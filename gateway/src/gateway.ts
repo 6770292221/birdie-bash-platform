@@ -77,6 +77,7 @@ function mergeOpenApi(specs: any[], baseServerUrl: string) {
         "Aggregated API docs for Auth and Event services via Gateway",
     },
     servers: [{ url: baseServerUrl }],
+    security: [{ BearerAuth: [] }],
     tags: [],
     paths: {},
     components: { securitySchemes: {}, schemas: {} },
@@ -113,6 +114,60 @@ function mergeOpenApi(specs: any[], baseServerUrl: string) {
   return merged;
 }
 
+function buildGatewaySpec() {
+  return {
+    openapi: "3.0.0",
+    security: [{ BearerAuth: [] }],
+    tags: [
+      { name: "Gateway", description: "Gateway utilities and health" },
+      {
+        name: "Authentication",
+        description:
+          "JWT is validated at gateway; user context forwarded via x-user-* headers",
+      },
+    ],
+    components: {
+      securitySchemes: {
+        BearerAuth: { type: "http", scheme: "bearer", bearerFormat: "JWT" },
+      },
+      schemas: {
+        GatewayError: {
+          type: "object",
+          properties: {
+            error: { type: "string" },
+            code: { type: "string" },
+          },
+        },
+      },
+    },
+    paths: {
+      "/health": {
+        get: {
+          summary: "Gateway health check",
+          tags: ["Gateway"],
+          responses: {
+            200: {
+              description: "Service is healthy",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      status: { type: "string" },
+                      timestamp: { type: "string", format: "date-time" },
+                      service: { type: "string" },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  };
+}
+
 app.get("/api-docs.json", async (req, res) => {
   const proto =
     (req.headers["x-forwarded-proto"] as string) || req.protocol || "http";
@@ -124,7 +179,7 @@ app.get("/api-docs.json", async (req, res) => {
       fetchJson(`${EVENT_SERVICE_URL}/api-docs.json`),
     ]);
 
-    const specs: any[] = [];
+    const specs: any[] = [buildGatewaySpec()];
     if (authSpec.status === "fulfilled") specs.push(authSpec.value);
     if (eventSpec.status === "fulfilled") specs.push(eventSpec.value);
 
@@ -148,7 +203,7 @@ app.get("/api-docs.json", async (req, res) => {
 app.use(
   "/api-docs",
   swaggerUi.serve,
-  swaggerUi.setup(undefined, { swaggerOptions: { url: "/api-docs.json" } })
+  swaggerUi.setup(undefined, { swaggerOptions: { url: "/api-docs.json", persistAuthorization: true } })
 );
 
 // Authentication middleware
@@ -239,7 +294,7 @@ const routes = [
   {
     path: "/api/events",
     target: EVENT_SERVICE_URL,
-    protected: false, // We'll handle protection per method in the proxy
+    protected: true, // Require auth for all /api/events routes
   },
 ];
 
@@ -263,6 +318,7 @@ routes.forEach((route) => {
         proxyReq.setHeader("x-user-id", req.headers["x-user-id"]);
         proxyReq.setHeader("x-user-email", req.headers["x-user-email"]);
         proxyReq.setHeader("x-user-role", req.headers["x-user-role"]);
+        proxyReq.setHeader("x-authenticated", "true");
       }
 
       // If body was parsed by express.json(), re-stream it to the target
@@ -309,23 +365,7 @@ routes.forEach((route) => {
   }
 });
 
-// Protected event routes (specific methods)
-app.use("/api/events", authenticateToken, (req: any, res: any, next: any) => {
-  const protectedMethods = ["POST", "PUT", "DELETE"];
-
-  if (
-    protectedMethods.includes(req.method) &&
-    !req.headers["x-authenticated"]
-  ) {
-    res.status(401).json({
-      error: "Authentication required for this operation",
-      code: "AUTHENTICATION_REQUIRED",
-    });
-    return;
-  }
-
-  next();
-});
+// (Removed) Method-specific protection, now all /api/events require auth via route.protected
 
 // Catch all for undefined routes
 app.use("*", (req, res) => {
