@@ -52,7 +52,6 @@ export interface IEvent {
 }
 
 export interface IEventCreate {
-  id?: string;
   eventName: string;
   eventDate: string;
   location: string;

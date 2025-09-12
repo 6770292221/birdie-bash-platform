@@ -32,7 +32,6 @@ const swaggerDefinition = {
       Event: {
         type: "object",
         required: [
-          "id",
           "eventName",
           "eventDate",
           "location",
@@ -42,7 +41,7 @@ const swaggerDefinition = {
           "courtHourlyRate",
         ],
         properties: {
-          id: { type: "string", description: "Event ID" },
+          id: { type: "string", description: "Event ID (Mongo ObjectId)", readOnly: true },
           eventName: { type: "string", description: "Event name" },
           eventDate: { type: "string", description: "Event date (YYYY-MM-DD)" },
           location: { type: "string", description: "Location name" },
@@ -87,7 +86,6 @@ const swaggerDefinition = {
       EventCreate: {
         type: "object",
         required: [
-          "id",
           "eventName",
           "eventDate",
           "location",
@@ -96,7 +94,6 @@ const swaggerDefinition = {
           "courtHourlyRate",
         ],
         properties: {
-          id: { type: "string" },
           eventName: { type: "string" },
           eventDate: { type: "string" },
           location: { type: "string" },
