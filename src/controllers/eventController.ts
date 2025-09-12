@@ -3,10 +3,7 @@ import Event from '../models/Event';
 import { IEventCreate, IEventUpdate } from '../types/event';
 export const createEvent = async (req: Request, res: Response): Promise<void> => {
   try {
-    const eventData: IEventCreate = {
-      ...req.body,
-      createdBy: req.body.createdBy || 'system',
-    };
+    const eventData: IEventCreate = req.body;
 
     const event = new Event(eventData);
     await event.save();
@@ -24,7 +21,6 @@ export const createEvent = async (req: Request, res: Response): Promise<void> =>
         currentParticipants: event.currentParticipants,
         status: event.status,
         location: event.location,
-        createdBy: event.createdBy,
         createdAt: event.createdAt,
         updatedAt: event.updatedAt,
       },
@@ -63,7 +59,6 @@ export const getEvents = async (req: Request, res: Response): Promise<void> => {
         currentParticipants: event.currentParticipants,
         status: event.status,
         location: event.location,
-        createdBy: event.createdBy,
         createdAt: event.createdAt,
         updatedAt: event.updatedAt,
       })),
@@ -103,7 +98,6 @@ export const getEvent = async (req: Request, res: Response): Promise<void> => {
         currentParticipants: event.currentParticipants,
         status: event.status,
         location: event.location,
-        createdBy: event.createdBy,
         createdAt: event.createdAt,
         updatedAt: event.updatedAt,
       },
@@ -141,7 +135,6 @@ export const updateEvent = async (req: Request, res: Response): Promise<void> =>
         currentParticipants: updatedEvent!.currentParticipants,
         status: updatedEvent!.status,
         location: updatedEvent!.location,
-        createdBy: updatedEvent!.createdBy,
         createdAt: updatedEvent!.createdAt,
         updatedAt: updatedEvent!.updatedAt,
       },

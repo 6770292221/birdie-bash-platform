@@ -2,7 +2,8 @@ import express, { Request, Response } from 'express';
 import dotenv from 'dotenv';
 import swaggerUi from 'swagger-ui-express';
 import swaggerSpecs from './config/swagger';
-import { connectDB } from './config/database';
+import { connectUserDB } from './config/userDatabase';
+import { connectEventDB } from './config/eventDatabase';
 import authRoutes from './routes/authRoutes';
 import eventRoutes from './routes/eventRoutes';
 
@@ -13,7 +14,8 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 
-connectDB();
+connectUserDB();
+connectEventDB();
 
 /**
  * @swagger

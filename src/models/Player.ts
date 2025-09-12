@@ -1,5 +1,6 @@
-import mongoose, { Schema, Document } from 'mongoose';
+import { Schema, Document } from 'mongoose';
 import { IPlayer } from '../types/event';
+import { eventDbConnection } from '../config/eventDatabase';
 
 export interface IPlayerDocument extends Omit<IPlayer, 'id'>, Document {}
 
@@ -11,8 +12,7 @@ const PlayerSchema: Schema = new Schema(
       required: true,
     },
     userId: {
-      type: Schema.Types.ObjectId,
-      ref: 'User',
+      type: String,
       required: false,
     },
     name: {
@@ -51,4 +51,4 @@ const PlayerSchema: Schema = new Schema(
 
 PlayerSchema.index({ eventId: 1, email: 1 }, { unique: true });
 
-export default mongoose.model<IPlayerDocument>('Player', PlayerSchema);
+export default eventDbConnection.model<IPlayerDocument>('Player', PlayerSchema);

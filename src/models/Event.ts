@@ -1,5 +1,6 @@
-import mongoose, { Schema, Document } from 'mongoose';
+import { Schema, Document } from 'mongoose';
 import { IEvent } from '../types/event';
+import { eventDbConnection } from '../config/eventDatabase';
 
 export interface IEventDocument extends Omit<IEvent, 'id'>, Document {}
 
@@ -45,15 +46,10 @@ const EventSchema: Schema = new Schema(
       type: String,
       trim: true,
     },
-    createdBy: {
-      type: Schema.Types.ObjectId,
-      ref: 'User',
-      required: true,
-    },
   },
   {
     timestamps: true,
   }
 );
 
-export default mongoose.model<IEventDocument>('Event', EventSchema);
+export default eventDbConnection.model<IEventDocument>('Event', EventSchema);

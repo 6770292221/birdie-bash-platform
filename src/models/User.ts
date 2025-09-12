@@ -1,5 +1,6 @@
-import mongoose, { Schema, Document } from 'mongoose';
+import { Schema, Document } from 'mongoose';
 import { IUser } from '../types/user';
+import { userDbConnection } from '../config/userDatabase';
 
 export interface IUserDocument extends Omit<IUser, 'id'>, Document {}
 
@@ -37,4 +38,4 @@ const UserSchema: Schema = new Schema(
   }
 );
 
-export default mongoose.model<IUserDocument>('User', UserSchema);
+export default userDbConnection.model<IUserDocument>('User', UserSchema);

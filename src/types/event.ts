@@ -12,7 +12,6 @@ export interface IEvent {
   currentParticipants: number;
   status: EventStatus;
   location?: string;
-  createdBy: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -25,7 +24,6 @@ export interface IEventCreate {
   endTime: string;
   maxParticipants: number;
   location?: string;
-  createdBy: string;
 }
 
 export interface IEventUpdate {
