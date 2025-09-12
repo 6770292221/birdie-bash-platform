@@ -1,23 +1,22 @@
-import { Request, Response } from 'express';
+import { Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
 import User from '../models/User';
 import { generateToken } from '../utils/jwt';
 import { IUserCreate, IUserLogin } from '../types/user';
 
-export const register = async (req: Request, res: Response): Promise<void> => {
+export const register = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { email, password, name, skill, role = 'user' }: IUserCreate = req.body;
 
-    if (!email || !password || !name || !skill) {
-      res.status(400).json({ error: 'Email, password, name, and skill are required' });
-      return;
-    }
+    const missing: string[] = [];
+    if (!email) missing.push('email');
+    if (!password) missing.push('password');
+    if (!name) missing.push('name');
+    if (!skill) missing.push('skill');
+    if (missing.length) { res.status(400).json({ code: 'VALIDATION_ERROR', message: 'Missing required fields', details: { missing } }); return; }
 
     const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      res.status(400).json({ error: 'User already exists' });
-      return;
-    }
+    if (existingUser) { res.status(409).json({ code: 'USER_EXISTS', message: 'User already exists', details: { email } }); return; }
 
     const saltRounds = 12;
     const password_hash = await bcrypt.hash(password, saltRounds);
@@ -49,32 +48,23 @@ export const register = async (req: Request, res: Response): Promise<void> => {
         role: user.role,
       },
     });
-  } catch (error) {
-    console.error('Register error:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
+  } catch (error) { next(error as any); }
 };
 
-export const login = async (req: Request, res: Response): Promise<void> => {
+export const login = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { email, password }: IUserLogin = req.body;
 
-    if (!email || !password) {
-      res.status(400).json({ error: 'Email and password are required' });
-      return;
-    }
+    const missing: string[] = [];
+    if (!email) missing.push('email');
+    if (!password) missing.push('password');
+    if (missing.length) { res.status(400).json({ code: 'VALIDATION_ERROR', message: 'Missing required fields', details: { missing } }); return; }
 
     const user = await User.findOne({ email });
-    if (!user) {
-      res.status(401).json({ error: 'Invalid credentials' });
-      return;
-    }
+    if (!user) { res.status(401).json({ code: 'INVALID_CREDENTIALS', message: 'Invalid credentials' }); return; }
 
     const isPasswordValid = await bcrypt.compare(password, user.password_hash);
-    if (!isPasswordValid) {
-      res.status(401).json({ error: 'Invalid credentials' });
-      return;
-    }
+    if (!isPasswordValid) { res.status(401).json({ code: 'INVALID_CREDENTIALS', message: 'Invalid credentials' }); return; }
 
     const token = generateToken({
       userId: (user._id as any).toString(),
@@ -93,10 +83,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
         role: user.role,
       },
     });
-  } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
+  } catch (error) { next(error as any); }
 };
 
 export const verifyToken = (req: Request, res: Response): void => {

@@ -24,11 +24,27 @@ const router = express.Router();
  *             schema:
  *               $ref: '#/components/schemas/AuthResponse'
  *       400:
- *         description: Bad request
+ *         description: Validation error
  *         content:
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/Error'
+ *             example:
+ *               code: 'VALIDATION_ERROR'
+ *               message: 'Missing required fields'
+ *               details:
+ *                 missing: ['email','password']
+ *       409:
+ *         description: User already exists
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *             example:
+ *               code: 'USER_EXISTS'
+ *               message: 'User already exists'
+ *               details:
+ *                 email: 'user@example.com'
  *       500:
  *         description: Internal server error
  *         content:
@@ -63,6 +79,9 @@ router.post('/register', register);
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/Error'
+ *             example:
+ *               code: 'INVALID_CREDENTIALS'
+ *               message: 'Invalid credentials'
  *       500:
  *         description: Internal server error
  *         content:
@@ -98,12 +117,18 @@ router.post('/login', login);
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/Error'
+ *             example:
+ *               code: 'UNAUTHORIZED'
+ *               message: 'Access token required'
  *       403:
  *         description: Invalid or expired token
  *         content:
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/Error'
+ *             example:
+ *               code: 'FORBIDDEN'
+ *               message: 'Invalid or expired token'
  */
 router.get('/verify', authenticateToken, verifyToken);
 

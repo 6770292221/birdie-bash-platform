@@ -7,13 +7,6 @@ import {
   deleteEvent, 
   getEventStatus 
 } from '../controllers/eventController';
-import { 
-  createCourt, 
-  getCourts, 
-  getCourt, 
-  updateCourt, 
-  deleteCourt 
-} from '../controllers/courtController';
 
 const router = express.Router();
 
@@ -22,8 +15,6 @@ const router = express.Router();
  * tags:
  *   - name: Events
  *     description: Event management
- *   - name: Courts
- *     description: Court management for events
  */
 
 /**
@@ -54,6 +45,16 @@ const router = express.Router();
  *                   $ref: '#/components/schemas/Event'
  *       400:
  *         description: Bad request
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *             example:
+ *               code: 'VALIDATION_ERROR'
+ *               message: 'maxParticipants must be >= 1'
+ *               details:
+ *                 field: 'capacity.maxParticipants'
+ *                 min: 1
  *       401:
  *         description: Unauthorized
  *       500:
@@ -115,6 +116,65 @@ router.post('/', createEvent);
  *                       type: number
  *                     hasMore:
  *                       type: boolean
+  *             example:
+  *               events:
+  *                 - eventId: "68c44e2d93ade3386805b831"
+  *                   name: "iday Night Badminton Bash"
+  *                   description: "เล่นแบดมินตันกระชับมิตร เหมาะสำหรับทุกระดับ มีจับคู่แบบสุ่มและ snack เล็กน้อยหลังเกม"
+  *                   time:
+  *                     date: "2025-09-19"
+  *                     startTime: "18:00"
+  *                     endTime: "21:00"
+  *                     durationMinutes: 180
+  *                   location:
+  *                     name: "TCC Badminton Complex - Court A & B"
+  *                     mapUrl: "https://maps.google.com/?q=TCC+Badminton+Complex"
+  *                   capacity:
+  *                     maxParticipants: 16
+  *                     currentParticipants: 12
+  *                     availableSlots: 4
+  *                     waitlistEnabled: false
+  *                   status:
+  *                     state: "active"
+  *                     isAcceptingRegistrations: true
+  *                   payment:
+  *                     pricePerPerson: 150
+  *                     currency: "THB"
+  *                     paymentRequired: true
+  *                     cancellationPolicy: "ยกเลิกก่อน 24 ชั่วโมงคืนเต็มจำนวน หากยกเลิกวันงานจะถูกปรับ 100 บาท"
+  *                   createdAt: "2025-09-12T16:45:33.623Z"
+  *                   updatedAt: "2025-09-12T16:45:33.623Z"
+  *                 - eventId: "68c44e7593ade3386805b835"
+  *                   name: "Friday Night Badminton Bash"
+  *                   description: "เล่นแบดมินตันกระชับมิตร เหมาะสำหรับทุกระดับ มีจับคู่แบบสุ่มและ snack เล็กน้อยหลังเกม"
+  *                   time:
+  *                     date: "2025-09-19"
+  *                     startTime: "18:00"
+  *                     endTime: "21:00"
+  *                     durationMinutes: 180
+  *                   location:
+  *                     name: "TCC Badminton Complex - Court A & B"
+  *                     mapUrl: "https://maps.google.com/?q=TCC+Badminton+Complex"
+  *                   capacity:
+  *                     maxParticipants: 16
+  *                     currentParticipants: 12
+  *                     availableSlots: 4
+  *                     waitlistEnabled: false
+  *                   status:
+  *                     state: "active"
+  *                     isAcceptingRegistrations: true
+  *                   payment:
+  *                     pricePerPerson: 5
+  *                     currency: "THB"
+  *                     paymentRequired: true
+  *                     cancellationPolicy: "ยกเลิกก่อน 24 ชั่วโมงคืนเต็มจำนวน หากยกเลิกวันงานจะถูกปรับ 100 บาท"
+  *                   createdAt: "2025-09-12T16:46:45.907Z"
+  *                   updatedAt: "2025-09-12T16:46:45.907Z"
+  *               pagination:
+  *                 total: 2
+  *                 limit: 10
+  *                 offset: 0
+  *                 hasMore: false
  *       500:
  *         description: Internal server error
  */
@@ -143,8 +203,45 @@ router.get('/', getEvents);
  *               properties:
  *                 event:
  *                   $ref: '#/components/schemas/Event'
+  *             example:
+  *               event:
+  *                 eventId: "68c44e2d93ade3386805b831"
+  *                 name: "Friday Night Badminton Bash"
+  *                 description: "Friendly badminton session for intermediate players."
+  *                 time:
+  *                   date: "2025-09-12"
+  *                   startTime: "18:00"
+  *                   endTime: "21:00"
+  *                   durationMinutes: 180
+  *                 location:
+  *                   name: "Bangkok Sports Complex - Hall A"
+  *                   mapUrl: "https://maps.google.com/?q=Bangkok+Sports+Complex"
+  *                 capacity:
+  *                   maxParticipants: 12
+  *                   currentParticipants: 5
+  *                   availableSlots: 7
+  *                   waitlistEnabled: false
+  *                 status:
+  *                   state: "active"
+  *                   isAcceptingRegistrations: true
+  *                 payment:
+  *                   pricePerPerson: 100
+  *                   currency: "THB"
+  *                   paymentRequired: true
+  *                   cancellationPolicy: "Refund 50% if canceled 24h before event"
+  *                 createdAt: "2025-09-01T10:00:00Z"
+  *                 updatedAt: "2025-09-10T15:30:00Z"
  *       404:
  *         description: Event not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *             example:
+ *               code: 'NOT_FOUND'
+ *               message: 'Event not found'
+ *               details:
+ *                 id: '68c44e2d93ade3386805b831'
  *       500:
  *         description: Internal server error
  */
@@ -246,212 +343,19 @@ router.delete('/:id', deleteEvent);
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/EventStatus'
+  *             example:
+  *               eventId: "68c44e2d93ade3386805b831"
+  *               status: "active"
+  *               maxParticipants: 16
+  *               currentParticipants: 12
+  *               availableSlots: 4
+  *               isAcceptingRegistrations: true
+  *               waitlistEnabled: false
  *       404:
  *         description: Event not found
  *       500:
  *         description: Internal server error
  */
 router.get('/:id/status', getEventStatus);
-
-// Court routes
-/**
- * @swagger
- * /api/events/{eventId}/courts:
- *   post:
- *     summary: Create a court for an event
- *     tags: [Courts]
- *     security:
- *       - BearerAuth: []
- *     parameters:
- *       - in: path
- *         name: eventId
- *         required: true
- *         schema:
- *           type: string
- *         description: Event ID
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/CourtCreate'
- *     responses:
- *       201:
- *         description: Court created successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                 court:
- *                   $ref: '#/components/schemas/Court'
- *       400:
- *         description: Bad request
- *       403:
- *         description: Not authorized
- *       404:
- *         description: Event not found
- *       500:
- *         description: Internal server error
- */
-router.post('/:eventId/courts', createCourt);
-
-/**
- * @swagger
- * /api/events/{eventId}/courts:
- *   get:
- *     summary: Get courts for an event
- *     tags: [Courts]
- *     parameters:
- *       - in: path
- *         name: eventId
- *         required: true
- *         schema:
- *           type: string
- *         description: Event ID
- *     responses:
- *       200:
- *         description: Courts retrieved successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 courts:
- *                   type: array
- *                   items:
- *                     $ref: '#/components/schemas/Court'
- *       404:
- *         description: Event not found
- *       500:
- *         description: Internal server error
- */
-router.get('/:eventId/courts', getCourts);
-
-/**
- * @swagger
- * /api/events/{eventId}/courts/{courtId}:
- *   get:
- *     summary: Get specific court
- *     tags: [Courts]
- *     parameters:
- *       - in: path
- *         name: eventId
- *         required: true
- *         schema:
- *           type: string
- *         description: Event ID
- *       - in: path
- *         name: courtId
- *         required: true
- *         schema:
- *           type: string
- *         description: Court ID
- *     responses:
- *       200:
- *         description: Court retrieved successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 court:
- *                   $ref: '#/components/schemas/Court'
- *       404:
- *         description: Court not found
- *       500:
- *         description: Internal server error
- */
-router.get('/:eventId/courts/:courtId', getCourt);
-
-/**
- * @swagger
- * /api/events/{eventId}/courts/{courtId}:
- *   put:
- *     summary: Update court
- *     tags: [Courts]
- *     security:
- *       - BearerAuth: []
- *     parameters:
- *       - in: path
- *         name: eventId
- *         required: true
- *         schema:
- *           type: string
- *         description: Event ID
- *       - in: path
- *         name: courtId
- *         required: true
- *         schema:
- *           type: string
- *         description: Court ID
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/CourtCreate'
- *     responses:
- *       200:
- *         description: Court updated successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                 court:
- *                   $ref: '#/components/schemas/Court'
- *       403:
- *         description: Not authorized
- *       404:
- *         description: Court not found
- *       500:
- *         description: Internal server error
- */
-router.put('/:eventId/courts/:courtId', updateCourt);
-
-/**
- * @swagger
- * /api/events/{eventId}/courts/{courtId}:
- *   delete:
- *     summary: Delete court
- *     tags: [Courts]
- *     security:
- *       - BearerAuth: []
- *     parameters:
- *       - in: path
- *         name: eventId
- *         required: true
- *         schema:
- *           type: string
- *         description: Event ID
- *       - in: path
- *         name: courtId
- *         required: true
- *         schema:
- *           type: string
- *         description: Court ID
- *     responses:
- *       200:
- *         description: Court deleted successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *       403:
- *         description: Not authorized
- *       404:
- *         description: Court not found
- *       500:
- *         description: Internal server error
- */
-router.delete('/:eventId/courts/:courtId', deleteCourt);
 
 export default router;

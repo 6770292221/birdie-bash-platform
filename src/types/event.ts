@@ -1,40 +1,86 @@
 export type EventStatus = 'active' | 'canceled' | 'completed';
 export type PlayerStatus = 'registered' | 'waitlist' | 'canceled';
 
-export interface IEvent {
-  id: string;
-  name: string;
-  description?: string;
+export interface TimeInfo {
   date: Date;
-  startTime: string;
-  endTime: string;
+  startTime: string; // HH:mm
+  endTime: string;   // HH:mm
+  durationMinutes?: number;
+}
+
+export interface LocationInfo {
+  name?: string;
+  mapUrl?: string;
+}
+
+export interface CapacityInfo {
   maxParticipants: number;
   currentParticipants: number;
-  status: EventStatus;
-  location?: string;
+  availableSlots: number;
+  waitlistEnabled: boolean;
+}
+
+export interface StatusInfo {
+  state: EventStatus;
+  isAcceptingRegistrations: boolean;
+}
+
+export interface PaymentInfo {
+  pricePerPerson?: number;
+  currency?: string;
+  paymentRequired?: boolean;
+  cancellationPolicy?: string;
+}
+
+export interface CostsInfo {
+  shuttlecockPrice?: number;
+  courtHourlyRate?: number;
+}
+
+export interface IEvent {
+  id: string;
+  eventName: string;
+  eventDate: string;
+  location: string;
+  status: StatusInfo;
+  capacity: CapacityInfo;
+  shuttlecockPrice: number;
+  courtHourlyRate: number;
+  courts: ICourtTime[];
   createdAt: Date;
-  updatedAt: Date;
+  updatedAt?: Date;
 }
 
 export interface IEventCreate {
-  name: string;
-  description?: string;
-  date: Date;
-  startTime: string;
-  endTime: string;
-  maxParticipants: number;
-  location?: string;
+  id?: string;
+  eventName: string;
+  eventDate: string;
+  location: string;
+  status?: StatusInfo;
+  capacity: Omit<CapacityInfo, 'availableSlots' | 'waitlistEnabled'> & {
+    availableSlots?: number;
+    waitlistEnabled?: boolean;
+  };
+  shuttlecockPrice: number;
+  courtHourlyRate: number;
+  courts: ICourtTime[];
 }
 
 export interface IEventUpdate {
-  name?: string;
-  description?: string;
-  date?: Date;
-  startTime?: string;
-  endTime?: string;
-  maxParticipants?: number;
+  eventName?: string;
+  eventDate?: string;
   location?: string;
-  status?: EventStatus;
+  capacity?: Partial<CapacityInfo>;
+  status?: Partial<StatusInfo> & { state?: EventStatus };
+  shuttlecockPrice?: number;
+  courtHourlyRate?: number;
+  courts?: ICourtTime[];
+}
+
+export interface ICourtTime {
+  courtNumber: number;
+  startTime: string;
+  endTime: string;
 }
 
 export interface ICourt {

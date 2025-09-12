@@ -6,6 +6,7 @@ import { connectUserDB } from './config/userDatabase';
 import { connectEventDB } from './config/eventDatabase';
 import authRoutes from './routes/authRoutes';
 import eventRoutes from './routes/eventRoutes';
+import { errorHandler } from './middleware/errorHandler';
 
 dotenv.config();
 
@@ -53,6 +54,9 @@ app.use('/api/auth', authRoutes);
 app.use('/api/events', eventRoutes);
 
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpecs));
+
+// Error handler should be registered after all routes
+app.use(errorHandler);
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

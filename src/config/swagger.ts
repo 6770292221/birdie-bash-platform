@@ -115,192 +115,159 @@ const swaggerDefinition = {
       },
       Error: {
         type: 'object',
+        required: ['code', 'message'],
         properties: {
-          error: {
+          code: {
             type: 'string',
-            description: 'Error message',
+            description: 'Application error code (e.g., VALIDATION_ERROR, NOT_FOUND, INVALID_ID, INTERNAL_SERVER_ERROR)'
+          },
+          message: {
+            type: 'string',
+            description: 'Human-readable error message',
+          },
+          details: {
+            type: 'object',
+            additionalProperties: true,
+            description: 'Optional key-value details for client handling',
           },
         },
+        example: {
+          code: 'VALIDATION_ERROR',
+          message: 'maxParticipants must be >= 1',
+          details: { field: 'capacity.maxParticipants', min: 1 }
+        }
       },
       Event: {
         type: 'object',
-        required: ['name', 'date', 'startTime', 'endTime', 'maxParticipants'],
+        required: ['id', 'eventName', 'eventDate', 'location', 'capacity', 'shuttlecockPrice', 'courtHourlyRate', 'courts'],
         properties: {
-          id: {
-            type: 'string',
-            description: 'Event ID',
-          },
-          name: {
-            type: 'string',
-            description: 'Event name',
-          },
-          description: {
-            type: 'string',
-            description: 'Event description',
-          },
-          date: {
-            type: 'string',
-            format: 'date',
-            description: 'Event date',
-          },
-          startTime: {
-            type: 'string',
-            description: 'Start time (HH:MM)',
-          },
-          endTime: {
-            type: 'string',
-            description: 'End time (HH:MM)',
-          },
-          maxParticipants: {
-            type: 'number',
-            minimum: 1,
-            description: 'Maximum number of participants',
-          },
-          currentParticipants: {
-            type: 'number',
-            description: 'Current number of participants',
-          },
+          id: { type: 'string', description: 'Event ID' },
+          eventName: { type: 'string', description: 'Event name' },
+          eventDate: { type: 'string', format: 'date', description: 'Event date' },
+          location: { type: 'string', description: 'Location name' },
           status: {
-            type: 'string',
-            enum: ['active', 'canceled', 'completed'],
-            description: 'Event status',
+            type: 'object',
+            properties: {
+              state: { type: 'string', enum: ['active', 'canceled', 'completed'], description: 'Event state' },
+              isAcceptingRegistrations: { type: 'boolean', description: 'Derived accepting flag' },
+            },
           },
-          location: {
-            type: 'string',
-            description: 'Event location',
+          capacity: {
+            type: 'object',
+            required: ['maxParticipants'],
+            properties: {
+              maxParticipants: { type: 'number', minimum: 1, description: 'Maximum participants' },
+              currentParticipants: { type: 'number', description: 'Current participants' },
+              availableSlots: { type: 'number', description: 'Derived available slots' },
+              waitlistEnabled: { type: 'boolean', description: 'Derived waitlist flag' },
+            },
           },
-          createdBy: {
-            type: 'string',
-            description: 'User ID who created the event',
+          shuttlecockPrice: { type: 'number', description: 'Shuttlecock price' },
+          courtHourlyRate: { type: 'number', description: 'Court hourly rate' },
+          courts: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                courtNumber: { type: 'number', description: 'Court number' },
+                startTime: { type: 'string', description: 'Start time (HH:MM)' },
+                endTime: { type: 'string', description: 'End time (HH:MM)' },
+              },
+            },
           },
+          createdAt: { type: 'string', format: 'date-time' },
+          updatedAt: { type: 'string', format: 'date-time' },
         },
       },
       EventCreate: {
         type: 'object',
-        required: ['name', 'date', 'startTime', 'endTime', 'maxParticipants'],
+        required: ['eventName', 'eventDate', 'location', 'capacity', 'shuttlecockPrice', 'courtHourlyRate', 'courts'],
         properties: {
-          name: {
-            type: 'string',
-            description: 'Event name',
+          id: { type: 'string', description: 'Optional custom ID' },
+          eventName: { type: 'string', description: 'Event name' },
+          eventDate: { type: 'string', format: 'date', description: 'Event date' },
+          location: { type: 'string', description: 'Location name' },
+          status: {
+            type: 'object',
+            properties: {
+              state: { type: 'string', enum: ['active', 'canceled', 'completed'], default: 'active' },
+              isAcceptingRegistrations: { type: 'boolean', default: true },
+            },
           },
-          description: {
-            type: 'string',
-            description: 'Event description',
+          capacity: {
+            type: 'object',
+            required: ['maxParticipants'],
+            properties: {
+              maxParticipants: { type: 'number', minimum: 1 },
+              currentParticipants: { type: 'number', default: 0 },
+            },
           },
-          date: {
-            type: 'string',
-            format: 'date',
-            description: 'Event date',
-          },
-          startTime: {
-            type: 'string',
-            description: 'Start time (HH:MM)',
-          },
-          endTime: {
-            type: 'string',
-            description: 'End time (HH:MM)',
-          },
-          maxParticipants: {
-            type: 'number',
-            minimum: 1,
-            description: 'Maximum number of participants',
-          },
-          location: {
-            type: 'string',
-            description: 'Event location',
+          shuttlecockPrice: { type: 'number', description: 'Shuttlecock price' },
+          courtHourlyRate: { type: 'number', description: 'Court hourly rate' },
+          courts: {
+            type: 'array',
+            items: {
+              type: 'object',
+              required: ['courtNumber', 'startTime', 'endTime'],
+              properties: {
+                courtNumber: { type: 'number', description: 'Court number' },
+                startTime: { type: 'string', description: 'Start time (HH:MM)' },
+                endTime: { type: 'string', description: 'End time (HH:MM)' },
+              },
+            },
           },
         },
+        example: {
+          id: 'evt_20250920_001',
+          eventName: 'Weekly Badminton Session',
+          eventDate: '2025-09-20',
+          location: 'TCC Badminton Complex',
+          status: { state: 'active', isAcceptingRegistrations: true },
+          capacity: { maxParticipants: 16, currentParticipants: 12 },
+          shuttlecockPrice: 20,
+          courtHourlyRate: 150,
+          courts: [
+            { courtNumber: 1, startTime: '20:00', endTime: '22:00' },
+            { courtNumber: 2, startTime: '20:00', endTime: '22:00' }
+          ]
+        }
       },
       EventUpdate: {
         type: 'object',
         properties: {
-          name: {
-            type: 'string',
-            description: 'Event name',
-          },
-          description: {
-            type: 'string',
-            description: 'Event description',
-          },
-          date: {
-            type: 'string',
-            format: 'date',
-            description: 'Event date',
-          },
-          startTime: {
-            type: 'string',
-            description: 'Start time (HH:MM)',
-          },
-          endTime: {
-            type: 'string',
-            description: 'End time (HH:MM)',
-          },
-          maxParticipants: {
-            type: 'number',
-            minimum: 1,
-            description: 'Maximum number of participants',
-          },
-          location: {
-            type: 'string',
-            description: 'Event location',
-          },
+          eventName: { type: 'string', description: 'Event name' },
+          eventDate: { type: 'string', format: 'date', description: 'Event date' },
+          location: { type: 'string', description: 'Location name' },
           status: {
-            type: 'string',
-            enum: ['active', 'canceled', 'completed'],
-            description: 'Event status',
+            type: 'object',
+            properties: {
+              state: { type: 'string', enum: ['active', 'canceled', 'completed'] },
+              isAcceptingRegistrations: { type: 'boolean' },
+            },
+          },
+          capacity: {
+            type: 'object',
+            properties: {
+              maxParticipants: { type: 'number', minimum: 1 },
+              currentParticipants: { type: 'number' },
+            },
+          },
+          shuttlecockPrice: { type: 'number', description: 'Shuttlecock price' },
+          courtHourlyRate: { type: 'number', description: 'Court hourly rate' },
+          courts: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                courtNumber: { type: 'number', description: 'Court number' },
+                startTime: { type: 'string', description: 'Start time (HH:MM)' },
+                endTime: { type: 'string', description: 'End time (HH:MM)' },
+              },
+            },
           },
         },
       },
-      Court: {
-        type: 'object',
-        required: ['courtNumber', 'maxPlayers'],
-        properties: {
-          id: {
-            type: 'string',
-            description: 'Court ID',
-          },
-          eventId: {
-            type: 'string',
-            description: 'Event ID',
-          },
-          courtNumber: {
-            type: 'number',
-            minimum: 1,
-            description: 'Court number',
-          },
-          maxPlayers: {
-            type: 'number',
-            minimum: 1,
-            description: 'Maximum players per court',
-          },
-          currentPlayers: {
-            type: 'number',
-            description: 'Current number of players',
-          },
-          status: {
-            type: 'string',
-            enum: ['available', 'occupied', 'maintenance'],
-            description: 'Court status',
-          },
-        },
-      },
-      CourtCreate: {
-        type: 'object',
-        required: ['courtNumber', 'maxPlayers'],
-        properties: {
-          courtNumber: {
-            type: 'number',
-            minimum: 1,
-            description: 'Court number',
-          },
-          maxPlayers: {
-            type: 'number',
-            minimum: 1,
-            default: 4,
-            description: 'Maximum players per court',
-          },
-        },
-      },
+      
       Player: {
         type: 'object',
         required: ['name', 'email'],
@@ -376,14 +343,14 @@ const swaggerDefinition = {
       EventStatus: {
         type: 'object',
         properties: {
-          eventId: {
+          id: {
             type: 'string',
             description: 'Event ID',
           },
           status: {
             type: 'string',
             enum: ['active', 'canceled', 'completed'],
-            description: 'Event status',
+            description: 'Event status (status.state)',
           },
           maxParticipants: {
             type: 'number',
