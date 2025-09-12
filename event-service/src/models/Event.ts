@@ -1,6 +1,5 @@
-import { Schema, Document } from "mongoose";
+import mongoose, { Schema, Document } from "mongoose";
 import { IEvent } from "../types/event";
-import { eventDbConnection } from "../config/eventDatabase";
 
 export interface IEventDocument extends Omit<IEvent, "id">, Document {}
 
@@ -40,13 +39,13 @@ const EventSchema: Schema = new Schema(
     eventName: { type: String, required: true, trim: true },
     eventDate: { type: String, required: true },
     location: { type: String, required: true, trim: true },
-    status: { type: StatusSchema, required: true },
+    status: { type: StatusSchema, required: false, default: () => ({ state: 'active', isAcceptingRegistrations: true }) },
     capacity: { type: CapacitySchema, required: true },
     shuttlecockPrice: { type: Number, required: true },
     courtHourlyRate: { type: Number, required: true },
     courts: [CourtTimeSchema],
   },
-  { timestamps: true }
+  { timestamps: true, bufferCommands: false }
 );
 
 // Prevent duplicate events by name+date+location
@@ -73,4 +72,4 @@ EventSchema.pre("save", function (next) {
   next();
 });
 
-export default eventDbConnection.model<IEventDocument>("Event", EventSchema);
+export default mongoose.model<IEventDocument>("Event", EventSchema);

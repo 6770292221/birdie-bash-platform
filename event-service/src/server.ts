@@ -3,6 +3,7 @@ import dotenv from "dotenv";
 import cors from "cors";
 import swaggerUi from "swagger-ui-express";
 import swaggerSpecs from "./config/swagger";
+import { connectEventDB } from "./config/eventDatabase";
 import {
   createEvent,
   getEvents,
@@ -22,6 +23,9 @@ app.use(express.json());
 
 // API Docs
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpecs));
+app.get('/api-docs.json', (_req: Request, res: Response) => {
+  res.json(swaggerSpecs);
+});
 
 // Health check
 app.get("/health", (req: Request, res: Response) => {
@@ -52,6 +56,9 @@ app.get("/api/events/:id", getEvent);
 app.put("/api/events/:id", updateEvent);
 app.delete("/api/events/:id", deleteEvent);
 app.get("/api/events/:id/status", getEventStatus);
+
+// Initialize DB connection (non-blocking)
+connectEventDB();
 
 app.listen(PORT, () => {
   console.log(`📅 Event Service running on port ${PORT}`);

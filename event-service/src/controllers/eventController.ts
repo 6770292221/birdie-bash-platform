@@ -73,8 +73,21 @@ export const createEvent = async (
       ...(userId && { createdBy: { userId, email: userEmail } }),
     });
   } catch (error: any) {
-    if (error?.code === 11000) {
+    if (error?.name === "ValidationError") {
       res.status(400).json({
+        code: "VALIDATION_ERROR",
+        message: error.message,
+        details: Object.fromEntries(
+          Object.entries(error.errors || {}).map(([k, v]: any) => [
+            k,
+            { kind: (v as any).kind, message: (v as any).message },
+          ])
+        ),
+      });
+      return;
+    }
+    if (error?.code === 11000) {
+      res.status(409).json({
         code: "EVENT_EXISTS",
         message:
           "An event with the same name, date and location already exists",

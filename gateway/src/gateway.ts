@@ -121,6 +121,8 @@ routes.forEach((route) => {
   const proxyOptions = {
     target: route.target,
     changeOrigin: true,
+    timeout: 5000,
+    proxyTimeout: 5000,
     pathRewrite: {
       [`^${route.path}`]: route.path, // Keep the path when forwarding
     },
@@ -135,6 +137,19 @@ routes.forEach((route) => {
         proxyReq.setHeader("x-user-email", req.headers["x-user-email"]);
         proxyReq.setHeader("x-user-role", req.headers["x-user-role"]);
       }
+
+      // If body was parsed by express.json(), re-stream it to the target
+      if (
+        req.body &&
+        Object.keys(req.body).length &&
+        req.method !== "GET" &&
+        req.headers["content-type"]?.includes("application/json")
+      ) {
+        const bodyData = Buffer.from(JSON.stringify(req.body));
+        proxyReq.setHeader("Content-Type", "application/json");
+        proxyReq.setHeader("Content-Length", bodyData.length);
+        proxyReq.write(bodyData);
+      }
     },
     onError: (err: any, req: any, res: any) => {
       console.error(
@@ -146,6 +161,10 @@ routes.forEach((route) => {
         code: "SERVICE_UNAVAILABLE",
         service: route.target,
       });
+    },
+    onProxyRes: (proxyRes: any, req: any, res: any) => {
+      // Optionally log upstream status codes
+      console.log(`[GATEWAY] <- ${proxyRes.statusCode} ${route.target}${req.path}`);
     },
   };
 
