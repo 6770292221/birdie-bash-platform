@@ -4,6 +4,7 @@ import swaggerUi from 'swagger-ui-express';
 import swaggerSpecs from './config/swagger';
 import { connectDB } from './config/database';
 import authRoutes from './routes/authRoutes';
+import eventRoutes from './routes/eventRoutes';
 
 dotenv.config();
 
@@ -47,6 +48,7 @@ app.get('/health', (req: Request, res: Response) => {
 });
 
 app.use('/api/auth', authRoutes);
+app.use('/api/events', eventRoutes);
 
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpecs));
 
