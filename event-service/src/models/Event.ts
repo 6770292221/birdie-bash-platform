@@ -44,6 +44,7 @@ const EventSchema: Schema = new Schema(
     shuttlecockPrice: { type: Number, required: true },
     courtHourlyRate: { type: Number, required: true },
     courts: [CourtTimeSchema],
+    createdBy: { type: String, required: false },
   },
   { timestamps: true, bufferCommands: false }
 );
