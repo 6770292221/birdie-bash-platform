@@ -2,9 +2,19 @@ import { Request, Response } from 'express';
 import Event from '../models/Event';
 import { IEventCreate, IEventUpdate } from '../types/event';
 
-export const createEvent = async (req: Request, res: Response): Promise<void> => {
+interface ExtendedRequest extends Request {
+  headers: Request['headers'] & {
+    'x-user-id'?: string;
+    'x-user-email'?: string;
+    'x-user-role'?: string;
+  };
+}
+
+export const createEvent = async (req: ExtendedRequest, res: Response): Promise<void> => {
   try {
     const eventData: IEventCreate = req.body;
+    const userId = req.headers['x-user-id'];
+    const userEmail = req.headers['x-user-email'];
 
     const event = new Event(eventData);
     await event.save();
@@ -24,6 +34,7 @@ export const createEvent = async (req: Request, res: Response): Promise<void> =>
         createdAt: event.createdAt,
         updatedAt: event.updatedAt,
       },
+      ...(userId && { createdBy: { userId, email: userEmail } }),
     });
   } catch (error) {
     console.error('Create event error:', error);

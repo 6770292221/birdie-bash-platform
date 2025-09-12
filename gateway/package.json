@@ -1,0 +1,29 @@
+{
+  "name": "birdie-gateway",
+  "version": "1.0.0",
+  "description": "API Gateway for Birdie Bash Platform",
+  "main": "src/gateway.ts",
+  "scripts": {
+    "dev": "nodemon --exec ts-node src/gateway.ts",
+    "build": "tsc",
+    "start": "node dist/gateway.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "http-proxy-middleware": "^2.0.6",
+    "jsonwebtoken": "^9.0.2",
+    "dotenv": "^16.3.1",
+    "cors": "^2.8.5",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.1"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.17",
+    "@types/jsonwebtoken": "^9.0.2",
+    "@types/node": "^20.4.5",
+    "@types/cors": "^2.8.13",
+    "typescript": "^5.1.6",
+    "nodemon": "^3.0.1",
+    "ts-node": "^10.9.1"
+  }
+}

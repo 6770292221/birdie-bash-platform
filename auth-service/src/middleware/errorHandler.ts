@@ -1,4 +1,4 @@
-import { NextFunction, Request, Response } from 'express';
+import type { NextFunction, Request, Response } from 'express';
 import mongoose from 'mongoose';
 
 interface ErrorDetails {
@@ -59,4 +59,3 @@ export function errorHandler(err: AppErrorLike, req: Request, res: Response, _ne
     message: 'Internal server error',
   });
 }
-
