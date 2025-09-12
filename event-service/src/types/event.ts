@@ -47,6 +47,7 @@ export interface IEvent {
   shuttlecockPrice: number;
   courtHourlyRate: number;
   courts: ICourtTime[];
+  createdBy?: string;
   createdAt: Date;
   updatedAt?: Date;
 }

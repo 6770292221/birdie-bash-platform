@@ -45,6 +45,7 @@ const swaggerDefinition = {
           eventName: { type: "string", description: "Event name" },
           eventDate: { type: "string", description: "Event date (YYYY-MM-DD)" },
           location: { type: "string", description: "Location name" },
+          createdBy: { type: "string", description: "User ID who created the event", readOnly: true },
           status: {
             type: "object",
             properties: {

@@ -19,6 +19,10 @@ app.use(express.json());
 
 // API Docs
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpecs));
+// Raw OpenAPI JSON for aggregation
+app.get('/api-docs.json', (_req: Request, res: Response) => {
+  res.json(swaggerSpecs as any);
+});
 
 // MongoDB connection
 const connectDB = async () => {
