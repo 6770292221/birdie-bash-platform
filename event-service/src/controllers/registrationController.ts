@@ -408,16 +408,19 @@ export const registerMember = async (
       return;
     }
 
-    const isAcceptingRegistrations = event.status === "active" && event.capacity.availableSlots > 0;
-
-    if (!isAcceptingRegistrations) {
+    // Support both legacy string status and new object status
+    const statusVal: any = (event as any).status;
+    const isActive = (typeof statusVal === 'string')
+      ? statusVal === 'active'
+      : (statusVal?.state === 'active');
+    if (!isActive) {
       res.status(400).json({
         code: "REGISTRATION_CLOSED",
         message: "Event is not accepting registrations",
         details: {
           eventId,
           status: event.status,
-          isAcceptingRegistrations
+          isAcceptingRegistrations: false
         }
       });
       return;
@@ -540,8 +543,8 @@ export const registerMember = async (
       }
     }
 
-    const availableSlots = event.capacity.availableSlots;
-    const waitlistEnabled = event.capacity.waitlistEnabled;
+    const availableSlots = Number(event.capacity?.availableSlots ?? Math.max(0, Number(event.capacity?.maxParticipants ?? 0) - Number(event.capacity?.currentParticipants ?? 0)));
+    const waitlistEnabled = Boolean((event.capacity as any)?.waitlistEnabled ?? (isActive && availableSlots <= 0));
 
     if (availableSlots > 0) {
       playerData.status = "registered";
@@ -555,8 +558,8 @@ export const registerMember = async (
           eventId,
           maxParticipants: event.capacity.maxParticipants,
           currentParticipants: event.capacity.currentParticipants,
-          availableSlots: event.capacity.availableSlots,
-          waitlistEnabled: event.capacity.waitlistEnabled
+          availableSlots,
+          waitlistEnabled
         }
       });
       return;
@@ -665,16 +668,19 @@ export const registerGuest = async (
       return;
     }
 
-    const isAcceptingRegistrations = event.status === "active" && event.capacity.availableSlots > 0;
-
-    if (!isAcceptingRegistrations) {
+    // Support both legacy string status and new object status
+    const statusVal2: any = (event as any).status;
+    const isActive = (typeof statusVal2 === 'string')
+      ? statusVal2 === 'active'
+      : (statusVal2?.state === 'active');
+    if (!isActive) {
       res.status(400).json({
         code: "REGISTRATION_CLOSED",
         message: "Event is not accepting registrations",
         details: {
           eventId,
           status: event.status,
-          isAcceptingRegistrations
+          isAcceptingRegistrations: false
         }
       });
       return;
@@ -802,8 +808,8 @@ export const registerGuest = async (
       }
     }
 
-    const availableSlots = event.capacity.availableSlots;
-    const waitlistEnabled = event.capacity.waitlistEnabled;
+    const availableSlots = Number(event.capacity?.availableSlots ?? Math.max(0, Number(event.capacity?.maxParticipants ?? 0) - Number(event.capacity?.currentParticipants ?? 0)));
+    const waitlistEnabled = Boolean((event.capacity as any)?.waitlistEnabled ?? (isActive && availableSlots <= 0));
 
     if (availableSlots > 0) {
       playerData.status = "registered";
@@ -817,8 +823,8 @@ export const registerGuest = async (
           eventId,
           maxParticipants: event.capacity.maxParticipants,
           currentParticipants: event.capacity.currentParticipants,
-          availableSlots: event.capacity.availableSlots,
-          waitlistEnabled: event.capacity.waitlistEnabled
+          availableSlots,
+          waitlistEnabled
         }
       });
       return;
