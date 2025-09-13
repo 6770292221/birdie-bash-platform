@@ -15,6 +15,72 @@ interface CourtValidationResult {
   errors: any;
 }
 
+function validateEventDate(eventDate: string): { isValid: boolean; error?: string } {
+  // ตรวจสอบรูปแบบวันที่ YYYY-MM-DD
+  const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+  if (!dateRegex.test(eventDate)) {
+    return {
+      isValid: false,
+      error: `Invalid date format: ${eventDate}. Expected YYYY-MM-DD`
+    };
+  }
+
+  // ตรวจสอบว่าวันที่ valid หรือไม่
+  const eventDateObj = new Date(eventDate + 'T00:00:00.000Z');
+  if (isNaN(eventDateObj.getTime())) {
+    return {
+      isValid: false,
+      error: `Invalid date: ${eventDate}`
+    };
+  }
+
+  // ตรวจสอบว่าไม่ใช่วันที่ในอดีต (เทียบกับ UTC วันนี้)
+  const today = new Date();
+  const todayUTC = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const eventDateLocal = new Date(eventDateObj.getFullYear(), eventDateObj.getMonth(), eventDateObj.getDate());
+
+  if (eventDateLocal < todayUTC) {
+    return {
+      isValid: false,
+      error: `Event date cannot be in the past. Event date: ${eventDate}, Today: ${todayUTC.toISOString().split('T')[0]}`
+    };
+  }
+
+  return { isValid: true };
+}
+
+function validateEventDateTime(eventDate: string, courts: ICourtTime[]): { isValid: boolean; error?: string } {
+  // ตรวจสอบวันที่ก่อน
+  const dateValidation = validateEventDate(eventDate);
+  if (!dateValidation.isValid) {
+    return dateValidation;
+  }
+
+  // ถ้าเป็นวันนี้ ตรวจสอบเวลาด้วย
+  const eventDateObj = new Date(eventDate + 'T00:00:00.000Z');
+  const today = new Date();
+  const todayUTC = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const eventDateLocal = new Date(eventDateObj.getFullYear(), eventDateObj.getMonth(), eventDateObj.getDate());
+
+  if (eventDateLocal.getTime() === todayUTC.getTime()) {
+    // เป็นวันนี้ - ตรวจสอบเวลา
+    const now = new Date();
+    const currentTimeMinutes = now.getHours() * 60 + now.getMinutes();
+
+    for (const court of courts) {
+      const startMinutes = timeToMinutes(court.startTime);
+      if (startMinutes <= currentTimeMinutes) {
+        return {
+          isValid: false,
+          error: `Court ${court.courtNumber} start time (${court.startTime}) cannot be in the past. Current time: ${now.toTimeString().slice(0, 5)}`
+        };
+      }
+    }
+  }
+
+  return { isValid: true };
+}
+
 function validateCourts(courts: ICourtTime[]): CourtValidationResult {
   const errors: any = {};
   
@@ -190,8 +256,30 @@ export const createEvent = async (
       return;
     }
 
+    // Validate event date
+    const dateValidation = validateEventDate(eventData.eventDate);
+    if (!dateValidation.isValid) {
+      res.status(400).json({
+        code: "VALIDATION_ERROR",
+        message: "Invalid event date",
+        details: { eventDate: dateValidation.error }
+      });
+      return;
+    }
+
     // Validate courts data
     if (eventData.courts && eventData.courts.length > 0) {
+      // Validate date and time together
+      const dateTimeValidation = validateEventDateTime(eventData.eventDate, eventData.courts);
+      if (!dateTimeValidation.isValid) {
+        res.status(400).json({
+          code: "VALIDATION_ERROR",
+          message: "Invalid event date/time",
+          details: { eventDateTime: dateTimeValidation.error }
+        });
+        return;
+      }
+
       const courtValidation = validateCourts(eventData.courts);
       if (!courtValidation.isValid) {
         res.status(400).json({
@@ -221,6 +309,7 @@ export const createEvent = async (
         courtHourlyRate: event.courtHourlyRate,
         courts: event.courts,
         createdBy: event.createdBy,
+        updatedBy: (event as any).updatedBy,
         createdAt: event.createdAt,
         updatedAt: event.updatedAt,
       },
@@ -280,6 +369,7 @@ export const getEvents = async (req: Request, res: Response): Promise<void> => {
         courtHourlyRate: event.courtHourlyRate,
         courts: event.courts,
         createdBy: (event as any).createdBy,
+        updatedBy: (event as any).updatedBy,
         createdAt: event.createdAt,
         updatedAt: event.updatedAt,
       })),
@@ -319,6 +409,7 @@ export const getEvent = async (req: Request, res: Response): Promise<void> => {
         courtHourlyRate: event.courtHourlyRate,
         courts: event.courts,
         createdBy: (event as any).createdBy,
+        updatedBy: (event as any).updatedBy,
         createdAt: event.createdAt,
         updatedAt: event.updatedAt,
       },
@@ -329,6 +420,54 @@ export const getEvent = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
+/**
+ * @swagger
+ * /api/events/{id}:
+ *   patch:
+ *     summary: Partially update an event (only specified fields)
+ *     tags: [Events]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Event ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/EventUpdate'
+ *           example:
+ *             eventName: "Updated Event Name"
+ *             capacity:
+ *               maxParticipants: 25
+ *     responses:
+ *       200:
+ *         description: Event updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 event:
+ *                   $ref: '#/components/schemas/Event'
+ *       404:
+ *         description: Event not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       409:
+ *         description: Duplicate event (same name, date, location)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 export const updateEvent = async (
   req: Request,
   res: Response
@@ -344,8 +483,35 @@ export const updateEvent = async (
       return;
     }
 
+    // Validate event date if being updated
+    if (updateData.eventDate) {
+      const dateValidation = validateEventDate(updateData.eventDate);
+      if (!dateValidation.isValid) {
+        res.status(400).json({
+          code: "VALIDATION_ERROR",
+          message: "Invalid event date",
+          details: { eventDate: dateValidation.error }
+        });
+        return;
+      }
+    }
+
     // Validate courts data if being updated
     if (updateData.courts && updateData.courts.length > 0) {
+      // ใช้ eventDate ใหม่หรือเก่า
+      const eventDateToUse = updateData.eventDate || event.eventDate;
+      
+      // Validate date and time together
+      const dateTimeValidation = validateEventDateTime(eventDateToUse, updateData.courts);
+      if (!dateTimeValidation.isValid) {
+        res.status(400).json({
+          code: "VALIDATION_ERROR",
+          message: "Invalid event date/time",
+          details: { eventDateTime: dateTimeValidation.error }
+        });
+        return;
+      }
+
       const courtValidation = validateCourts(updateData.courts);
       if (!courtValidation.isValid) {
         res.status(400).json({
@@ -357,11 +523,34 @@ export const updateEvent = async (
       }
     }
 
-    let updatedEvent;
+    // ถ้าแก้เฉพาะวันที่ (ไม่แก้ courts) ให้ตรวจสอบกับ courts เดิม
+    if (updateData.eventDate && (!updateData.courts || updateData.courts.length === 0) && event.courts && event.courts.length > 0) {
+      const dateTimeValidation = validateEventDateTime(updateData.eventDate, event.courts);
+      if (!dateTimeValidation.isValid) {
+        res.status(400).json({
+          code: "VALIDATION_ERROR",
+          message: "Invalid event date/time with existing courts",
+          details: { eventDateTime: dateTimeValidation.error }
+        });
+        return;
+      }
+    }
+
+    // เพิ่ม updatedBy จาก x-user-id header
+    const userId = req.headers["x-user-id"] as string;
+    const updateDataWithUser = { ...updateData, updatedBy: userId };
+
+    let updatedEvent: any;
     try {
-      updatedEvent = await Event.findByIdAndUpdate(id, updateData, {
-        new: true,
-      });
+      // ใช้ findById แล้ว save เพื่อให้ pre-save hook ทำงาน
+      updatedEvent = await Event.findById(id);
+      if (!updatedEvent) {
+        res.status(404).json({ error: "Event not found" });
+        return;
+      }
+      
+      Object.assign(updatedEvent, updateDataWithUser);
+      await updatedEvent.save();
     } catch (error: any) {
       if (error?.code === 11000) {
         res.status(409).json({
@@ -387,6 +576,8 @@ export const updateEvent = async (
         shuttlecockPrice: updatedEvent!.shuttlecockPrice,
         courtHourlyRate: updatedEvent!.courtHourlyRate,
         courts: updatedEvent!.courts,
+        createdBy: (updatedEvent as any).createdBy,
+        updatedBy: (updatedEvent as any).updatedBy,
         createdAt: updatedEvent!.createdAt,
         updatedAt: updatedEvent!.updatedAt,
       },

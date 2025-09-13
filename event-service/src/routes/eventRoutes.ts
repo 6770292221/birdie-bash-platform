@@ -78,33 +78,6 @@ router.get('/', getEvents);
  */
 router.get('/:id', getEvent);
 
-/**
- * @swagger
- * /api/events/{id}:
- *   put:
- *     summary: Update event
- *     tags: [Events]
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/EventUpdate'
- *     responses:
- *       200:
- *         description: Event updated successfully
- *       404:
- *         description: Event not found
- *       500:
- *         description: Internal server error
- */
-router.put('/:id', updateEvent);
 
 /**
  * @swagger

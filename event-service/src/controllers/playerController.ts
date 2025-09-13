@@ -11,6 +11,349 @@ interface ExtendedRequest extends Request {
   };
 }
 
+/**
+ * @swagger
+ * /api/events/{id}/players:
+ *   get:
+ *     summary: Get list of players for an event
+ *     tags: [Players]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Event ID
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [registered, waitlist, canceled]
+ *         description: Filter by player status
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: number
+ *           default: 50
+ *         description: Number of players to return
+ *       - in: query
+ *         name: offset
+ *         schema:
+ *           type: number
+ *           default: 0
+ *         description: Number of players to skip
+ *     responses:
+ *       200:
+ *         description: List of players retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 eventId:
+ *                   type: string
+ *                 players:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       playerId:
+ *                         type: string
+ *                       userId:
+ *                         type: string
+ *                         nullable: true
+ *                       name:
+ *                         type: string
+ *                         nullable: true
+ *                       email:
+ *                         type: string
+ *                         nullable: true
+ *                       startTime:
+ *                         type: string
+ *                         nullable: true
+ *                       endTime:
+ *                         type: string
+ *                         nullable: true
+ *                       status:
+ *                         type: string
+ *                         enum: [registered, waitlist, canceled]
+ *                       registrationTime:
+ *                         type: string
+ *                         format: date-time
+ *                 summary:
+ *                   type: object
+ *                   properties:
+ *                     total:
+ *                       type: number
+ *                     registered:
+ *                       type: number
+ *                     waitlist:
+ *                       type: number
+ *                     canceled:
+ *                       type: number
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     limit:
+ *                       type: number
+ *                     offset:
+ *                       type: number
+ *                     hasMore:
+ *                       type: boolean
+ *       404:
+ *         description: Event not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+export const getPlayers = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    const { id: eventId } = req.params;
+    const { status, limit = 50, offset = 0 } = req.query;
+
+    // ตรวจสอบว่า event มีอยู่จริง
+    const event = await Event.findById(eventId);
+    if (!event) {
+      res.status(404).json({ 
+        code: "EVENT_NOT_FOUND",
+        message: "Event not found",
+        details: { eventId }
+      });
+      return;
+    }
+
+    // สร้าง filter
+    const filter: any = { eventId };
+    if (status) filter.status = status;
+
+    // ดึงข้อมูล players
+    const players = await Player.find(filter)
+      .sort({ registrationTime: 1 }) // เรียงตามเวลาสมัคร
+      .limit(Number(limit))
+      .skip(Number(offset));
+
+    const total = await Player.countDocuments(filter);
+
+    // จัดกลุ่มตาม status
+    const groupedPlayers = {
+      registered: players.filter(p => p.status === 'registered'),
+      waitlist: players.filter(p => p.status === 'waitlist'),
+      canceled: players.filter(p => p.status === 'canceled')
+    };
+
+    res.status(200).json({
+      eventId,
+      players: players.map(player => ({
+        playerId: player.id,
+        userId: player.userId || null,
+        name: player.name || null,
+        email: player.email || null,
+        startTime: player.startTime || null,
+        endTime: player.endTime || null,
+        status: player.status,
+        registrationTime: player.registrationTime.toISOString()
+      })),
+      summary: {
+        total,
+        registered: groupedPlayers.registered.length,
+        waitlist: groupedPlayers.waitlist.length,
+        canceled: groupedPlayers.canceled.length
+      },
+      pagination: {
+        limit: Number(limit),
+        offset: Number(offset),
+        hasMore: Number(offset) + Number(limit) < total
+      }
+    });
+  } catch (error) {
+    console.error("Get players error:", error);
+    res.status(500).json({ 
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Internal server error",
+      details: {}
+    });
+  }
+};
+
+/**
+ * @swagger
+ * /api/events/{id}/players/{pid}/cancel:
+ *   post:
+ *     summary: Cancel a player registration
+ *     tags: [Players]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Event ID
+ *       - in: path
+ *         name: pid
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Player ID
+ *     responses:
+ *       200:
+ *         description: Player registration canceled successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 player:
+ *                   type: object
+ *                   properties:
+ *                     playerId:
+ *                       type: string
+ *                     eventId:
+ *                       type: string
+ *                     status:
+ *                       type: string
+ *                       enum: [canceled]
+ *                     canceledAt:
+ *                       type: string
+ *                       format: date-time
+ *       400:
+ *         description: Bad request (already canceled, player not in event)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       403:
+ *         description: Forbidden (can only cancel own registration)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       404:
+ *         description: Event or player not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+export const cancelPlayerRegistration = async (
+  req: ExtendedRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const { id: eventId, pid: playerId } = req.params;
+    const userId = req.headers["x-user-id"];
+
+    // ตรวจสอบว่า event มีอยู่จริง
+    const event = await Event.findById(eventId);
+    if (!event) {
+      res.status(404).json({ 
+        code: "EVENT_NOT_FOUND",
+        message: "Event not found",
+        details: { eventId }
+      });
+      return;
+    }
+
+    // ตรวจสอบว่า player มีอยู่จริง
+    const player = await Player.findById(playerId);
+    if (!player) {
+      res.status(404).json({ 
+        code: "PLAYER_NOT_FOUND",
+        message: "Player registration not found",
+        details: { playerId }
+      });
+      return;
+    }
+
+    // ตรวจสอบว่า player อยู่ใน event นี้
+    if (player.eventId.toString() !== eventId) {
+      res.status(400).json({ 
+        code: "PLAYER_EVENT_MISMATCH",
+        message: "Player is not registered for this event",
+        details: { playerId, eventId }
+      });
+      return;
+    }
+
+    // ตรวจสอบสิทธิ์การยกเลิก
+    // ถ้ามี userId (user ที่ login) ต้องเป็นเจ้าของ registration
+    if (userId && player.userId && player.userId !== userId) {
+      res.status(403).json({
+        code: "INSUFFICIENT_PERMISSIONS",
+        message: "You can only cancel your own registration",
+        details: { playerId, requesterId: userId, ownerId: player.userId }
+      });
+      return;
+    }
+
+    // ตรวจสอบสถานะปัจจุบัน
+    if (player.status === 'canceled') {
+      res.status(400).json({
+        code: "ALREADY_CANCELED",
+        message: "Player registration is already canceled",
+        details: { playerId, currentStatus: player.status }
+      });
+      return;
+    }
+
+    // อัปเดตสถานะเป็น canceled
+    const wasRegistered = player.status === 'registered';
+    player.status = 'canceled';
+    await player.save();
+
+    // ถ้า player ที่ยกเลิกเป็นสถานะ 'registered' ให้ลด currentParticipants และเพิ่ม availableSlots
+    if (wasRegistered) {
+      await Event.findByIdAndUpdate(eventId, {
+        $inc: { 
+          "capacity.currentParticipants": -1,
+          "capacity.availableSlots": 1
+        }
+      });
+
+      // ตรวจสอบว่ามีคนใน waitlist หรือไม่ เพื่อเลื่อนขึ้นมา
+      const waitlistPlayer = await Player.findOne({ 
+        eventId, 
+        status: 'waitlist' 
+      }).sort({ registrationTime: 1 });
+
+      if (waitlistPlayer) {
+        waitlistPlayer.status = 'registered';
+        await waitlistPlayer.save();
+
+        // ไม่ต้องอัปเดต capacity เพราะเราเพิ่งเพิ่ม availableSlots แล้วลดลงอีกครั้ง
+        await Event.findByIdAndUpdate(eventId, {
+          $inc: { 
+            "capacity.currentParticipants": 1,
+            "capacity.availableSlots": -1
+          }
+        });
+      }
+    }
+
+    res.status(200).json({
+      message: "Player registration canceled successfully",
+      player: {
+        playerId: player.id,
+        eventId: player.eventId.toString(),
+        status: player.status,
+        canceledAt: new Date().toISOString()
+      }
+    });
+  } catch (error) {
+    console.error("Cancel player registration error:", error);
+    res.status(500).json({ 
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Internal server error",
+      details: {}
+    });
+  }
+};
+
 export const registerPlayer = async (
   req: ExtendedRequest,
   res: Response
@@ -163,8 +506,8 @@ export const registerPlayer = async (
 
       // Check if player's time is within the available court time range
       if (playerStartNum < earliestStart || playerEndNum > latestEnd) {
-        const earliestStartTime = startTimes.find(time => parseInt(time.replace(':', '')) === earliestStart);
-        const latestEndTime = endTimes.find(time => parseInt(time.replace(':', '')) === latestEnd);
+        const earliestStartTime = startTimes.find(time => parseInt(time.replace(':', '')) === earliestStart) || '';
+        const latestEndTime = endTimes.find(time => parseInt(time.replace(':', '')) === latestEnd) || '';
         
         res.status(400).json({
           code: "TIME_OUTSIDE_COURT_HOURS",

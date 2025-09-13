@@ -37,6 +37,7 @@ const EventSchema: Schema = new Schema(
     courtHourlyRate: { type: Number, required: true },
     courts: [CourtTimeSchema],
     createdBy: { type: String, required: false },
+    updatedBy: { type: String, required: false },
   },
   { timestamps: true, bufferCommands: false }
 );

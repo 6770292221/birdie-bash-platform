@@ -45,6 +45,7 @@ export interface IEvent {
   courtHourlyRate: number;
   courts: ICourtTime[];
   createdBy?: string;
+  updatedBy?: string;
   createdAt: Date;
   updatedAt?: Date;
 }

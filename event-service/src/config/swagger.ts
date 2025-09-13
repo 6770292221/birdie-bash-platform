@@ -46,6 +46,7 @@ const swaggerDefinition = {
           eventDate: { type: "string", description: "Event date (YYYY-MM-DD)" },
           location: { type: "string", description: "Location name" },
           createdBy: { type: "string", description: "User ID who created the event", readOnly: true },
+          updatedBy: { type: "string", description: "User ID who last updated the event", readOnly: true },
           status: {
             type: "object",
             properties: {
@@ -115,6 +116,30 @@ const swaggerDefinition = {
           courtHourlyRate: { type: "number" },
           courts: { $ref: "#/components/schemas/Event/properties/courts" },
         },
+        example: {
+          eventName: "Weekend Badminton Meetup",
+          eventDate: "2025-09-21",
+          location: "Bangkok Sports Complex",
+          status: "active",
+          capacity: {
+            maxParticipants: 20,
+            waitlistEnabled: true
+          },
+          shuttlecockPrice: 25,
+          courtHourlyRate: 200,
+          courts: [
+            {
+              courtNumber: 1,
+              startTime: "18:00",
+              endTime: "20:00"
+            },
+            {
+              courtNumber: 2,
+              startTime: "20:00",
+              endTime: "22:00"
+            }
+          ]
+        }
       },
       EventUpdate: {
         type: "object",
