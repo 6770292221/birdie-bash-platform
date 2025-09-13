@@ -22,24 +22,16 @@ const CapacitySchema = new Schema(
   { _id: false }
 );
 
-const StatusSchema = new Schema(
-  {
-    state: {
-      type: String,
-      enum: ["active", "canceled", "completed"],
-      default: "active",
-    },
-    isAcceptingRegistrations: { type: Boolean, default: true },
-  },
-  { _id: false }
-);
-
 const EventSchema: Schema = new Schema(
   {
     eventName: { type: String, required: true, trim: true },
     eventDate: { type: String, required: true },
     location: { type: String, required: true, trim: true },
-    status: { type: StatusSchema, required: false, default: () => ({ state: 'active', isAcceptingRegistrations: true }) },
+    status: { 
+      type: String, 
+      enum: ["active", "canceled", "completed"], 
+      default: "active" 
+    },
     capacity: { type: CapacitySchema, required: true },
     shuttlecockPrice: { type: Number, required: true },
     courtHourlyRate: { type: Number, required: true },
@@ -63,12 +55,7 @@ EventSchema.pre("save", function (next) {
   if (!doc.capacity) doc.capacity = {};
   doc.capacity.availableSlots = available;
   doc.capacity.waitlistEnabled =
-    doc.status?.state === "active" && available <= 0;
-
-  // Calculate derived status field
-  if (!doc.status) doc.status = {};
-  doc.status.isAcceptingRegistrations =
-    doc.status.state === "active" && available > 0;
+    doc.status === "active" && available <= 0;
 
   next();
 });

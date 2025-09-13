@@ -27,6 +27,31 @@ export function requireAuth(req: RequestWithUser, res: Response, next: NextFunct
   next();
 }
 
+export function requireAdmin(req: RequestWithUser, res: Response, next: NextFunction) {
+  if (!req.user) {
+    res.status(401).json({ 
+      error: "Authentication required", 
+      code: "AUTHENTICATION_REQUIRED" 
+    });
+    return;
+  }
+  
+  if (req.user.role !== "admin") {
+    res.status(403).json({
+      error: "Admin privileges required",
+      code: "INSUFFICIENT_PERMISSIONS",
+      details: {
+        userId: req.user.userId,
+        currentRole: req.user.role,
+        requiredRole: "admin"
+      }
+    });
+    return;
+  }
+  
+  next();
+}
+
 export function forwardUserHeaders(proxyReq: any, req: RequestWithUser) {
   if (req.user) {
     proxyReq.setHeader("x-user-id", req.user.userId);

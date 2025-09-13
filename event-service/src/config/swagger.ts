@@ -58,11 +58,11 @@ const swaggerDefinition = {
           },
           capacity: {
             type: "object",
-            required: ["maxParticipants"],
+            required: ["maxParticipants", "currentParticipants", "availableSlots"],
             properties: {
               maxParticipants: { type: "number", minimum: 1 },
-              currentParticipants: { type: "number" },
-              availableSlots: { type: "number" },
+              currentParticipants: { type: "number", minimum: 0 },
+              availableSlots: { type: "number", minimum: 0 },
               waitlistEnabled: { type: "boolean" },
             },
           },
@@ -98,8 +98,19 @@ const swaggerDefinition = {
           eventName: { type: "string" },
           eventDate: { type: "string" },
           location: { type: "string" },
-          status: { $ref: "#/components/schemas/Event/properties/status" },
-          capacity: { $ref: "#/components/schemas/Event/properties/capacity" },
+          status: { 
+            type: "string",
+            enum: ["active", "canceled", "completed"],
+            default: "active"
+          },
+          capacity: {
+            type: "object",
+            required: ["maxParticipants"],
+            properties: {
+              maxParticipants: { type: "number", minimum: 1 },
+              waitlistEnabled: { type: "boolean" },
+            },
+          },
           shuttlecockPrice: { type: "number" },
           courtHourlyRate: { type: "number" },
           courts: { $ref: "#/components/schemas/Event/properties/courts" },
@@ -128,6 +139,33 @@ const swaggerDefinition = {
           availableSlots: { type: "number" },
           isAcceptingRegistrations: { type: "boolean" },
           waitlistEnabled: { type: "boolean" },
+        },
+      },
+      RegisterByUser: {
+        type: "object",
+        properties: {
+          startTime: { type: "string", description: "Start time (HH:mm)" },
+          endTime: { type: "string", description: "End time (HH:mm)" },
+        },
+      },
+      RegisterByGuest: {
+        type: "object",
+        required: ["name"],
+        properties: {
+          name: { type: "string", description: "Guest name" },
+          email: { type: "string", format: "email", description: "Guest email (optional)" },
+          startTime: { type: "string", description: "Start time (HH:mm)" },
+          endTime: { type: "string", description: "End time (HH:mm)" },
+        },
+      },
+      Player: {
+        type: "object",
+        properties: {
+          eventId: { type: "string", description: "Event ID" },
+          playerId: { type: "string", description: "Player ID" },
+          userId: { type: "string", nullable: true, description: "User ID (null for guests)" },
+          registrationTime: { type: "string", format: "date-time", description: "Registration timestamp" },
+          status: { type: "string", enum: ["registered", "waitlist", "cancelled"], description: "Registration status" },
         },
       },
     },

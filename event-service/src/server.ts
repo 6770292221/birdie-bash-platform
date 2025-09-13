@@ -12,6 +12,7 @@ import {
   deleteEvent,
   getEventStatus,
 } from "./controllers/eventController";
+import { registerPlayer } from "./controllers/playerController";
 
 dotenv.config();
 
@@ -56,6 +57,7 @@ app.get("/api/events/:id", getEvent);
 app.put("/api/events/:id", updateEvent);
 app.delete("/api/events/:id", deleteEvent);
 app.get("/api/events/:id/status", getEventStatus);
+app.post("/api/events/:id/players", registerPlayer);
 
 // Initialize DB connection (non-blocking)
 connectEventDB();

@@ -20,10 +20,7 @@ export interface CapacityInfo {
   waitlistEnabled: boolean;
 }
 
-export interface StatusInfo {
-  state: EventStatus;
-  isAcceptingRegistrations: boolean;
-}
+// StatusInfo is no longer used - status is now a simple string
 
 export interface PaymentInfo {
   pricePerPerson?: number;
@@ -42,7 +39,7 @@ export interface IEvent {
   eventName: string;
   eventDate: string;
   location: string;
-  status: StatusInfo;
+  status: EventStatus;
   capacity: CapacityInfo;
   shuttlecockPrice: number;
   courtHourlyRate: number;
@@ -56,7 +53,7 @@ export interface IEventCreate {
   eventName: string;
   eventDate: string;
   location: string;
-  status?: StatusInfo;
+  status?: EventStatus;
   capacity: Omit<CapacityInfo, 'availableSlots' | 'waitlistEnabled'> & {
     availableSlots?: number;
     waitlistEnabled?: boolean;
@@ -71,7 +68,7 @@ export interface IEventUpdate {
   eventDate?: string;
   location?: string;
   capacity?: Partial<CapacityInfo>;
-  status?: Partial<StatusInfo> & { state?: EventStatus };
+  status?: EventStatus;
   shuttlecockPrice?: number;
   courtHourlyRate?: number;
   courts?: ICourtTime[];
@@ -118,6 +115,18 @@ export interface IPlayerRegister {
   userId?: string;
   name: string;
   email: string;
+  startTime?: string;
+  endTime?: string;
+}
+
+export interface RegisterByUser {
+  startTime?: string;
+  endTime?: string;
+}
+
+export interface RegisterByGuest {
+  name: string;
+  email?: string;
   startTime?: string;
   endTime?: string;
 }

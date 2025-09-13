@@ -1,6 +1,5 @@
-import { Schema, Document } from 'mongoose';
+import mongoose, { Schema, Document } from 'mongoose';
 import { IPlayer } from '../types/event';
-import { eventDbConnection } from '../config/eventDatabase';
 
 export interface IPlayerDocument extends Omit<IPlayer, 'id'>, Document {}
 
@@ -17,12 +16,12 @@ const PlayerSchema: Schema = new Schema(
     },
     name: {
       type: String,
-      required: true,
+      required: false,
       trim: true,
     },
     email: {
       type: String,
-      required: true,
+      required: false,
       lowercase: true,
       trim: true,
     },
@@ -49,6 +48,7 @@ const PlayerSchema: Schema = new Schema(
   }
 );
 
-PlayerSchema.index({ eventId: 1, email: 1 }, { unique: true });
+PlayerSchema.index({ eventId: 1, userId: 1 }, { unique: true, sparse: true });
+PlayerSchema.index({ eventId: 1, email: 1 }, { unique: true, sparse: true });
 
-export default eventDbConnection.model<IPlayerDocument>('Player', PlayerSchema);
+export default mongoose.model<IPlayerDocument>('Player', PlayerSchema);

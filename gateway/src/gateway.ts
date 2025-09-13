@@ -2,7 +2,7 @@ import express from "express";
 import { createProxyMiddleware } from "http-proxy-middleware";
 import dotenv from "dotenv";
 import cors from "cors";
-import { attachUserFromJwt, requireAuth, forwardUserHeaders } from "./middleware/auth";
+import { attachUserFromJwt, requireAuth, requireAdmin, forwardUserHeaders } from "./middleware/auth";
 import { getRoutes } from "./routesConfig";
 import { registerDocs } from "./docs/aggregate";
 
@@ -55,7 +55,7 @@ registerDocs(app, AUTH_SERVICE_URL, EVENT_SERVICE_URL);
  *                   type: string
  *                   example: birdie-gateway
  */
-app.get("/health", (req, res) => {
+app.get("/health", (_req, res) => {
   res.status(200).json({
     status: "OK",
     timestamp: new Date().toISOString(),
@@ -76,7 +76,7 @@ routes.forEach((route) => {
     pathRewrite: {
       [`^${route.path}`]: route.path, // Keep the path when forwarding
     },
-    onProxyReq: (proxyReq: any, req: any, res: any) => {
+    onProxyReq: (proxyReq: any, req: any, _res: any) => {
       console.log(
         `[GATEWAY] ${req.method} ${req.path} -> ${route.target}${req.path}`
       );
@@ -108,7 +108,7 @@ routes.forEach((route) => {
         service: route.target,
       });
     },
-    onProxyRes: (proxyRes: any, req: any, res: any) => {
+    onProxyRes: (proxyRes: any, req: any, _res: any) => {
       // Optionally log upstream status codes
       console.log(
         `[GATEWAY] <- ${proxyRes.statusCode} ${route.target}${req.path}`
@@ -116,10 +116,44 @@ routes.forEach((route) => {
     },
   };
 
+  // Create middleware stack based on route configuration
+  const middlewares: any[] = [];
+  
   if (route.protected) {
-    app.use(route.path, requireAuth as any, createProxyMiddleware(proxyOptions));
+    middlewares.push(requireAuth as any);
+  }
+  
+  if (route.adminRequired) {
+    middlewares.push(requireAdmin as any);
+  }
+  
+  middlewares.push(createProxyMiddleware(proxyOptions));
+
+  // Apply route with method filtering if specified
+  if (route.methods && route.methods.length > 0) {
+    route.methods.forEach(method => {
+      switch (method.toUpperCase()) {
+        case "GET":
+          app.get(route.path, ...middlewares);
+          break;
+        case "POST":
+          app.post(route.path, ...middlewares);
+          break;
+        case "PUT":
+          app.put(route.path, ...middlewares);
+          break;
+        case "DELETE":
+          app.delete(route.path, ...middlewares);
+          break;
+        case "PATCH":
+          app.patch(route.path, ...middlewares);
+          break;
+        default:
+          app.use(route.path, ...middlewares);
+      }
+    });
   } else {
-    app.use(route.path, createProxyMiddleware(proxyOptions));
+    app.use(route.path, ...middlewares);
   }
 });
 
@@ -133,7 +167,7 @@ app.use("*", (req, res) => {
 });
 
 // Global error handler
-app.use((err: any, req: any, res: any, next: any) => {
+app.use((err: any, _req: any, res: any, _next: any) => {
   console.error("[GATEWAY ERROR]:", err);
   res.status(500).json({
     error: "Internal gateway error",

@@ -7,6 +7,7 @@ import {
   deleteEvent, 
   getEventStatus 
 } from '../controllers/eventController';
+import { registerPlayer } from '../controllers/playerController';
 
 const router = express.Router();
 
@@ -15,6 +16,8 @@ const router = express.Router();
  * tags:
  *   - name: Events
  *     description: Event management
+ *   - name: Players
+ *     description: Player registration management
  */
 
 /**
@@ -146,5 +149,64 @@ router.delete('/:id', deleteEvent);
  *         description: Internal server error
  */
 router.get('/:id/status', getEventStatus);
+
+/**
+ * @swagger
+ * /api/events/{id}/players:
+ *   post:
+ *     summary: Register a player for an event
+ *     tags: [Players]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Event ID
+ *       - in: header
+ *         name: x-user-id
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: User ID (if provided, registers as user; if not provided, registers as guest with name/email in body)
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             oneOf:
+ *               - $ref: '#/components/schemas/RegisterByUser'
+ *               - $ref: '#/components/schemas/RegisterByGuest'
+ *     responses:
+ *       201:
+ *         description: Player registered successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 eventId:
+ *                   type: string
+ *                 playerId:
+ *                   type: string
+ *                 userId:
+ *                   type: string
+ *                   nullable: true
+ *                 registrationTime:
+ *                   type: string
+ *                   format: date-time
+ *                 status:
+ *                   type: string
+ *                   enum: [registered, waitlist, cancelled]
+ *       400:
+ *         description: Bad request (event not accepting registrations, event full)
+ *       404:
+ *         description: Event not found
+ *       409:
+ *         description: Player already registered
+ *       500:
+ *         description: Internal server error
+ */
+router.post('/:id/players', registerPlayer);
 
 export default router;

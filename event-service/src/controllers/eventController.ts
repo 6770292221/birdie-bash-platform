@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import Event from "../models/Event";
-import { IEventCreate, IEventUpdate } from "../types/event";
+import { IEventCreate, IEventUpdate, ICourtTime } from "../types/event";
 
 interface ExtendedRequest extends Request {
   headers: Request["headers"] & {
@@ -8,6 +8,115 @@ interface ExtendedRequest extends Request {
     "x-user-email"?: string;
     "x-user-role"?: string;
   };
+}
+
+interface CourtValidationResult {
+  isValid: boolean;
+  errors: any;
+}
+
+function validateCourts(courts: ICourtTime[]): CourtValidationResult {
+  const errors: any = {};
+  
+  // ตรวจสอบ courtNumber ซ้ำ
+  const courtNumbers = courts.map(c => c.courtNumber);
+  const duplicateNumbers = courtNumbers.filter((num, index) => courtNumbers.indexOf(num) !== index);
+  if (duplicateNumbers.length > 0) {
+    errors.duplicateCourtNumbers = duplicateNumbers;
+  }
+  
+  // ตรวจสอบแต่ละ court
+  courts.forEach((court, index) => {
+    const courtErrors: any = {};
+    
+    // ตรวจสอบ courtNumber ต้องเป็นเลขบวก
+    if (!court.courtNumber || court.courtNumber <= 0) {
+      courtErrors.courtNumber = "Court number must be a positive integer";
+    }
+    
+    // ตรวจสอบรูปแบบเวลา (HH:MM)
+    const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+    if (!timeRegex.test(court.startTime)) {
+      courtErrors.startTime = `Invalid time format: ${court.startTime}. Expected HH:MM (24-hour format)`;
+    }
+    if (!timeRegex.test(court.endTime)) {
+      courtErrors.endTime = `Invalid time format: ${court.endTime}. Expected HH:MM (24-hour format)`;
+    }
+    
+    // ตรวจสอบ startTime < endTime
+    if (timeRegex.test(court.startTime) && timeRegex.test(court.endTime)) {
+      const startMinutes = timeToMinutes(court.startTime);
+      const endMinutes = timeToMinutes(court.endTime);
+      
+      if (startMinutes >= endMinutes) {
+        courtErrors.timeRange = `Start time (${court.startTime}) must be before end time (${court.endTime})`;
+      }
+      
+      // ตรวจสอบระยะเวลาขั้นต่ำ (30 นาที)
+      if (endMinutes - startMinutes < 30) {
+        courtErrors.minimumDuration = `Court session must be at least 30 minutes. Current: ${endMinutes - startMinutes} minutes`;
+      }
+      
+      // ตรวจสอบเวลาสมเหตุสมผล (6:00-24:00)
+      if (startMinutes < 360) { // ก่อน 6:00
+        courtErrors.startTimeRealistic = `Start time too early: ${court.startTime}. Courts typically open after 6:00`;
+      }
+      if (endMinutes > 1440) { // หลัง 24:00
+        courtErrors.endTimeRealistic = `End time too late: ${court.endTime}. Courts typically close before 24:00`;
+      }
+    }
+    
+    if (Object.keys(courtErrors).length > 0) {
+      errors[`court_${index + 1}`] = courtErrors;
+    }
+  });
+  
+  // ตรวจสอบการซ้อนทับของเวลาในสนามเดียวกัน
+  const timeOverlaps = findTimeOverlaps(courts);
+  if (timeOverlaps.length > 0) {
+    errors.timeOverlaps = timeOverlaps;
+  }
+  
+  return {
+    isValid: Object.keys(errors).length === 0,
+    errors: Object.keys(errors).length > 0 ? errors : undefined
+  };
+}
+
+function timeToMinutes(timeStr: string): number {
+  const [hours, minutes] = timeStr.split(':').map(Number);
+  return hours * 60 + minutes;
+}
+
+function findTimeOverlaps(courts: ICourtTime[]): any[] {
+  const overlaps: any[] = [];
+  
+  for (let i = 0; i < courts.length; i++) {
+    for (let j = i + 1; j < courts.length; j++) {
+      const court1 = courts[i];
+      const court2 = courts[j];
+      
+      // ถ้าเป็นสนามเดียวกัน ตรวจสอบการซ้อนทับ
+      if (court1.courtNumber === court2.courtNumber) {
+        const start1 = timeToMinutes(court1.startTime);
+        const end1 = timeToMinutes(court1.endTime);
+        const start2 = timeToMinutes(court2.startTime);
+        const end2 = timeToMinutes(court2.endTime);
+        
+        // ตรวจสอบการซ้อนทับ
+        if ((start1 < end2 && start2 < end1)) {
+          overlaps.push({
+            court: court1.courtNumber,
+            session1: `${court1.startTime}-${court1.endTime}`,
+            session2: `${court2.startTime}-${court2.endTime}`,
+            message: `Court ${court1.courtNumber} has overlapping time slots`
+          });
+        }
+      }
+    }
+  }
+  
+  return overlaps;
 }
 
 export const createEvent = async (
@@ -20,6 +129,11 @@ export const createEvent = async (
    *   post:
    *     summary: Create a new event
    *     tags: [Events]
+   *     security:
+   *       - BearerAuth: []
+   *     description: |
+   *       Create a new event. Requires admin privileges.
+   *       Authorization is handled by Gateway - user headers are automatically forwarded.
    *     requestBody:
    *       required: true
    *       content:
@@ -38,6 +152,24 @@ export const createEvent = async (
    *                   type: string
    *                 event:
    *                   $ref: '#/components/schemas/Event'
+   *       400:
+   *         description: Bad request (validation error)
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Error'
+   *       401:
+   *         description: Unauthorized (missing or invalid JWT token)
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Error'
+   *       403:
+   *         description: Forbidden (requires admin privileges)
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Error'
    *       409:
    *         description: Duplicate event (same name, date, location)
    *         content:
@@ -48,11 +180,32 @@ export const createEvent = async (
   try {
     const eventData: IEventCreate = req.body;
     const userId = req.headers["x-user-id"];
-    const userEmail = req.headers["x-user-email"];
+
+    if (!userId) {
+      res.status(400).json({
+        code: "VALIDATION_ERROR",
+        message: "x-user-id header is required",
+        details: { field: "x-user-id", required: true },
+      });
+      return;
+    }
+
+    // Validate courts data
+    if (eventData.courts && eventData.courts.length > 0) {
+      const courtValidation = validateCourts(eventData.courts);
+      if (!courtValidation.isValid) {
+        res.status(400).json({
+          code: "VALIDATION_ERROR",
+          message: "Invalid courts configuration",
+          details: courtValidation.errors
+        });
+        return;
+      }
+    }
 
     // Ignore any client-provided id; it will be generated by MongoDB
     const { /* id: _ignored, */ ...payload } = eventData as any;
-    const event = new Event({ ...payload, ...(userId ? { createdBy: userId } : {}) });
+    const event = new Event({ ...payload, createdBy: userId });
     await event.save();
 
     res.status(201).json({
@@ -105,7 +258,7 @@ export const getEvents = async (req: Request, res: Response): Promise<void> => {
     const { status, date, limit = 10, offset = 0 } = req.query;
 
     const filter: any = {};
-    if (status) filter["status.state"] = status;
+    if (status) filter["status"] = status;
     if (date) filter.eventDate = date;
 
     const events = await Event.find(filter)
@@ -190,6 +343,20 @@ export const updateEvent = async (
       res.status(404).json({ error: "Event not found" });
       return;
     }
+
+    // Validate courts data if being updated
+    if (updateData.courts && updateData.courts.length > 0) {
+      const courtValidation = validateCourts(updateData.courts);
+      if (!courtValidation.isValid) {
+        res.status(400).json({
+          code: "VALIDATION_ERROR",
+          message: "Invalid courts configuration",
+          details: courtValidation.errors
+        });
+        return;
+      }
+    }
+
     let updatedEvent;
     try {
       updatedEvent = await Event.findByIdAndUpdate(id, updateData, {
@@ -270,11 +437,12 @@ export const getEventStatus = async (
     }
 
     const availableSlots = event.capacity.availableSlots;
-    const isAcceptingRegistrations = event.status.isAcceptingRegistrations;
+    const isAcceptingRegistrations =
+      event.status === "active" && availableSlots > 0;
 
     res.status(200).json({
       id: event.id,
-      status: event.status.state,
+      status: event.status,
       maxParticipants: event.capacity.maxParticipants,
       currentParticipants: event.capacity.currentParticipants,
       availableSlots,
