@@ -14,14 +14,7 @@ export function getRoutes(authUrl: string, eventUrl: string): ProxyRoute[] {
       target: eventUrl,
       protected: true,
       adminRequired: true,
-      methods: ["POST"],
-    },
-    {
-      path: "/api/events",
-      target: eventUrl,
-      protected: true,
-      adminRequired: true,
-      methods: ["PATCH", "DELETE"],
+      methods: ["POST", "PATCH", "DELETE"],
     },
     {
       path: "/api/events",

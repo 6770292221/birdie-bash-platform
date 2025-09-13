@@ -1,13 +1,13 @@
 import express from 'express';
-import { 
-  createEvent, 
-  getEvents, 
-  getEvent, 
-  updateEvent, 
-  deleteEvent, 
-  getEventStatus 
+import {
+  createEvent,
+  getEvents,
+  getEvent,
+  updateEvent,
+  deleteEvent,
+  getEventStatus
 } from '../controllers/eventController';
-import { registerPlayer } from '../controllers/playerController';
+import { registerPlayer, registerGuest, getPlayers, cancelPlayerRegistration } from '../controllers/playerController';
 
 const router = express.Router();
 
@@ -77,7 +77,7 @@ router.get('/', getEvents);
  *         description: Internal server error
  */
 router.get('/:id', getEvent);
-
+router.patch('/:id', updateEvent);
 
 /**
  * @swagger
@@ -125,10 +125,19 @@ router.get('/:id/status', getEventStatus);
 
 /**
  * @swagger
- * /api/events/{id}/players:
+ * /api/events/{id}/members:
  *   post:
- *     summary: Register a player for an event
+ *     summary: Register an authenticated user for an event
  *     tags: [Players]
+ *     security:
+ *       - BearerAuth: []
+ *     description: |
+ *       Register an authenticated user for an event.
+ *
+ *       **Requirements:**
+ *       - Valid JWT token via Authorization header
+ *       - Gateway injects x-user-id, x-user-name, x-user-email headers
+ *       - Request body contains only time preferences
  *     parameters:
  *       - in: path
  *         name: id
@@ -136,23 +145,107 @@ router.get('/:id/status', getEventStatus);
  *         schema:
  *           type: string
  *         description: Event ID
- *       - in: header
- *         name: x-user-id
- *         required: false
- *         schema:
- *           type: string
- *         description: User ID (if provided, registers as user; if not provided, registers as guest with name/email in body)
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
- *             oneOf:
- *               - $ref: '#/components/schemas/RegisterByUser'
- *               - $ref: '#/components/schemas/RegisterByGuest'
+ *             $ref: '#/components/schemas/RegisterByUser'
+ *           example:
+ *             startTime: "20:00"
+ *             endTime: "22:00"
  *     responses:
  *       201:
- *         description: Player registered successfully
+ *         description: User registered successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 eventId:
+ *                   type: string
+ *                 playerId:
+ *                   type: string
+ *                 userId:
+ *                   type: string
+ *                   description: User ID
+ *                 registrationTime:
+ *                   type: string
+ *                   format: date-time
+ *                 status:
+ *                   type: string
+ *                   enum: [registered, waitlist, cancelled]
+ *       400:
+ *         description: Bad request (validation error, event not accepting registrations, event full, user already registered)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Authentication required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       403:
+ *         description: Forbidden (admin privileges required)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       404:
+ *         description: Event not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.post('/:id/members', registerPlayer);
+
+/**
+ * @swagger
+ * /api/events/{id}/guests:
+ *   post:
+ *     summary: Register a guest for an event (Admin Only)
+ *     tags: [Players]
+ *     security:
+ *       - BearerAuth: []
+ *     description: |
+ *       Register a guest for an event. This endpoint requires admin privileges.
+ *
+ *       **Requirements:**
+ *       - Valid JWT token with admin role
+ *       - Gateway injects x-user-id and x-user-role headers
+ *       - Request body must contain guest name and phone number
+ *       - Phone number is used to prevent duplicate registrations
+ *       - Admin user ID is recorded as createdBy field
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Event ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/RegisterByGuest'
+ *           example:
+ *             name: "John Guest"
+ *             phoneNumber: "+66812345678"
+ *             startTime: "18:00"
+ *             endTime: "20:00"
+ *     responses:
+ *       201:
+ *         description: Guest registered successfully
  *         content:
  *           application/json:
  *             schema:
@@ -165,6 +258,10 @@ router.get('/:id/status', getEventStatus);
  *                 userId:
  *                   type: string
  *                   nullable: true
+ *                   description: Always null for guest registrations
+ *                 createdBy:
+ *                   type: string
+ *                   description: Admin user ID who created this guest registration
  *                 registrationTime:
  *                   type: string
  *                   format: date-time
@@ -172,14 +269,26 @@ router.get('/:id/status', getEventStatus);
  *                   type: string
  *                   enum: [registered, waitlist, cancelled]
  *       400:
- *         description: Bad request (event not accepting registrations, event full)
+ *         description: Bad request (validation error, event not accepting registrations, event full, guest already registered)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  *       404:
  *         description: Event not found
- *       409:
- *         description: Player already registered
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  *       500:
  *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
-router.post('/:id/players', registerPlayer);
+router.post('/:id/guests', registerGuest);
+router.get('/:id/players', getPlayers);
+router.post('/:id/players/:pid/cancel', cancelPlayerRegistration);
 
 export default router;

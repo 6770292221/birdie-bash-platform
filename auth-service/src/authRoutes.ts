@@ -34,8 +34,8 @@ const router = express.Router();
  *               message: 'Missing required fields'
  *               details:
  *                 missing: ['email','password']
- *       409:
- *         description: User already exists
+ *       400:
+ *         description: Bad request (user already exists, validation errors)
  *         content:
  *           application/json:
  *             schema:

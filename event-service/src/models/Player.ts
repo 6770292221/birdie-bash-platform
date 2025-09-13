@@ -25,6 +25,17 @@ const PlayerSchema: Schema = new Schema(
       lowercase: true,
       trim: true,
     },
+    phoneNumber: {
+      type: String,
+      required: false,
+      trim: true,
+      validate: {
+        validator: function(v: string) {
+          return !v || /^[0-9\-\+\(\)\s]{10,15}$/.test(v);
+        },
+        message: 'Phone number must be 10-15 digits and may contain +, -, (, ), space'
+      }
+    },
     startTime: {
       type: String,
       required: false,
@@ -42,6 +53,11 @@ const PlayerSchema: Schema = new Schema(
       enum: ['registered', 'waitlist', 'canceled'],
       default: 'registered',
     },
+    createdBy: {
+      type: String,
+      required: false,
+      description: 'Admin user ID who created this guest registration',
+    },
   },
   {
     timestamps: true,
@@ -49,6 +65,6 @@ const PlayerSchema: Schema = new Schema(
 );
 
 PlayerSchema.index({ eventId: 1, userId: 1 }, { unique: true, sparse: true });
-PlayerSchema.index({ eventId: 1, email: 1 }, { unique: true, sparse: true });
+PlayerSchema.index({ eventId: 1, phoneNumber: 1 }, { unique: true, sparse: true });
 
 export default mongoose.model<IPlayerDocument>('Player', PlayerSchema);

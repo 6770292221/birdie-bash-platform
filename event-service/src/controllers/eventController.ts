@@ -329,7 +329,7 @@ export const createEvent = async (
       return;
     }
     if (error?.code === 11000) {
-      res.status(409).json({
+      res.status(400).json({
         code: "EVENT_EXISTS",
         message:
           "An event with the same name, date and location already exists",
@@ -342,6 +342,94 @@ export const createEvent = async (
   }
 };
 
+/**
+ * @swagger
+ * /api/events:
+ *   get:
+ *     summary: Get list of events
+ *     tags: [Events]
+ *     security:
+ *       - BearerAuth: []
+ *     description: |
+ *       Retrieve a paginated list of events with optional filtering.
+ *
+ *       **Requirements:**
+ *       - Valid JWT token via Authorization header
+ *       - Any authenticated user can access this endpoint
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [active, canceled, completed]
+ *         description: Filter events by status
+ *       - in: query
+ *         name: date
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: Filter events by date (YYYY-MM-DD)
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: number
+ *           default: 10
+ *           minimum: 1
+ *           maximum: 100
+ *         description: Number of events to return per page
+ *       - in: query
+ *         name: offset
+ *         schema:
+ *           type: number
+ *           default: 0
+ *           minimum: 0
+ *         description: Number of events to skip for pagination
+ *     responses:
+ *       200:
+ *         description: Events retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 events:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Event'
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     total:
+ *                       type: number
+ *                       description: Total number of events matching criteria
+ *                     limit:
+ *                       type: number
+ *                       description: Number of events per page
+ *                     offset:
+ *                       type: number
+ *                       description: Number of events skipped
+ *                     hasMore:
+ *                       type: boolean
+ *                       description: Whether there are more events available
+ *       400:
+ *         description: Bad request (invalid query parameters)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Authentication required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 export const getEvents = async (req: Request, res: Response): Promise<void> => {
   try {
     const { status, date, limit = 10, offset = 0 } = req.query;
@@ -386,6 +474,53 @@ export const getEvents = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
+/**
+ * @swagger
+ * /api/events/{id}:
+ *   get:
+ *     summary: Get event details by ID
+ *     tags: [Events]
+ *     security:
+ *       - BearerAuth: []
+ *     description: |
+ *       Retrieve detailed information about a specific event by its ID.
+ *
+ *       **Requirements:**
+ *       - Valid JWT token via Authorization header
+ *       - Any authenticated user can access this endpoint
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Event ID
+ *     responses:
+ *       200:
+ *         description: Event details retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Event'
+ *       401:
+ *         description: Authentication required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       404:
+ *         description: Event not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 export const getEvent = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
@@ -553,7 +688,7 @@ export const updateEvent = async (
       await updatedEvent.save();
     } catch (error: any) {
       if (error?.code === 11000) {
-        res.status(409).json({
+        res.status(400).json({
           code: "EVENT_EXISTS",
           message:
             "An event with the same name, date and location already exists",
@@ -588,6 +723,63 @@ export const updateEvent = async (
   }
 };
 
+/**
+ * @swagger
+ * /api/events/{id}:
+ *   delete:
+ *     summary: Delete an event
+ *     tags: [Events]
+ *     security:
+ *       - BearerAuth: []
+ *     description: |
+ *       Delete an event permanently. This action cannot be undone.
+ *
+ *       **Requirements:**
+ *       - Valid JWT token with admin role
+ *       - Only admin users can delete events
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Event ID
+ *     responses:
+ *       200:
+ *         description: Event deleted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Event deleted successfully
+ *       401:
+ *         description: Authentication required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       403:
+ *         description: Forbidden (admin privileges required)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       404:
+ *         description: Event not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 export const deleteEvent = async (
   req: Request,
   res: Response
@@ -613,6 +805,53 @@ export const deleteEvent = async (
   }
 };
 
+/**
+ * @swagger
+ * /api/events/{id}/status:
+ *   get:
+ *     summary: Get event status and registration information
+ *     tags: [Events]
+ *     security:
+ *       - BearerAuth: []
+ *     description: |
+ *       Get event status including registration availability, participant counts, and waitlist information.
+ *
+ *       **Requirements:**
+ *       - Valid JWT token via Authorization header
+ *       - Any authenticated user can access this endpoint
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Event ID
+ *     responses:
+ *       200:
+ *         description: Event status retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/EventStatus'
+ *       401:
+ *         description: Authentication required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       404:
+ *         description: Event not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 export const getEventStatus = async (
   req: Request,
   res: Response
