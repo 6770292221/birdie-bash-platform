@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import Player from "../models/Player";
 import Event from "../models/Event";
 import { RegisterByUser, RegisterByGuest } from "../types/event";
+import messageQueueService from "../services/messageQueue";
 
 interface ExtendedRequest extends Request {
   headers: Request["headers"] & {
@@ -355,6 +356,21 @@ export const cancelPlayerRegistration = async (
       }
     }
 
+    // Publish participant.cancelled event
+    try {
+      await messageQueueService.publishEvent('participant.cancelled', {
+        eventId,
+        playerId: player.id,
+        canceledBy: userId,
+        wasRegistered,
+        status: player.status,
+        canceledAt: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error('Failed to publish participant.cancelled event:', error);
+      // Continue execution; do not fail the request because of messaging issues
+    }
+
     res.status(200).json({
       message: "Player registration canceled successfully",
       player: {
@@ -551,11 +567,26 @@ export const registerPlayer = async (
 
     if (playerData.status === "registered") {
       await Event.findByIdAndUpdate(eventId, {
-        $inc: { 
+        $inc: {
           "capacity.currentParticipants": 1,
           "capacity.availableSlots": -1
         }
       });
+    }
+
+    // Publish event to RabbitMQ
+    try {
+      await messageQueueService.publishParticipantJoined({
+        eventId,
+        playerId: player.id,
+        userId: player.userId || undefined,
+        playerName: req.headers["x-user-name"] as string,
+        playerEmail: req.headers["x-user-email"] as string,
+        status: playerData.status as 'registered' | 'waitlist'
+      });
+    } catch (error) {
+      console.error('Failed to publish participant joined event:', error);
+      // Continue execution - don't fail the request due to messaging issues
     }
 
     const responsePlayer = {
@@ -803,6 +834,21 @@ export const registerGuest = async (
           "capacity.availableSlots": -1
         }
       });
+    }
+
+    // Publish event to RabbitMQ
+    try {
+      await messageQueueService.publishParticipantJoined({
+        eventId,
+        playerId: player.id,
+        userId: undefined, // Guests don't have userId
+        playerName: registrationData.name,
+        playerEmail: undefined, // Guests don't have email
+        status: playerData.status as 'registered' | 'waitlist'
+      });
+    } catch (error) {
+      console.error('Failed to publish guest joined event:', error);
+      // Continue execution - don't fail the request due to messaging issues
     }
 
     const responsePlayer = {

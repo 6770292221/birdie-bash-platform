@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import Event from "../models/Event";
 import { IEventCreate, IEventUpdate, ICourtTime } from "../types/event";
+import messageQueueService from "../services/messageQueue";
 
 interface ExtendedRequest extends Request {
   headers: Request["headers"] & {
@@ -296,6 +297,19 @@ export const createEvent = async (
     const event = new Event({ ...payload, createdBy: userId });
     await event.save();
 
+    // Publish RabbitMQ message: event.created (routingKey: event.created)
+    try {
+      await messageQueueService.publishEvent("created", {
+        eventId: event.id,
+        eventName: event.eventName,
+        eventDate: event.eventDate,
+        location: event.location,
+        createdBy: event.createdBy || userId,
+      });
+    } catch (e) {
+      console.error("Publish event.created failed:", e);
+    }
+
     res.status(201).json({
       message: "Event created successfully",
       event: {
@@ -332,7 +346,7 @@ export const createEvent = async (
       res.status(400).json({
         code: "EVENT_EXISTS",
         message:
-          "An event with the same name, date and location already exists",
+          "An event with the same name and date already exists",
         details: error.keyValue,
       });
       return;
@@ -604,12 +618,13 @@ export const getEvent = async (req: Request, res: Response): Promise<void> => {
  *               $ref: '#/components/schemas/Error'
  */
 export const updateEvent = async (
-  req: Request,
+  req: ExtendedRequest,
   res: Response
 ): Promise<void> => {
   try {
     const { id } = req.params;
     const updateData: IEventUpdate = req.body;
+    const userId = req.headers["x-user-id"];
 
     const event = await Event.findById(id);
 
@@ -672,7 +687,6 @@ export const updateEvent = async (
     }
 
     // เพิ่ม updatedBy จาก x-user-id header
-    const userId = req.headers["x-user-id"] as string;
     const updateDataWithUser = { ...updateData, updatedBy: userId };
 
     let updatedEvent: any;
@@ -691,12 +705,25 @@ export const updateEvent = async (
         res.status(400).json({
           code: "EVENT_EXISTS",
           message:
-            "An event with the same name, date and location already exists",
+            "An event with the same name and date already exists",
           details: error.keyValue,
         });
         return;
       }
       throw error;
+    }
+
+    // Publish RabbitMQ message: event.updated
+    try {
+      await messageQueueService.publishEvent("updated", {
+        eventId: updatedEvent!.id,
+        updatedBy: userId,
+        eventName: updatedEvent!.eventName,
+        eventDate: updatedEvent!.eventDate,
+        location: updatedEvent!.location,
+      });
+    } catch (e) {
+      console.error("Publish event.updated failed:", e);
     }
 
     res.status(200).json({
@@ -781,11 +808,12 @@ export const updateEvent = async (
  *               $ref: '#/components/schemas/Error'
  */
 export const deleteEvent = async (
-  req: Request,
+  req: ExtendedRequest,
   res: Response
 ): Promise<void> => {
   try {
     const { id } = req.params;
+    const userId = req.headers["x-user-id"];
 
     const event = await Event.findById(id);
 
@@ -795,6 +823,19 @@ export const deleteEvent = async (
     }
 
     await Event.findByIdAndDelete(id);
+
+    // Publish RabbitMQ message: event.deleted
+    try {
+      await messageQueueService.publishEvent("deleted", {
+        eventId: id,
+        deletedBy: userId,
+        eventName: event.eventName,
+        eventDate: event.eventDate,
+        location: event.location,
+      });
+    } catch (e) {
+      console.error("Publish event.deleted failed:", e);
+    }
 
     res.status(200).json({
       message: "Event deleted successfully",

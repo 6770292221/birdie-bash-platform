@@ -17,7 +17,7 @@ import { registerMember, registerGuest, getPlayers, cancelPlayerRegistration } f
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3002;
+const BASE_PORT = Number(process.env.PORT) || 3002;
 
 app.use(cors());
 app.use(express.json());
@@ -59,13 +59,32 @@ app.delete("/api/events/:id", deleteEvent);
 app.get("/api/events/:id/status", getEventStatus);
 app.get("/api/events/:id/players", getPlayers);
 app.post("/api/events/:id/members", registerMember);
+// Alias singular form for convenience
+app.post("/api/events/:id/member", registerMember);
 app.post("/api/events/:id/guests", registerGuest);
 app.post("/api/events/:id/players/:pid/cancel", cancelPlayerRegistration);
 
 // Initialize DB connection (non-blocking)
 connectEventDB();
 
-app.listen(PORT, () => {
-  console.log(`📅 Event Service running on port ${PORT}`);
-  console.log(`📘 Event API docs: http://localhost:${PORT}/api-docs`);
-});
+function startEventService(port: number, attempt = 0) {
+  const server = app.listen(port, () => {
+    console.log(`📅 Event Service running on port ${port}`);
+    console.log(`📘 Event API docs: http://localhost:${port}/api-docs`);
+  });
+
+  server.on("error", (err: any) => {
+    if (err && err.code === "EADDRINUSE" && attempt < 10) {
+      const nextPort = port + 1;
+      console.warn(
+        `[Event] Port ${port} in use. Retrying on ${nextPort} (attempt ${attempt + 1}/10)...`
+      );
+      setTimeout(() => startEventService(nextPort, attempt + 1), 200);
+    } else {
+      console.error("[Event] Failed to bind port:", err);
+      process.exit(1);
+    }
+  });
+}
+
+startEventService(BASE_PORT);
