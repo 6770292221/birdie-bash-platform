@@ -42,8 +42,8 @@ const EventSchema: Schema = new Schema(
   { timestamps: true, bufferCommands: false }
 );
 
-// Prevent duplicate events by name+date+location
-EventSchema.index({ eventName: 1, eventDate: 1, location: 1 }, { unique: true, name: 'uniq_event_key' });
+// Prevent duplicate events by name+date (allow same location different dates)
+EventSchema.index({ eventName: 1, eventDate: 1 }, { unique: true, name: 'uniq_event_key' });
 
 EventSchema.pre("save", function (next) {
   const doc = this as any;

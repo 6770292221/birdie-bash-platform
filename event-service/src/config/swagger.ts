@@ -172,16 +172,26 @@ const swaggerDefinition = {
           startTime: { type: "string", description: "Start time (HH:mm)" },
           endTime: { type: "string", description: "End time (HH:mm)" },
         },
+        example: {
+          startTime: "20:00",
+          endTime: "22:00"
+        }
       },
       RegisterByGuest: {
         type: "object",
-        required: ["name"],
+        required: ["name", "phoneNumber"],
         properties: {
           name: { type: "string", description: "Guest name" },
-          email: { type: "string", format: "email", description: "Guest email (optional)" },
+          phoneNumber: { type: "string", description: "Phone number (required)" },
           startTime: { type: "string", description: "Start time (HH:mm)" },
           endTime: { type: "string", description: "End time (HH:mm)" },
         },
+        example: {
+          name: "John Guest",
+          phoneNumber: "+66812345678",
+          startTime: "18:00",
+          endTime: "20:00"
+        }
       },
       Player: {
         type: "object",
@@ -189,8 +199,14 @@ const swaggerDefinition = {
           eventId: { type: "string", description: "Event ID" },
           playerId: { type: "string", description: "Player ID" },
           userId: { type: "string", nullable: true, description: "User ID (null for guests)" },
+          name: { type: "string", nullable: true, description: "Player name" },
+          email: { type: "string", nullable: true, description: "Player email" },
+          phoneNumber: { type: "string", description: "Player phone number (required)" },
+          startTime: { type: "string", nullable: true, description: "Preferred start time" },
+          endTime: { type: "string", nullable: true, description: "Preferred end time" },
           registrationTime: { type: "string", format: "date-time", description: "Registration timestamp" },
           status: { type: "string", enum: ["registered", "waitlist", "cancelled"], description: "Registration status" },
+          createdBy: { type: "string", nullable: true, description: "Admin user ID who created this guest registration (null for user registrations)" },
         },
       },
     },

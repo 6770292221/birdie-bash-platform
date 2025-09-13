@@ -16,7 +16,7 @@ export const register = async (req: Request, res: Response, next: NextFunction):
     if (missing.length) { res.status(400).json({ code: 'VALIDATION_ERROR', message: 'Missing required fields', details: { missing } }); return; }
 
     const existingUser = await User.findOne({ email });
-    if (existingUser) { res.status(409).json({ code: 'USER_EXISTS', message: 'User already exists', details: { email } }); return; }
+    if (existingUser) { res.status(400).json({ code: 'USER_EXISTS', message: 'User already exists', details: { email } }); return; }
 
     const saltRounds = 12;
     const password_hash = await bcrypt.hash(password, saltRounds);

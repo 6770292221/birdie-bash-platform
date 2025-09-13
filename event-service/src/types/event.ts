@@ -104,10 +104,12 @@ export interface IPlayer {
   userId?: string;
   name: string;
   email: string;
+  phoneNumber: string;
   startTime?: string;
   endTime?: string;
   registrationTime: Date;
   status: PlayerStatus;
+  createdBy?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -116,6 +118,7 @@ export interface IPlayerRegister {
   userId?: string;
   name: string;
   email: string;
+  phoneNumber: string;
   startTime?: string;
   endTime?: string;
 }
@@ -127,7 +130,7 @@ export interface RegisterByUser {
 
 export interface RegisterByGuest {
   name: string;
-  email?: string;
+  phoneNumber: string;
   startTime?: string;
   endTime?: string;
 }

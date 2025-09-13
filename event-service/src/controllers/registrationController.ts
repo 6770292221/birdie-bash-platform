@@ -2,11 +2,14 @@ import { Request, Response } from "express";
 import Player from "../models/Player";
 import Event from "../models/Event";
 import { RegisterByUser, RegisterByGuest } from "../types/event";
+import messageQueueService from "../services/messageQueue";
 
 interface ExtendedRequest extends Request {
   headers: Request["headers"] & {
     "x-user-id"?: string;
     "x-user-email"?: string;
+    "x-user-name"?: string;
+    "x-user-phone"?: string;
     "x-user-role"?: string;
   };
 }
@@ -16,7 +19,7 @@ interface ExtendedRequest extends Request {
  * /api/events/{id}/players:
  *   get:
  *     summary: Get list of players for an event
- *     tags: [Players]
+ *     tags: [Registrations]
  *     parameters:
  *       - in: path
  *         name: id
@@ -152,9 +155,11 @@ export const getPlayers = async (
         userId: player.userId || null,
         name: player.name || null,
         email: player.email || null,
+        phoneNumber: player.phoneNumber,
         startTime: player.startTime || null,
         endTime: player.endTime || null,
         status: player.status,
+        createdBy: (player as any).createdBy || null,
         registrationTime: player.registrationTime.toISOString()
       })),
       summary: {
@@ -184,7 +189,7 @@ export const getPlayers = async (
  * /api/events/{id}/players/{pid}/cancel:
  *   post:
  *     summary: Cancel a player registration
- *     tags: [Players]
+ *     tags: [Registrations]
  *     parameters:
  *       - in: path
  *         name: id
@@ -281,14 +286,30 @@ export const cancelPlayerRegistration = async (
     }
 
     // ตรวจสอบสิทธิ์การยกเลิก
-    // ถ้ามี userId (user ที่ login) ต้องเป็นเจ้าของ registration
-    if (userId && player.userId && player.userId !== userId) {
-      res.status(403).json({
-        code: "INSUFFICIENT_PERMISSIONS",
-        message: "You can only cancel your own registration",
-        details: { playerId, requesterId: userId, ownerId: player.userId }
-      });
-      return;
+    const userRole = req.headers["x-user-role"];
+    const isAdmin = userRole === "admin";
+
+    // ถ้าไม่ใช่ admin
+    if (!isAdmin) {
+      // ถ้า player เป็น guest (ไม่มี userId) ไม่สามารถยกเลิกได้
+      if (!player.userId) {
+        res.status(403).json({
+          code: "INSUFFICIENT_PERMISSIONS",
+          message: "Only admin can cancel guest registrations",
+          details: { playerId, playerType: "guest" }
+        });
+        return;
+      }
+
+      // ถ้า player เป็น user ต้องเป็นเจ้าของ registration
+      if (userId && player.userId !== userId) {
+        res.status(403).json({
+          code: "INSUFFICIENT_PERMISSIONS",
+          message: "You can only cancel your own registration",
+          details: { playerId, requesterId: userId, ownerId: player.userId }
+        });
+        return;
+      }
     }
 
     // ตรวจสอบสถานะปัจจุบัน
@@ -335,6 +356,21 @@ export const cancelPlayerRegistration = async (
       }
     }
 
+    // Publish participant.cancelled event
+    try {
+      await messageQueueService.publishEvent('participant.cancelled', {
+        eventId,
+        playerId: player.id,
+        canceledBy: userId,
+        wasRegistered,
+        status: player.status,
+        canceledAt: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error('Failed to publish participant.cancelled event:', error);
+      // Continue execution; do not fail the request because of messaging issues
+    }
+
     res.status(200).json({
       message: "Player registration canceled successfully",
       player: {
@@ -354,17 +390,17 @@ export const cancelPlayerRegistration = async (
   }
 };
 
-export const registerPlayer = async (
+export const registerMember = async (
   req: ExtendedRequest,
   res: Response
 ): Promise<void> => {
   try {
     const { id: eventId } = req.params;
-    const registrationData: RegisterByUser | RegisterByGuest = req.body;
+    const registrationData: RegisterByUser = req.body;
 
     const event = await Event.findById(eventId);
     if (!event) {
-      res.status(404).json({ 
+      res.status(404).json({
         code: "EVENT_NOT_FOUND",
         message: "Event not found",
         details: { eventId }
@@ -373,12 +409,12 @@ export const registerPlayer = async (
     }
 
     const isAcceptingRegistrations = event.status === "active" && event.capacity.availableSlots > 0;
-    
+
     if (!isAcceptingRegistrations) {
-      res.status(400).json({ 
+      res.status(400).json({
         code: "REGISTRATION_CLOSED",
         message: "Event is not accepting registrations",
-        details: { 
+        details: {
           eventId,
           status: event.status,
           isAcceptingRegistrations
@@ -387,75 +423,53 @@ export const registerPlayer = async (
       return;
     }
 
+    const userId = req.headers["x-user-id"];
+    const userName = req.headers["x-user-name"];
+    const userEmail = req.headers["x-user-email"];
+
+    if (!userId) {
+      res.status(401).json({
+        code: "AUTHENTICATION_REQUIRED",
+        message: "User authentication required for player registration",
+        details: { endpoint: "/api/events/{id}/players" }
+      });
+      return;
+    }
+
+    // Check for duplicate userId in this event (excluding canceled registrations)
+    const existingUserPlayer = await Player.findOne({
+      eventId,
+      userId,
+      status: { $ne: 'canceled' }
+    });
+    if (existingUserPlayer) {
+      res.status(400).json({
+        code: "PLAYER_ALREADY_REGISTERED",
+        message: "User is already registered for this event",
+        details: { eventId, userId }
+      });
+      return;
+    }
+
     let playerData: any = {
       eventId,
+      userId,
+      name: userName || "",
+      email: userEmail || "",
       registrationTime: new Date(),
     };
 
-    const userId = req.headers["x-user-id"];
-    
-    if (userId) {
-      const registerByUser = registrationData as RegisterByUser;
-      
-      // Check for duplicate userId in this event
-      const existingUserPlayer = await Player.findOne({ eventId, userId });
-      if (existingUserPlayer) {
-        res.status(409).json({
-          code: "PLAYER_ALREADY_REGISTERED",
-          message: "User is already registered for this event",
-          details: { eventId, userId }
-        });
-        return;
-      }
-      
-      playerData.userId = userId;
-      playerData.name = "";
-      
-      if (registerByUser.startTime) {
-        playerData.startTime = registerByUser.startTime;
-      }
-      if (registerByUser.endTime) {
-        playerData.endTime = registerByUser.endTime;
-      }
-    } else {
-      const registerByGuest = registrationData as RegisterByGuest;
-      
-      if (!registerByGuest.name) {
-        res.status(400).json({ 
-          code: "VALIDATION_ERROR",
-          message: "Name is required when x-user-id header is not provided",
-          details: { 
-            field: "name",
-            required: true
-          }
-        });
-        return;
-      }
-      
-      // Check for duplicate name in this event (for guests)
-      const existingGuestPlayer = await Player.findOne({ 
-        eventId, 
-        name: registerByGuest.name,
-        userId: { $exists: false }
-      });
-      if (existingGuestPlayer) {
-        res.status(409).json({
-          code: "PLAYER_ALREADY_REGISTERED",
-          message: "Guest with this name is already registered for this event",
-          details: { eventId, name: registerByGuest.name }
-        });
-        return;
-      }
-      
-      playerData.name = registerByGuest.name;
-      playerData.email = registerByGuest.email;
-      
-      if (registerByGuest.startTime) {
-        playerData.startTime = registerByGuest.startTime;
-      }
-      if (registerByGuest.endTime) {
-        playerData.endTime = registerByGuest.endTime;
-      }
+    // Get phone number from user profile if available (optional for user registration)
+    const userPhoneNumber = req.headers["x-user-phone"] as string;
+    if (userPhoneNumber) {
+      playerData.phoneNumber = userPhoneNumber;
+    }
+
+    if (registrationData.startTime) {
+      playerData.startTime = registrationData.startTime;
+    }
+    if (registrationData.endTime) {
+      playerData.endTime = registrationData.endTime;
     }
 
     // Validate start time < end time
@@ -553,11 +567,26 @@ export const registerPlayer = async (
 
     if (playerData.status === "registered") {
       await Event.findByIdAndUpdate(eventId, {
-        $inc: { 
+        $inc: {
           "capacity.currentParticipants": 1,
           "capacity.availableSlots": -1
         }
       });
+    }
+
+    // Publish event to RabbitMQ
+    try {
+      await messageQueueService.publishParticipantJoined({
+        eventId,
+        playerId: player.id,
+        userId: player.userId || undefined,
+        playerName: req.headers["x-user-name"] as string,
+        playerEmail: req.headers["x-user-email"] as string,
+        status: playerData.status as 'registered' | 'waitlist'
+      });
+    } catch (error) {
+      console.error('Failed to publish participant joined event:', error);
+      // Continue execution - don't fail the request due to messaging issues
     }
 
     const responsePlayer = {
@@ -585,7 +614,269 @@ export const registerPlayer = async (
     }
     
     console.error("Register player error:", error);
-    res.status(500).json({ 
+    res.status(500).json({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Internal server error",
+      details: {}
+    });
+  }
+};
+
+export const registerGuest = async (
+  req: ExtendedRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const { id: eventId } = req.params;
+    const registrationData: RegisterByGuest = req.body;
+
+    // Get admin user info from headers (injected by Gateway)
+    const adminUserId = req.headers["x-user-id"];
+    const adminRole = req.headers["x-user-role"];
+
+    if (!adminUserId) {
+      res.status(401).json({
+        code: "AUTHENTICATION_REQUIRED",
+        message: "Admin authentication required for guest registration",
+        details: { endpoint: "/api/events/{id}/guests" }
+      });
+      return;
+    }
+
+    if (adminRole !== "admin") {
+      res.status(403).json({
+        code: "INSUFFICIENT_PERMISSIONS",
+        message: "Admin privileges required to register guests",
+        details: {
+          currentRole: adminRole,
+          requiredRole: "admin"
+        }
+      });
+      return;
+    }
+
+    const event = await Event.findById(eventId);
+    if (!event) {
+      res.status(404).json({
+        code: "EVENT_NOT_FOUND",
+        message: "Event not found",
+        details: { eventId }
+      });
+      return;
+    }
+
+    const isAcceptingRegistrations = event.status === "active" && event.capacity.availableSlots > 0;
+
+    if (!isAcceptingRegistrations) {
+      res.status(400).json({
+        code: "REGISTRATION_CLOSED",
+        message: "Event is not accepting registrations",
+        details: {
+          eventId,
+          status: event.status,
+          isAcceptingRegistrations
+        }
+      });
+      return;
+    }
+
+    if (!registrationData.name) {
+      res.status(400).json({
+        code: "VALIDATION_ERROR",
+        message: "Name is required for guest registration",
+        details: {
+          field: "name",
+          required: true
+        }
+      });
+      return;
+    }
+
+    if (!registrationData.phoneNumber) {
+      res.status(400).json({
+        code: "VALIDATION_ERROR",
+        message: "Phone number is required for guest registration",
+        details: {
+          field: "phoneNumber",
+          required: true
+        }
+      });
+      return;
+    }
+
+    // Check for duplicate phone number in this event (excluding canceled registrations)
+    const existingPhonePlayer = await Player.findOne({
+      eventId,
+      phoneNumber: registrationData.phoneNumber,
+      status: { $ne: 'canceled' }
+    });
+    if (existingPhonePlayer) {
+      res.status(400).json({
+        code: "PLAYER_ALREADY_REGISTERED",
+        message: "A player with this phone number is already registered for this event",
+        details: { eventId, phoneNumber: registrationData.phoneNumber }
+      });
+      return;
+    }
+
+    let playerData: any = {
+      eventId,
+      name: registrationData.name,
+      phoneNumber: registrationData.phoneNumber,
+      registrationTime: new Date(),
+      createdBy: adminUserId, // Admin user who created this guest registration
+    };
+
+    if (registrationData.startTime) {
+      playerData.startTime = registrationData.startTime;
+    }
+    if (registrationData.endTime) {
+      playerData.endTime = registrationData.endTime;
+    }
+
+    // Validate start time < end time
+    if (playerData.startTime && playerData.endTime) {
+      const startTime = new Date(`1970-01-01T${playerData.startTime}:00`);
+      const endTime = new Date(`1970-01-01T${playerData.endTime}:00`);
+
+      if (startTime >= endTime) {
+        res.status(400).json({
+          code: "VALIDATION_ERROR",
+          message: "Start time must be less than end time",
+          details: {
+            startTime: playerData.startTime,
+            endTime: playerData.endTime
+          }
+        });
+        return;
+      }
+
+      // Validate that guest's time is within available court time slots
+      const playerStart = playerData.startTime;
+      const playerEnd = playerData.endTime;
+
+      // Get all court time slots for this event
+      const courtTimeSlots = event.courts || [];
+
+      if (courtTimeSlots.length === 0) {
+        res.status(400).json({
+          code: "NO_COURT_AVAILABLE",
+          message: "No court time slots available for this event",
+          details: { eventId }
+        });
+        return;
+      }
+
+      // Find the earliest start time and latest end time from all courts
+      const startTimes = courtTimeSlots.map(court => court.startTime);
+      const endTimes = courtTimeSlots.map(court => court.endTime);
+
+      const startTimeNumbers = startTimes.map(time => parseInt(time.replace(':', '')));
+      const endTimeNumbers = endTimes.map(time => parseInt(time.replace(':', '')));
+
+      const earliestStart = Math.min(...startTimeNumbers);
+      const latestEnd = Math.max(...endTimeNumbers);
+
+      const playerStartNum = parseInt(playerStart.replace(':', ''));
+      const playerEndNum = parseInt(playerEnd.replace(':', ''));
+
+      // Check if guest's time is within the available court time range
+      if (playerStartNum < earliestStart || playerEndNum > latestEnd) {
+        const earliestStartTime = startTimes.find(time => parseInt(time.replace(':', '')) === earliestStart) || '';
+        const latestEndTime = endTimes.find(time => parseInt(time.replace(':', '')) === latestEnd) || '';
+
+        res.status(400).json({
+          code: "TIME_OUTSIDE_COURT_HOURS",
+          message: "Registration time must be within available court time slots",
+          details: {
+            guestStartTime: playerStart,
+            guestEndTime: playerEnd,
+            availableTimeRange: {
+              earliestStart: earliestStartTime,
+              latestEnd: latestEndTime
+            },
+            courtTimeSlots
+          }
+        });
+        return;
+      }
+    }
+
+    const availableSlots = event.capacity.availableSlots;
+    const waitlistEnabled = event.capacity.waitlistEnabled;
+
+    if (availableSlots > 0) {
+      playerData.status = "registered";
+    } else if (waitlistEnabled) {
+      playerData.status = "waitlist";
+    } else {
+      res.status(400).json({
+        code: "EVENT_FULL",
+        message: "Event is full and waitlist is not enabled",
+        details: {
+          eventId,
+          maxParticipants: event.capacity.maxParticipants,
+          currentParticipants: event.capacity.currentParticipants,
+          availableSlots: event.capacity.availableSlots,
+          waitlistEnabled: event.capacity.waitlistEnabled
+        }
+      });
+      return;
+    }
+
+    const player = new Player(playerData);
+    await player.save();
+
+    if (playerData.status === "registered") {
+      await Event.findByIdAndUpdate(eventId, {
+        $inc: {
+          "capacity.currentParticipants": 1,
+          "capacity.availableSlots": -1
+        }
+      });
+    }
+
+    // Publish event to RabbitMQ
+    try {
+      await messageQueueService.publishParticipantJoined({
+        eventId,
+        playerId: player.id,
+        userId: undefined, // Guests don't have userId
+        playerName: registrationData.name,
+        playerEmail: undefined, // Guests don't have email
+        status: playerData.status as 'registered' | 'waitlist'
+      });
+    } catch (error) {
+      console.error('Failed to publish guest joined event:', error);
+      // Continue execution - don't fail the request due to messaging issues
+    }
+
+    const responsePlayer = {
+      eventId: player.eventId.toString(),
+      playerId: player.id,
+      userId: null, // Guests don't have userId
+      registrationTime: player.registrationTime.toISOString(),
+      status: player.status
+    };
+
+    res.status(201).json(responsePlayer);
+  } catch (error: any) {
+    if (error?.name === "ValidationError") {
+      res.status(400).json({
+        code: "VALIDATION_ERROR",
+        message: error.message,
+        details: Object.fromEntries(
+          Object.entries(error.errors || {}).map(([k, v]: any) => [
+            k,
+            { kind: (v as any).kind, message: (v as any).message },
+          ])
+        ),
+      });
+      return;
+    }
+
+    console.error("Register guest error:", error);
+    res.status(500).json({
       code: "INTERNAL_SERVER_ERROR",
       message: "Internal server error",
       details: {}
