@@ -72,7 +72,8 @@ const grpcService = {
           message: 'Missing required fields: player_id and amount are required'
         });
         return;
-      }      // Create payment record
+      }
+      // Create payment record
       const paymentId = uuidv4();
       const payment = new Payment({
         id: paymentId,
