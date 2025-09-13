@@ -12,7 +12,7 @@ import {
   deleteEvent,
   getEventStatus,
 } from "./controllers/eventController";
-import { registerPlayer, registerGuest, getPlayers, cancelPlayerRegistration } from "./controllers/playerController";
+import { registerMember, registerGuest, getPlayers, cancelPlayerRegistration } from "./controllers/registrationController";
 
 dotenv.config();
 
@@ -58,7 +58,7 @@ app.patch("/api/events/:id", updateEvent);
 app.delete("/api/events/:id", deleteEvent);
 app.get("/api/events/:id/status", getEventStatus);
 app.get("/api/events/:id/players", getPlayers);
-app.post("/api/events/:id/members", registerPlayer);
+app.post("/api/events/:id/members", registerMember);
 app.post("/api/events/:id/guests", registerGuest);
 app.post("/api/events/:id/players/:pid/cancel", cancelPlayerRegistration);
 

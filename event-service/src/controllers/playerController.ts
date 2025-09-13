@@ -18,7 +18,7 @@ interface ExtendedRequest extends Request {
  * /api/events/{id}/players:
  *   get:
  *     summary: Get list of players for an event
- *     tags: [Players]
+ *     tags: [Registrations]
  *     parameters:
  *       - in: path
  *         name: id
@@ -188,7 +188,7 @@ export const getPlayers = async (
  * /api/events/{id}/players/{pid}/cancel:
  *   post:
  *     summary: Cancel a player registration
- *     tags: [Players]
+ *     tags: [Registrations]
  *     parameters:
  *       - in: path
  *         name: id

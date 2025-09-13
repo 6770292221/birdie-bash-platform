@@ -7,7 +7,7 @@ import {
   deleteEvent,
   getEventStatus
 } from '../controllers/eventController';
-import { registerPlayer, registerGuest, getPlayers, cancelPlayerRegistration } from '../controllers/playerController';
+import { registerMember, registerGuest, getPlayers, cancelPlayerRegistration } from '../controllers/registrationController';
 
 const router = express.Router();
 
@@ -16,8 +16,8 @@ const router = express.Router();
  * tags:
  *   - name: Events
  *     description: Event management
- *   - name: Players
- *     description: Player registration management
+ *   - name: Registrations
+ *     description: Registration management
  */
 
 /**
@@ -128,7 +128,7 @@ router.get('/:id/status', getEventStatus);
  * /api/events/{id}/members:
  *   post:
  *     summary: Register an authenticated user for an event
- *     tags: [Players]
+ *     tags: [Registrations]
  *     security:
  *       - BearerAuth: []
  *     description: |
@@ -206,14 +206,14 @@ router.get('/:id/status', getEventStatus);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.post('/:id/members', registerPlayer);
+router.post('/:id/members', registerMember);
 
 /**
  * @swagger
  * /api/events/{id}/guests:
  *   post:
  *     summary: Register a guest for an event (Admin Only)
- *     tags: [Players]
+ *     tags: [Registrations]
  *     security:
  *       - BearerAuth: []
  *     description: |
