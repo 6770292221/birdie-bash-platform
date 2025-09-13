@@ -130,21 +130,15 @@ export class Logger {
     console.log(chalk.gray('───────────────────────────────────────────────────────────'));
     
     try {
-      // Parse the base64 encoded QR data
-      const decodedData = Buffer.from(qrData, 'base64').toString();
-      const qrPayload = JSON.parse(decodedData);
-      
-      // Create a simple QR-like string for the terminal
-      const qrString = `promptpay://${qrPayload.recipientId}?amount=${qrPayload.amount}&ref=${qrPayload.paymentReference}`;
-      
-      // Generate QR code in terminal
-      QRCode.generate(qrString, { small: true }, (qrcode: string) => {
+      // The qrData is now the actual PromptPay QR code payload from promptpay-qr library
+      // Generate QR code in terminal using the payload directly
+      QRCode.generate(qrData, { small: true }, (qrcode: string) => {
         console.log(chalk.white(qrcode));
       });
       
       console.log(chalk.gray('───────────────────────────────────────────────────────────'));
-      console.log(chalk.yellow('📋 QR Data (for development):'));
-      console.log(chalk.gray(qrString));
+      console.log(chalk.yellow('📋 QR Data (PromptPay payload):'));
+      console.log(chalk.gray(qrData));
       
     } catch (error) {
       console.log(chalk.red('❌ Error generating QR code:'), error);
