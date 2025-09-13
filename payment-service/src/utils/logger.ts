@@ -1,5 +1,5 @@
-const chalk = require('chalk');
-const QRCode = require('qrcode-terminal');
+import chalk from 'chalk';
+import * as QRCode from 'qrcode-terminal';
 
 export class Logger {
   private static formatTimestamp(): string {
