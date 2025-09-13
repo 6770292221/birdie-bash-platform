@@ -13,6 +13,8 @@ class MessageQueueService {
   private readonly bindKey: string;
   private readonly logPayloads: boolean;
   private readonly maxLogBytes: number;
+  private readonly autoBindOnReturn: boolean;
+  private didAutoBindOnce: boolean = false;
 
   constructor() {
     this.url = process.env.RABBIT_URL || 'amqp://localhost';
@@ -28,6 +30,8 @@ class MessageQueueService {
     // Log payloads: default true in non-prod, false in prod unless explicitly enabled
     this.logPayloads = process.env.RABBIT_LOG_PAYLOADS === 'true' || (!isProd && (process.env.RABBIT_LOG_PAYLOADS ?? 'true') !== 'false');
     this.maxLogBytes = Number(process.env.RABBIT_MAX_LOG_BYTES || 2048);
+    // If a message is returned as NO_ROUTE, optionally auto-bind and retry once
+    this.autoBindOnReturn = process.env.RABBIT_AUTOBIND_ON_RETURN === 'true' || (!isProd && (process.env.RABBIT_AUTOBIND_ON_RETURN ?? 'true') !== 'false');
   }
 
   private scheduleReconnect() {
@@ -64,13 +68,18 @@ class MessageQueueService {
         this.channel.on('return', (msg: any) => {
           try {
             const payload = msg.content?.toString('utf8');
-            console.warn('↩️  Message returned (unroutable)', {
+            const info = {
               exchange: msg.fields?.exchange,
               routingKey: msg.fields?.routingKey,
               replyCode: msg.fields?.replyCode,
               replyText: msg.fields?.replyText,
-              payload,
-            });
+            };
+            console.warn('↩️  Message returned (unroutable)', { ...info, payload });
+            // Attempt self-healing bind and one-time retry in dev
+            if (this.autoBindOnReturn && !this.didAutoBindOnce) {
+              this.didAutoBindOnce = true;
+              void this.selfHealBindAndRetry(info.exchange, info.routingKey, msg.content);
+            }
           } catch (_e) {
             console.warn('↩️  Message returned (unroutable)');
           }
@@ -154,6 +163,32 @@ class MessageQueueService {
       this.channel = null;
       this.pending.push({ type: eventType, data });
       this.scheduleReconnect();
+    }
+  }
+
+  private async selfHealBindAndRetry(exchange: string, routingKey: string, rawContent: Buffer) {
+    try {
+      if (!this.channel) return;
+      console.warn('🧩 Attempting auto-bind and retry once for returned message', {
+        exchange,
+        routingKey,
+        queue: this.bindQueue,
+        binding: this.bindKey,
+      });
+      await this.channel.assertQueue(this.bindQueue, { durable: true });
+      await this.channel.bindQueue(this.bindQueue, exchange, this.bindKey);
+      await new Promise<void>((resolve, reject) => {
+        this.channel!.publish(
+          exchange,
+          routingKey,
+          rawContent,
+          { persistent: true, mandatory: true },
+          (err: any) => (err ? reject(err) : resolve())
+        );
+      });
+      console.log('🔁 Retried publish after auto-bind', { exchange, routingKey });
+    } catch (e) {
+      console.error('❌ Auto-bind retry failed:', e);
     }
   }
 
