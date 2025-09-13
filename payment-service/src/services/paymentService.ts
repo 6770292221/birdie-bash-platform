@@ -1,3 +1,5 @@
+import { Logger } from '../utils/logger';
+
 export interface QRCodePaymentData {
   paymentReference: string;
   amount: number;
@@ -21,6 +23,12 @@ export class PaymentService {
     paymentMethodId?: string;
     metadata?: Record<string, any>;
   }): Promise<QRCodePaymentData> {
+    Logger.payment('Creating payment intent', {
+      amount: params.amount,
+      currency: params.currency,
+      paymentMethodId: params.paymentMethodId
+    });
+
     // Generate unique payment reference
     const paymentReference = this.generatePaymentReference();
     
@@ -31,7 +39,7 @@ export class PaymentService {
       currency: params.currency
     });
 
-    return {
+    const result = {
       paymentReference,
       amount: params.amount,
       currency: params.currency,
@@ -39,6 +47,17 @@ export class PaymentService {
       promptPayId: process.env.PROMPT_PAY_ID || '0xx-xxx-xxxx',
       qrCodeData
     };
+
+    Logger.success('Payment intent created successfully', {
+      paymentReference,
+      amount: params.amount,
+      currency: params.currency
+    });
+
+    // Display QR code in console
+    Logger.displayQRCode(qrCodeData, result);
+
+    return result;
   }
 
   /**
@@ -48,14 +67,28 @@ export class PaymentService {
     paymentReference: string, 
     paymentMethodId?: string
   ): Promise<{ status: string; id: string; latest_charge?: string }> {
+    Logger.payment('Confirming payment', {
+      paymentReference,
+      paymentMethodId
+    });
+
     // For MVP: Return pending status, actual confirmation will be manual
     // In production, this could integrate with bank APIs to verify payment
     
-    return {
+    const result = {
       id: paymentReference,
       status: 'requires_confirmation', // Manual confirmation needed
       latest_charge: paymentReference
     };
+
+    Logger.warning('Payment requires manual confirmation', {
+      paymentReference,
+      status: result.status
+    });
+
+    Logger.displayPaymentStatus(result.status, paymentReference);
+
+    return result;
   }
 
   /**
@@ -66,14 +99,31 @@ export class PaymentService {
     amount?: number;
     reason?: string;
   }): Promise<{ id: string; amount?: number; status: string }> {
+    Logger.payment('Creating refund', {
+      chargeId: params.chargeId,
+      amount: params.amount,
+      reason: params.reason
+    });
+
     // Generate refund reference, actual refund will be manual
     const refundReference = `ref_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     
-    return {
+    const result = {
       id: refundReference,
       amount: params.amount ? Math.round(params.amount * 100) : undefined,
       status: 'pending' // Manual refund process
     };
+
+    Logger.warning('Refund created - manual processing required', {
+      refundId: refundReference,
+      originalChargeId: params.chargeId,
+      amount: params.amount,
+      reason: params.reason
+    });
+
+    Logger.displayPaymentStatus('refunded', refundReference);
+
+    return result;
   }
 
   /**
@@ -113,21 +163,38 @@ export class PaymentService {
    * Manually confirm payment (for admin use)
    */
   async manualConfirmPayment(paymentReference: string): Promise<{ status: string; confirmedAt: Date }> {
-    return {
+    Logger.payment('Manually confirming payment', { paymentReference });
+
+    const result = {
       status: 'succeeded',
       confirmedAt: new Date()
     };
+
+    Logger.success('Payment manually confirmed', {
+      paymentReference,
+      confirmedAt: result.confirmedAt
+    });
+
+    Logger.displayPaymentStatus('completed', paymentReference);
+
+    return result;
   }
 
   /**
    * Get payment details by reference
    */
   async getPaymentByReference(paymentReference: string): Promise<any> {
+    Logger.info('Retrieving payment details', { paymentReference });
+
     // For MVP: This would typically check with bank API or manual records
-    return {
+    const result = {
       id: paymentReference,
       status: 'pending', // Default status until manually confirmed
       created: Date.now()
     };
+
+    Logger.info('Payment details retrieved', result);
+
+    return result;
   }
 }

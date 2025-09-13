@@ -5,6 +5,7 @@ import { Payment } from './models/Payment';
 import { PaymentService } from './services/paymentService';
 import { PaymentStatus, PaymentType } from './types/payment';
 import { v4 as uuidv4 } from 'uuid';
+import { Logger } from './utils/logger';
 
 // Load the protobuf
 const PROTO_PATH = path.join(__dirname, '../proto/payment.proto');
@@ -53,16 +54,25 @@ const grpcService = {
     try {
       const request = call.request;
       
+      Logger.grpc('IssueCharges request received', {
+        player_id: request.player_id,
+        amount: request.amount,
+        currency: request.currency,
+        event_id: request.event_id
+      });
+
       // Validate required fields
       if (!request.player_id || !request.amount) {
+        Logger.error('Invalid IssueCharges request - missing required fields', {
+          player_id: request.player_id,
+          amount: request.amount
+        });
         callback({
           code: grpc.status.INVALID_ARGUMENT,
           message: 'Missing required fields: player_id and amount are required'
         });
         return;
-      }
-
-      // Create payment record
+      }      // Create payment record
       const paymentId = uuidv4();
       const payment = new Payment({
         id: paymentId,
@@ -114,9 +124,16 @@ const grpcService = {
         updated_at: payment.updatedAt.getTime()
       };
 
+      Logger.success('IssueCharges completed successfully', {
+        paymentId,
+        paymentReference: paymentData.paymentReference,
+        amount: payment.amount,
+        currency: payment.currency
+      });
+
       callback(null, response);
     } catch (error) {
-      console.error('gRPC issueCharges error:', error);
+      Logger.error('gRPC issueCharges error', error);
       callback({
         code: grpc.status.INTERNAL,
         message: error instanceof Error ? error.message : 'Unknown error'
@@ -129,7 +146,13 @@ const grpcService = {
     try {
       const request = call.request;
       
+      Logger.grpc('ConfirmPayment request received', {
+        payment_id: request.payment_id,
+        payment_method_id: request.payment_method_id
+      });
+      
       if (!request.payment_id) {
+        Logger.error('Invalid ConfirmPayment request - missing payment_id');
         callback({
           code: grpc.status.INVALID_ARGUMENT,
           message: 'Payment ID is required'
@@ -139,6 +162,7 @@ const grpcService = {
 
       const payment = await Payment.findOne({ id: request.payment_id });
       if (!payment) {
+        Logger.error('Payment not found', { payment_id: request.payment_id });
         callback({
           code: grpc.status.NOT_FOUND,
           message: 'Payment not found'
@@ -190,9 +214,15 @@ const grpcService = {
         updated_at: payment.updatedAt.getTime()
       };
 
+      Logger.success('ConfirmPayment completed', {
+        payment_id: payment.id,
+        status: payment.status,
+        confirmation_status: confirmedPayment.status
+      });
+
       callback(null, response);
     } catch (error) {
-      console.error('gRPC confirmPayment error:', error);
+      Logger.error('gRPC confirmPayment error', error);
       callback({
         code: grpc.status.INTERNAL,
         message: error instanceof Error ? error.message : 'Unknown error'
@@ -388,6 +418,9 @@ const grpcService = {
 };
 
 export function startGrpcServer() {
+  // Display banner
+  Logger.displayBanner();
+
   const server = new grpc.Server();
   server.addService(paymentProto.PaymentService.service, grpcService);
 
@@ -396,10 +429,14 @@ export function startGrpcServer() {
 
   server.bindAsync(bindAddress, grpc.ServerCredentials.createInsecure(), (err, port) => {
     if (err) {
-      console.error('Failed to start gRPC server:', err);
+      Logger.error('Failed to start gRPC server', err);
       return;
     }
-    console.log(`Payment gRPC server running on port ${port}`);
+    Logger.server(`gRPC server running on port ${port}`, {
+      port,
+      bindAddress,
+      services: ['PaymentService']
+    });
     server.start();
   });
 

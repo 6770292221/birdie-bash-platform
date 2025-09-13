@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
+import { Logger } from '../utils/logger';
 
 // Ensure .env is loaded before reading ENV vars
 dotenv.config();
@@ -11,18 +12,19 @@ mongoose.set('bufferCommands', false);
 
 export async function connectPaymentDB(): Promise<void> {
   try {
+    Logger.info('Connecting to Payment Database...', { uri: PAYMENT_DB_URI.replace(/\/\/.*@/, '//***:***@') });
     await mongoose.connect(PAYMENT_DB_URI);
-    console.log('Payment Service - MongoDB Connected');
+    Logger.success('Payment Service - MongoDB Connected', { database: 'birdie_payments' });
   } catch (error) {
-    console.error('Payment Service - Database connection failed:', error);
+    Logger.error('Payment Service - Database connection failed', error);
     // Don't throw to allow service to start and return 503 on DB-dependent routes
   }
 }
 
 mongoose.connection.on('error', (error) => {
-  console.error('Payment Service - MongoDB Error:', error);
+  Logger.error('Payment Service - MongoDB Error', error);
 });
 
 mongoose.connection.on('disconnected', () => {
-  console.warn('Payment Service - MongoDB Disconnected');
+  Logger.warning('Payment Service - MongoDB Disconnected');
 });
