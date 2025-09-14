@@ -4,14 +4,7 @@ import cors from "cors";
 import swaggerUi from "swagger-ui-express";
 import swaggerSpecs from "./config/swagger";
 import { connectEventDB } from "./config/eventDatabase";
-import {
-  createEvent,
-  getEvents,
-  getEvent,
-  updateEvent,
-  deleteEvent,
-  getEventStatus,
-} from "./controllers/eventController";
+import eventRoutes from "./routes/eventRoutes";
 
 dotenv.config();
 
@@ -49,13 +42,8 @@ app.use((req: any, res: Response, next: any) => {
   next();
 });
 
-// Real event endpoints backed by MongoDB
-app.get("/api/events", getEvents);
-app.post("/api/events", createEvent);
-app.get("/api/events/:id", getEvent);
-app.patch("/api/events/:id", updateEvent);
-app.delete("/api/events/:id", deleteEvent);
-app.get("/api/events/:id/status", getEventStatus);
+// Event endpoints (mounted router)
+app.use("/api/events", eventRoutes);
 
 // Initialize DB connection (non-blocking)
 connectEventDB();

@@ -55,8 +55,10 @@ EventSchema.pre("save", function (next) {
 
   if (!doc.capacity) doc.capacity = {};
   doc.capacity.availableSlots = available;
-  doc.capacity.waitlistEnabled =
-    doc.status === "active" && available <= 0;
+  // Respect explicitly provided waitlistEnabled; otherwise derive default
+  if (typeof doc.capacity.waitlistEnabled !== 'boolean') {
+    doc.capacity.waitlistEnabled = doc.status === "active" && available <= 0;
+  }
 
   next();
 });

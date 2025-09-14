@@ -201,6 +201,13 @@ export const createEvent = async (
    *     description: |
    *       Create a new event. Requires admin privileges.
    *       Authorization is handled by Gateway - user headers are automatically forwarded.
+   *     parameters:
+   *       - in: header
+   *         name: x-user-id
+   *         required: false
+   *         schema:
+   *           type: string
+   *         description: User ID set by Gateway after JWT validation. Optional here; required only if calling the service directly without Gateway.
    *     requestBody:
    *       required: true
    *       content:

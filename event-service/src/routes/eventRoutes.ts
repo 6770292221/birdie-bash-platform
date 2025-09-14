@@ -23,6 +23,13 @@ const router = express.Router();
  *   post:
  *     summary: Create a new event
  *     tags: [Events]
+ *     parameters:
+ *       - in: header
+ *         name: x-user-id
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: User ID set by Gateway after JWT validation. Optional here; required only if calling the service directly without Gateway.
  *     requestBody:
  *       required: true
  *       content:
