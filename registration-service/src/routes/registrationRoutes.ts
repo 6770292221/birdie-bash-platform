@@ -1,5 +1,10 @@
-import express from 'express';
-import { getPlayers, registerMember, registerGuest, cancelPlayerRegistration } from '../controllers/registrationController';
+import express from "express";
+import {
+  getPlayers,
+  registerMember,
+  registerGuest,
+  cancelPlayerRegistration,
+} from "../controllers/registrationController";
 
 const router = express.Router();
 
@@ -21,6 +26,12 @@ const router = express.Router();
  *     security:
  *       - BearerAuth: []
  *     parameters:
+ *       - in: header
+ *         name: x-user-id
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: User ID set by Gateway after JWT validation. Optional here; required only if calling the service directly without Gateway.
  *       - in: path
  *         name: id
  *         required: true
@@ -49,7 +60,7 @@ const router = express.Router();
  *       200:
  *         description: List of players retrieved successfully
  */
-router.get('/events/:id/players', getPlayers);
+router.get("/events/:id/players", getPlayers);
 
 /**
  * @swagger
@@ -60,8 +71,14 @@ router.get('/events/:id/players', getPlayers);
  *     security:
  *       - BearerAuth: []
  *     parameters:
+ *       - in: header
+ *         name: x-user-id
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: User ID set by Gateway after JWT validation. Optional here; required only if calling the service directly without Gateway.
  *       - in: path
- *         name: id
+ *         name: event id
  *         required: true
  *         schema:
  *           type: string
@@ -80,8 +97,8 @@ router.get('/events/:id/players', getPlayers);
  *       201:
  *         description: User registered successfully
  */
-router.post('/events/:id/members', registerMember);
-router.post('/events/:id/member', registerMember); // alias
+router.post("/events/:id/members", registerMember);
+router.post("/events/:id/member", registerMember); // alias
 
 /**
  * @swagger
@@ -92,6 +109,12 @@ router.post('/events/:id/member', registerMember); // alias
  *     security:
  *       - BearerAuth: []
  *     parameters:
+ *       - in: header
+ *         name: x-user-id
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Admin user ID set by Gateway after JWT validation. Optional here; required only if calling the service directly without Gateway.
  *       - in: path
  *         name: id
  *         required: true
@@ -117,7 +140,7 @@ router.post('/events/:id/member', registerMember); // alias
  *       201:
  *         description: Guest registered successfully
  */
-router.post('/events/:id/guests', registerGuest);
+router.post("/events/:id/guests", registerGuest);
 
 /**
  * @swagger
@@ -128,6 +151,12 @@ router.post('/events/:id/guests', registerGuest);
  *     security:
  *       - BearerAuth: []
  *     parameters:
+ *       - in: header
+ *         name: x-user-id
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: User ID set by Gateway after JWT validation. Optional here; required only if calling the service directly without Gateway.
  *       - in: path
  *         name: id
  *         required: true
@@ -144,6 +173,6 @@ router.post('/events/:id/guests', registerGuest);
  *       200:
  *         description: Player registration canceled successfully
  */
-router.post('/events/:id/players/:pid/cancel', cancelPlayerRegistration);
+router.post("/events/:id/players/:pid/cancel", cancelPlayerRegistration);
 
 export default router;
