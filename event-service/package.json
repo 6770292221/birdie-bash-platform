@@ -7,7 +7,9 @@
     "dev": "nodemon --exec ts-node src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
-    "consume:events": "ts-node scripts/consume-events.ts"
+    "consume:events": "ts-node scripts/consume-events.ts",
+    "capacity:consumer": "ts-node src/consumers/capacityConsumer.ts",
+    "capacity:worker": "npm run capacity:consumer"
   },
   "dependencies": {
     "amqplib": "^0.10.9",

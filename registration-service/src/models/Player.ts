@@ -25,17 +25,18 @@ const PlayerSchema: Schema = new Schema(
       lowercase: true,
       trim: true,
     },
-    phoneNumber: {
-      type: String,
-      required: false,
-      trim: true,
-      validate: {
-        validator: function(v: string) {
-          return !v || /^[0-9\-\+\(\)\s]{10,15}$/.test(v);
-        },
-        message: 'Phone number must be 10-15 digits and may contain +, -, (, ), space'
-      }
-    },
+  phoneNumber: {
+    type: String,
+    required: false,
+    trim: true,
+    set: (v: any) => (v === null || v === undefined || v === '' ? undefined : v),
+    validate: {
+      validator: function(v: string) {
+        return !v || /^[0-9\-\+\(\)\s]{10,15}$/.test(v);
+      },
+      message: 'Phone number must be 10-15 digits and may contain +, -, (, ), space'
+    }
+  },
     startTime: {
       type: String,
       required: false,
@@ -65,7 +66,10 @@ const PlayerSchema: Schema = new Schema(
 );
 
 PlayerSchema.index({ eventId: 1, userId: 1 }, { unique: true, sparse: true });
-PlayerSchema.index({ eventId: 1, phoneNumber: 1 }, { unique: true, sparse: true });
+// Enforce uniqueness of phoneNumber per event only when a non-null phoneNumber is provided
+PlayerSchema.index(
+  { eventId: 1, phoneNumber: 1 },
+  { unique: true, partialFilterExpression: { phoneNumber: { $exists: true, $ne: null } }, name: 'uniq_event_phone_if_set' }
+);
 
 export default mongoose.model<IPlayerDocument>('Player', PlayerSchema);
-

@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import Event from "../models/Event";
 import { IEventCreate, IEventUpdate, ICourtTime } from "../types/event";
-import messageQueueService from "../services/messageQueue";
+import messageQueueService from "../queue/publisher";
 
 interface ExtendedRequest extends Request {
   headers: Request["headers"] & {
@@ -317,6 +317,9 @@ export const createEvent = async (
       console.error("Publish event.created failed:", e);
     }
 
+    const availableSlotsAfter = event.capacity.availableSlots;
+    const waitlistActiveAfter = (event.capacity.waitlistEnabled === true) && (event.status === "active") && (availableSlotsAfter <= 0);
+
     res.status(201).json({
       message: "Event created successfully",
       event: {
@@ -326,6 +329,7 @@ export const createEvent = async (
         location: event.location,
         status: event.status,
         capacity: event.capacity,
+        waitlistActive: waitlistActiveAfter,
         shuttlecockPrice: event.shuttlecockPrice,
         courtHourlyRate: event.courtHourlyRate,
         courts: event.courts,
@@ -474,6 +478,7 @@ export const getEvents = async (req: Request, res: Response): Promise<void> => {
         location: event.location,
         status: event.status,
         capacity: event.capacity,
+        waitlistActive: (event.capacity.waitlistEnabled === true) && (event.status === "active") && ((event.capacity.availableSlots ?? 0) <= 0),
         shuttlecockPrice: event.shuttlecockPrice,
         courtHourlyRate: event.courtHourlyRate,
         courts: event.courts,
@@ -553,6 +558,9 @@ export const getEvent = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    const available = event.capacity.availableSlots;
+    const waitlistActive = (event.capacity.waitlistEnabled === true) && (event.status === "active") && (available <= 0);
+
     res.status(200).json({
       event: {
         id: event.id,
@@ -561,6 +569,7 @@ export const getEvent = async (req: Request, res: Response): Promise<void> => {
         location: event.location,
         status: event.status,
         capacity: event.capacity,
+        waitlistActive,
         shuttlecockPrice: event.shuttlecockPrice,
         courtHourlyRate: event.courtHourlyRate,
         courts: event.courts,
@@ -915,8 +924,8 @@ export const getEventStatus = async (
     }
 
     const availableSlots = event.capacity.availableSlots;
-    const isAcceptingRegistrations =
-      event.status === "active" && availableSlots > 0;
+    const isAcceptingRegistrations = event.status === "active" && availableSlots > 0;
+    const waitlistActive = (event.capacity.waitlistEnabled === true) && (event.status === "active") && (availableSlots <= 0);
 
     res.status(200).json({
       id: event.id,
@@ -926,6 +935,7 @@ export const getEventStatus = async (
       availableSlots,
       isAcceptingRegistrations,
       waitlistEnabled: event.capacity.waitlistEnabled,
+      waitlistActive,
     });
   } catch (error) {
     console.error("Get event status error:", error);

@@ -3,7 +3,7 @@ import Player from "../models/Player";
 import { RegisterByUser, RegisterByGuest } from "../types/event";
 import http from "http";
 import https from "https";
-import messageQueueService from "../services/messageQueue";
+import messageQueueService from "../queue/publisher";
 
 interface ExtendedRequest extends Request {
   headers: Request["headers"] & {
@@ -433,6 +433,12 @@ export const registerMember = async (
     // Capacity adjustments are managed by Event Service; skip local Event updates here.
 
     try {
+      console.log('[registration] Publishing participant event', {
+        eventId,
+        playerId: player.id,
+        userId: player.userId || undefined,
+        status: playerData.status,
+      });
       await messageQueueService.publishParticipantJoined({
         eventId,
         playerId: player.id,
@@ -441,6 +447,7 @@ export const registerMember = async (
         playerEmail: req.headers["x-user-email"] as string,
         status: playerData.status as "registered" | "waitlist",
       });
+      console.log('[registration] Published participant event OK');
     } catch (error) {
       console.error("Failed to publish participant joined event:", error);
     }
@@ -693,6 +700,11 @@ export const registerGuest = async (
     // Capacity adjustments are managed by Event Service; skip local Event updates here.
 
     try {
+      console.log('[registration] Publishing participant event (guest)', {
+        eventId,
+        playerId: player.id,
+        status: playerData.status,
+      });
       await messageQueueService.publishParticipantJoined({
         eventId,
         playerId: player.id,
@@ -701,6 +713,7 @@ export const registerGuest = async (
         playerEmail: undefined,
         status: playerData.status as "registered" | "waitlist",
       });
+      console.log('[registration] Published participant event (guest) OK');
     } catch (error) {
       console.error("Failed to publish participant joined event:", error);
     }
