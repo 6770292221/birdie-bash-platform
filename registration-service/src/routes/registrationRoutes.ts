@@ -59,6 +59,22 @@ const router = express.Router();
  *     responses:
  *       200:
  *         description: List of players retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/PlayersListResponse'
+ *       404:
+ *         description: Event not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.get("/events/:id/players", getPlayers);
 
@@ -78,24 +94,46 @@ router.get("/events/:id/players", getPlayers);
  *           type: string
  *         description: User ID set by Gateway after JWT validation. Optional here; required only if calling the service directly without Gateway.
  *       - in: path
- *         name: event id
+ *         name: id
  *         required: true
  *         schema:
  *           type: string
+ *         description: Event ID
  *     requestBody:
  *       required: false
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             properties:
- *               startTime:
- *                 type: string
- *               endTime:
- *                 type: string
+ *             $ref: '#/components/schemas/RegisterMemberRequest'
+ *           examples:
+ *             withTime:
+ *               summary: With time range
+ *               value: { startTime: '19:00', endTime: '21:00' }
  *     responses:
  *       201:
  *         description: User registered successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/PlayerRegistrationResponse'
+ *       400:
+ *         description: Validation error or event full
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       401:
+ *         description: Authentication required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       404:
+ *         description: Event not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.post("/events/:id/members", registerMember);
 router.post("/events/:id/member", registerMember); // alias
@@ -120,25 +158,51 @@ router.post("/events/:id/member", registerMember); // alias
  *         required: true
  *         schema:
  *           type: string
+ *         description: Event ID
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             required: [name, phoneNumber]
- *             properties:
- *               name:
- *                 type: string
- *               phoneNumber:
- *                 type: string
- *               startTime:
- *                 type: string
- *               endTime:
- *                 type: string
+ *             $ref: '#/components/schemas/RegisterGuestRequest'
+ *           examples:
+ *             minimal:
+ *               summary: Minimal payload
+ *               value: { name: 'Guest A', phoneNumber: '080-000-0000' }
+ *             withTime:
+ *               summary: With time range
+ *               value: { name: 'Guest A', phoneNumber: '080-000-0000', startTime: '19:00', endTime: '21:00' }
  *     responses:
  *       201:
  *         description: Guest registered successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/PlayerRegistrationResponse'
+ *       400:
+ *         description: Validation error or event full
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       401:
+ *         description: Authentication required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       403:
+ *         description: Admin privileges required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       404:
+ *         description: Event not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.post("/events/:id/guests", registerGuest);
 
@@ -172,6 +236,30 @@ router.post("/events/:id/guests", registerGuest);
  *     responses:
  *       200:
  *         description: Player registration canceled successfully
+ *       400:
+ *         description: Already canceled
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       401:
+ *         description: Authentication required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       403:
+ *         description: Insufficient permissions
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       404:
+ *         description: Event or player not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.post("/events/:id/players/:pid/cancel", cancelPlayerRegistration);
 

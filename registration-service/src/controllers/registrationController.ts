@@ -18,6 +18,7 @@ interface ExtendedRequest extends Request {
 async function fetchEventById(eventId: string): Promise<any | null> {
   const base = process.env.EVENT_SERVICE_URL || "http://localhost:3002";
   const target = new URL(`/api/events/${eventId}`, base);
+  console.log(`[fetchEventById] Calling: ${target.toString()}`);
   const lib = target.protocol === "https:" ? https : http;
   return new Promise((resolve) => {
     const req = lib.request(
@@ -441,18 +442,24 @@ export const registerMember = async (
       }
     }
 
+    // Get real-time event status for accurate capacity
+    const eventStatus = await fetchEventStatus(eventId);
+    const capacity = eventStatus ? {
+      maxParticipants: eventStatus.maxParticipants,
+      currentParticipants: eventStatus.currentParticipants,
+      availableSlots: eventStatus.availableSlots,
+      waitlistEnabled: eventStatus.waitlistEnabled
+    } : event.capacity;
+
     const availableSlots = Number(
-      event.capacity?.availableSlots ??
+      capacity?.availableSlots ??
         Math.max(
           0,
-          Number(event.capacity?.maxParticipants ?? 0) -
-            Number(event.capacity?.currentParticipants ?? 0)
+          Number(capacity?.maxParticipants ?? 0) -
+            Number(capacity?.currentParticipants ?? 0)
         )
     );
-    const waitlistEnabled = Boolean(
-      (event.capacity as any)?.waitlistEnabled ??
-        (isActive && availableSlots <= 0)
-    );
+    const waitlistEnabled = Boolean(capacity?.waitlistEnabled);
 
     if (availableSlots > 0) {
       playerData.status = "registered";
@@ -464,8 +471,8 @@ export const registerMember = async (
         message: "Event is full and waitlist is not enabled",
         details: {
           eventId,
-          maxParticipants: event.capacity.maxParticipants,
-          currentParticipants: event.capacity.currentParticipants,
+          maxParticipants: capacity?.maxParticipants,
+          currentParticipants: capacity?.currentParticipants,
           availableSlots,
           waitlistEnabled,
         },
@@ -708,7 +715,12 @@ export const registerGuest = async (
 
     // Get real-time event status for accurate capacity
     const eventStatus = await fetchEventStatus(eventId);
-    const capacity = eventStatus?.capacity || event.capacity;
+    const capacity = eventStatus ? {
+      maxParticipants: eventStatus.maxParticipants,
+      currentParticipants: eventStatus.currentParticipants,
+      availableSlots: eventStatus.availableSlots,
+      waitlistEnabled: eventStatus.waitlistEnabled
+    } : event.capacity;
 
     const availableSlots = Number(
       capacity?.availableSlots ??
