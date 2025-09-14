@@ -314,6 +314,20 @@ export const registerMember = async (
     if (registrationData.endTime) playerData.endTime = registrationData.endTime;
 
     // Validate time format HH:MM if provided
+    const isHHMMGuest = (t: string) => /^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(t);
+    const guestTimeErrors: Record<string, string> = {};
+    if (playerData.startTime && !isHHMMGuest(playerData.startTime)) {
+      guestTimeErrors.startTime = `Invalid time format: ${playerData.startTime}. Expected HH:MM`;
+    }
+    if (playerData.endTime && !isHHMMGuest(playerData.endTime)) {
+      guestTimeErrors.endTime = `Invalid time format: ${playerData.endTime}. Expected HH:MM`;
+    }
+    if (Object.keys(guestTimeErrors).length > 0) {
+      res.status(400).json({ code: "VALIDATION_ERROR", message: "Invalid time format", details: guestTimeErrors });
+      return;
+    }
+
+    // Validate time format HH:MM if provided
     const isHHMM = (t: string) => /^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(t);
     const timeErrors: Record<string, string> = {};
     if (playerData.startTime && !isHHMM(playerData.startTime)) {
@@ -343,6 +357,40 @@ export const registerMember = async (
               endTime: playerData.endTime,
             },
           });
+        return;
+      }
+
+      // Ensure requested time is within event court time slots
+      const courtTimeSlots = (event as any).courts || [];
+      if (courtTimeSlots.length === 0) {
+        res.status(400).json({
+          code: "NO_COURT_AVAILABLE",
+          message: "No court time slots available for this event",
+          details: { eventId },
+        });
+        return;
+      }
+
+      const toNum = (t: string) => parseInt(t.replace(":", ""));
+      const startTimes = courtTimeSlots.map((c: any) => c.startTime);
+      const endTimes = courtTimeSlots.map((c: any) => c.endTime);
+      const earliestStart = Math.min(...startTimes.map(toNum));
+      const latestEnd = Math.max(...endTimes.map(toNum));
+      const playerStartNum = toNum(playerData.startTime);
+      const playerEndNum = toNum(playerData.endTime);
+      if (playerStartNum < earliestStart || playerEndNum > latestEnd) {
+        const earliestStartTime = startTimes.find((t: string) => toNum(t) === earliestStart) || "";
+        const latestEndTime = endTimes.find((t: string) => toNum(t) === latestEnd) || "";
+        res.status(400).json({
+          code: "TIME_OUTSIDE_COURT_HOURS",
+          message: "Registration time must be within available court time slots",
+          details: {
+            memberStartTime: playerData.startTime,
+            memberEndTime: playerData.endTime,
+            availableTimeRange: { earliestStart: earliestStartTime, latestEnd: latestEndTime },
+            courtTimeSlots,
+          },
+        });
         return;
       }
     }
