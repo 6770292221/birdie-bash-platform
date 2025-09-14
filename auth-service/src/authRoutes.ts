@@ -10,6 +10,7 @@ const router = express.Router();
  *   post:
  *     summary: Register a new user
  *     tags: [Authentication]
+ *     security: []
  *     requestBody:
  *       required: true
  *       content:
@@ -34,8 +35,8 @@ const router = express.Router();
  *               message: 'Missing required fields'
  *               details:
  *                 missing: ['email','password']
- *       400:
- *         description: Bad request (user already exists, validation errors)
+ *       409:
+ *         description: Conflict (user already exists)
  *         content:
  *           application/json:
  *             schema:
@@ -60,6 +61,7 @@ router.post('/register', register);
  *   post:
  *     summary: Login user
  *     tags: [Authentication]
+ *     security: []
  *     requestBody:
  *       required: true
  *       content:
