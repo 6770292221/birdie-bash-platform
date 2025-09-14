@@ -1,9 +1,11 @@
 import { Router, Request, Response } from 'express';
 import { PaymentServiceClient } from '../clients/paymentClient';
 import { Logger } from '../utils/logger';
+import { SettlementCalculator } from '../services/settlementCalculator';
 
 const router = Router();
 const paymentClient = new PaymentServiceClient();
+const calculator = new SettlementCalculator();
 
 // Settlement endpoints that call the gRPC Payment Service
 
@@ -359,6 +361,474 @@ router.get('/player/:player_id', async (req: Request, res: Response) => {
       success: false,
       code: 'PLAYER_SETTLEMENTS_FAILED',
       message: 'Failed to retrieve player settlements',
+      details: { error: error instanceof Error ? error.message : 'Unknown error' }
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/settlements/calculate:
+ *   post:
+ *     summary: Calculate settlement amounts for event participants
+ *     description: Calculates court fees, shuttlecock fees, and penalties based on player participation
+ *     tags: [Settlements]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [players, courts, costs]
+ *             properties:
+ *               players:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   required: [playerId, startTime, endTime, status]
+ *                   properties:
+ *                     playerId:
+ *                       type: string
+ *                       description: Player ID
+ *                     startTime:
+ *                       type: string
+ *                       description: Start time (HH:mm format)
+ *                       example: "20:00"
+ *                     endTime:
+ *                       type: string
+ *                       description: End time (HH:mm format)
+ *                       example: "22:00"
+ *                     status:
+ *                       type: string
+ *                       enum: [played, no_show]
+ *                       description: Player participation status
+ *               courts:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   required: [courtNumber, startTime, endTime, hourlyRate]
+ *                   properties:
+ *                     courtNumber:
+ *                       type: number
+ *                       description: Court number
+ *                     startTime:
+ *                       type: string
+ *                       description: Court start time (HH:mm format)
+ *                       example: "20:00"
+ *                     endTime:
+ *                       type: string
+ *                       description: Court end time (HH:mm format)
+ *                       example: "22:00"
+ *                     hourlyRate:
+ *                       type: number
+ *                       description: Court hourly rate in THB
+ *                       example: 200
+ *               costs:
+ *                 type: object
+ *                 required: [shuttlecockPrice, shuttlecockCount, penaltyFee]
+ *                 properties:
+ *                   shuttlecockPrice:
+ *                     type: number
+ *                     description: Price per shuttlecock in THB
+ *                     example: 40
+ *                   shuttlecockCount:
+ *                     type: number
+ *                     description: Number of shuttlecocks used
+ *                     example: 3
+ *                   penaltyFee:
+ *                     type: number
+ *                     description: Penalty fee for no-show players in THB
+ *                     example: 100
+ *           example:
+ *             players:
+ *               - playerId: "player_A"
+ *                 startTime: "20:00"
+ *                 endTime: "22:00"
+ *                 status: "played"
+ *               - playerId: "player_B"
+ *                 startTime: "20:00"
+ *                 endTime: "21:00"
+ *                 status: "played"
+ *               - playerId: "player_C"
+ *                 startTime: "21:00"
+ *                 endTime: "22:00"
+ *                 status: "played"
+ *               - playerId: "player_D"
+ *                 startTime: "20:00"
+ *                 endTime: "22:00"
+ *                 status: "no_show"
+ *             courts:
+ *               - courtNumber: 1
+ *                 startTime: "20:00"
+ *                 endTime: "22:00"
+ *                 hourlyRate: 200
+ *             costs:
+ *               shuttlecockPrice: 40
+ *               shuttlecockCount: 3
+ *               penaltyFee: 100
+ *     responses:
+ *       200:
+ *         description: Settlement calculation successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     settlements:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           playerId:
+ *                             type: string
+ *                           courtFee:
+ *                             type: number
+ *                           shuttlecockFee:
+ *                             type: number
+ *                           penaltyFee:
+ *                             type: number
+ *                           totalAmount:
+ *                             type: number
+ *                           breakdown:
+ *                             type: object
+ *                             properties:
+ *                               hoursPlayed:
+ *                                 type: number
+ *                               courtSessions:
+ *                                 type: array
+ *                                 items:
+ *                                   type: object
+ *                                   properties:
+ *                                     hour:
+ *                                       type: string
+ *                                     playersInSession:
+ *                                       type: number
+ *                                     costPerPlayer:
+ *                                       type: number
+ *                     totalCollected:
+ *                       type: number
+ *                       description: Total amount to be collected from all players
+ *                 message:
+ *                   type: string
+ *       400:
+ *         description: Invalid request data
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.post('/calculate', async (req: Request, res: Response) => {
+  try {
+    const { players, courts, costs } = req.body;
+
+    Logger.info('Settlement calculation request received', {
+      playersCount: players?.length || 0,
+      courtsCount: courts?.length || 0,
+      timestamp: new Date().toISOString()
+    });
+
+    // Validate required fields
+    if (!players || !courts || !costs) {
+      return res.status(400).json({
+        success: false,
+        code: 'INVALID_REQUEST',
+        message: 'Missing required fields: players, courts, and costs are required',
+        details: { required_fields: ['players', 'courts', 'costs'] }
+      });
+    }
+
+    // Calculate settlements
+    const settlements = calculator.calculateSettlements(players, courts, costs);
+    const totalCollected = settlements.reduce((sum, s) => sum + s.totalAmount, 0);
+
+    Logger.success('Settlement calculation completed', {
+      settlementsCount: settlements.length,
+      totalAmount: totalCollected
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        settlements,
+        totalCollected: Math.round(totalCollected * 100) / 100 // Round to 2 decimal places
+      },
+      message: 'Settlement calculation completed successfully'
+    });
+
+  } catch (error) {
+    Logger.error('Settlement calculation failed', error);
+
+    res.status(500).json({
+      success: false,
+      code: 'SETTLEMENT_CALCULATION_FAILED',
+      message: 'Failed to calculate settlement amounts',
+      details: { error: error instanceof Error ? error.message : 'Unknown error' }
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/settlements/calculate-and-charge:
+ *   post:
+ *     summary: Calculate settlements and issue charges to Payment Service
+ *     description: Calculates settlement amounts and automatically issues charges via gRPC to Payment Service
+ *     tags: [Settlements]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [event_id, players, courts, costs]
+ *             properties:
+ *               event_id:
+ *                 type: string
+ *                 description: Event ID for the settlement
+ *                 example: "event_123"
+ *               players:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   required: [playerId, startTime, endTime, status]
+ *                   properties:
+ *                     playerId:
+ *                       type: string
+ *                     startTime:
+ *                       type: string
+ *                       example: "20:00"
+ *                     endTime:
+ *                       type: string
+ *                       example: "22:00"
+ *                     status:
+ *                       type: string
+ *                       enum: [played, no_show]
+ *               courts:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   required: [courtNumber, startTime, endTime, hourlyRate]
+ *                   properties:
+ *                     courtNumber:
+ *                       type: number
+ *                     startTime:
+ *                       type: string
+ *                       example: "20:00"
+ *                     endTime:
+ *                       type: string
+ *                       example: "22:00"
+ *                     hourlyRate:
+ *                       type: number
+ *                       example: 200
+ *               costs:
+ *                 type: object
+ *                 required: [shuttlecockPrice, shuttlecockCount, penaltyFee]
+ *                 properties:
+ *                   shuttlecockPrice:
+ *                     type: number
+ *                     example: 40
+ *                   shuttlecockCount:
+ *                     type: number
+ *                     example: 3
+ *                   penaltyFee:
+ *                     type: number
+ *                     example: 100
+ *               currency:
+ *                 type: string
+ *                 description: Currency code
+ *                 default: "THB"
+ *                 example: "THB"
+ *     responses:
+ *       201:
+ *         description: Settlements calculated and charges issued successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     settlements:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           playerId:
+ *                             type: string
+ *                           totalAmount:
+ *                             type: number
+ *                           paymentResponse:
+ *                             type: object
+ *                             description: Response from Payment Service gRPC
+ *                     totalCollected:
+ *                       type: number
+ *                     successfulCharges:
+ *                       type: number
+ *                     failedCharges:
+ *                       type: number
+ *                 message:
+ *                   type: string
+ *       400:
+ *         description: Invalid request data
+ *       500:
+ *         description: Settlement calculation or charging failed
+ */
+router.post('/calculate-and-charge', async (req: Request, res: Response) => {
+  try {
+    const { event_id, players, courts, costs, currency = 'THB' } = req.body;
+
+    Logger.info('Settlement calculate-and-charge request received', {
+      event_id,
+      playersCount: players?.length || 0,
+      courtsCount: courts?.length || 0,
+      currency,
+      timestamp: new Date().toISOString()
+    });
+
+    // Validate required fields
+    if (!event_id || !players || !courts || !costs) {
+      return res.status(400).json({
+        success: false,
+        code: 'INVALID_REQUEST',
+        message: 'Missing required fields: event_id, players, courts, and costs are required',
+        details: { required_fields: ['event_id', 'players', 'courts', 'costs'] }
+      });
+    }
+
+    // Calculate settlements
+    const settlements = calculator.calculateSettlements(players, courts, costs);
+    const totalCollected = settlements.reduce((sum, s) => sum + s.totalAmount, 0);
+
+    Logger.info('Settlement calculation completed, proceeding to charge players', {
+      settlementsCount: settlements.length,
+      totalAmount: totalCollected
+    });
+
+    // Issue charges to Payment Service for each player
+    const chargeResults = [];
+    let successfulCharges = 0;
+    let failedCharges = 0;
+
+    for (const settlement of settlements) {
+      try {
+        // Only charge if there's an amount to collect
+        if (settlement.totalAmount > 0) {
+          const chargeRequest = {
+            player_id: settlement.playerId,
+            amount: settlement.totalAmount,
+            currency: currency,
+            event_id: event_id,
+            description: `Settlement charge for event ${event_id} - Court: ${settlement.courtFee}, Shuttlecock: ${settlement.shuttlecockFee}, Penalty: ${settlement.penaltyFee}`,
+            metadata: {
+              court_fee: settlement.courtFee.toString(),
+              shuttlecock_fee: settlement.shuttlecockFee.toString(),
+              penalty_fee: settlement.penaltyFee.toString(),
+              hours_played: settlement.breakdown.hoursPlayed.toString(),
+              settlement_type: 'event_settlement'
+            }
+          };
+
+          Logger.grpc('Issuing charge to Payment Service', {
+            player_id: settlement.playerId,
+            amount: settlement.totalAmount,
+            currency
+          });
+
+          const paymentResponse = await paymentClient.issueCharges(chargeRequest);
+
+          chargeResults.push({
+            playerId: settlement.playerId,
+            totalAmount: settlement.totalAmount,
+            courtFee: settlement.courtFee,
+            shuttlecockFee: settlement.shuttlecockFee,
+            penaltyFee: settlement.penaltyFee,
+            breakdown: settlement.breakdown,
+            paymentResponse,
+            status: 'success'
+          });
+
+          successfulCharges++;
+
+          Logger.success('Payment charge successful', {
+            player_id: settlement.playerId,
+            payment_id: paymentResponse.id,
+            amount: settlement.totalAmount
+          });
+        } else {
+          // No amount to charge (shouldn't happen in normal cases)
+          chargeResults.push({
+            playerId: settlement.playerId,
+            totalAmount: 0,
+            courtFee: settlement.courtFee,
+            shuttlecockFee: settlement.shuttlecockFee,
+            penaltyFee: settlement.penaltyFee,
+            breakdown: settlement.breakdown,
+            paymentResponse: null,
+            status: 'skipped',
+            reason: 'No amount to charge'
+          });
+        }
+      } catch (error) {
+        Logger.error('Payment charge failed for player', {
+          player_id: settlement.playerId,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
+
+        chargeResults.push({
+          playerId: settlement.playerId,
+          totalAmount: settlement.totalAmount,
+          courtFee: settlement.courtFee,
+          shuttlecockFee: settlement.shuttlecockFee,
+          penaltyFee: settlement.penaltyFee,
+          breakdown: settlement.breakdown,
+          paymentResponse: null,
+          status: 'failed',
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
+
+        failedCharges++;
+      }
+    }
+
+    Logger.success('Settlement calculate-and-charge completed', {
+      event_id,
+      totalAmount: totalCollected,
+      successfulCharges,
+      failedCharges
+    });
+
+    res.status(201).json({
+      success: true,
+      data: {
+        event_id,
+        settlements: chargeResults,
+        totalCollected: Math.round(totalCollected * 100) / 100,
+        successfulCharges,
+        failedCharges,
+        summary: {
+          totalPlayers: settlements.length,
+          playersCharged: successfulCharges,
+          chargesFailed: failedCharges
+        }
+      },
+      message: `Settlement calculation and charging completed. ${successfulCharges} successful, ${failedCharges} failed charges.`
+    });
+
+  } catch (error) {
+    Logger.error('Settlement calculate-and-charge failed', error);
+
+    res.status(500).json({
+      success: false,
+      code: 'SETTLEMENT_CALCULATE_AND_CHARGE_FAILED',
+      message: 'Failed to calculate settlements and issue charges',
       details: { error: error instanceof Error ? error.message : 'Unknown error' }
     });
   }
