@@ -1,5 +1,10 @@
 import amqp from 'amqplib';
+import dotenv from 'dotenv';
+import path from 'path';
 import Event from '../models/Event';
+
+// Ensure .env is loaded before reading process.env
+dotenv.config({ path: path.resolve(__dirname, '..', '..', '.env') });
 
 class MessageQueueService {
   private connection: any = null;
@@ -56,6 +61,19 @@ class MessageQueueService {
 
       if (this.channel) {
         await this.channel.assertExchange(this.exchange, 'topic', { durable: true });
+        // Always bind notification queue regardless of autoBind flag
+        {
+          const notifyQueue = process.env.RABBIT_NOTIFY_QUEUE || 'events.notification';
+          const notifyKeys = (process.env.RABBIT_NOTIFY_BIND_KEY || 'event.created')
+            .split(',')
+            .map(k => k.trim())
+            .filter(Boolean);
+          await this.channel.assertQueue(notifyQueue, { durable: true });
+          for (const key of notifyKeys) {
+            await this.channel.bindQueue(notifyQueue, this.exchange, key);
+          }
+          console.log('🔗 Notification queue bound', { queue: notifyQueue, keys: notifyKeys });
+        }
         if (this.autoBind) {
           await this.channel.assertQueue(this.bindQueue, { durable: true });
           const keys = new Set<string>((this.bindKey || '').split(',').map(k => k.trim()).filter(Boolean));
@@ -66,16 +84,7 @@ class MessageQueueService {
           for (const key of keys) {
             await this.channel.bindQueue(this.bindQueue, this.exchange, key);
           }
-          // Also bind a dedicated notification queue to retain lifecycle messages (e.g., event.created)
-          const notifyQueue = process.env.RABBIT_NOTIFY_QUEUE || 'events.notification';
-          const notifyKeys = (process.env.RABBIT_NOTIFY_BIND_KEY || 'event.created')
-            .split(',')
-            .map(k => k.trim())
-            .filter(Boolean);
-          await this.channel.assertQueue(notifyQueue, { durable: true });
-          for (const key of notifyKeys) {
-            await this.channel.bindQueue(notifyQueue, this.exchange, key);
-          }
+          console.log('🔗 Bind queue configured', { queue: this.bindQueue, keys: Array.from(keys) });
           const enableInternal = String(process.env.RABBIT_ENABLE_INTERNAL_CONSUMER || '').toLowerCase() === 'true';
           if (enableInternal) {
             await this.channel.consume(
@@ -203,8 +212,24 @@ class MessageQueueService {
     try {
       if (!this.channel) return;
       console.warn('🧩 Attempting auto-bind and retry once for returned message', { exchange, routingKey, queue: this.bindQueue, binding: this.bindKey });
+      // Ensure main bind queue is present and bound
       await this.channel.assertQueue(this.bindQueue, { durable: true });
       await this.channel.bindQueue(this.bindQueue, exchange, this.bindKey);
+      // Ensure notification queue is also bound (covers event.updated/deleted)
+      try {
+        const notifyQueue = process.env.RABBIT_NOTIFY_QUEUE || 'events.notification';
+        const notifyKeys = (process.env.RABBIT_NOTIFY_BIND_KEY || 'event.created')
+          .split(',')
+          .map(k => k.trim())
+          .filter(Boolean);
+        await this.channel.assertQueue(notifyQueue, { durable: true });
+        for (const key of notifyKeys) {
+          await this.channel.bindQueue(notifyQueue, exchange, key);
+        }
+        console.log('🔗 Self-heal: notification queue bound', { queue: notifyQueue, keys: notifyKeys });
+      } catch (e) {
+        console.warn('Self-heal: notification bind failed (non-fatal)', e);
+      }
       await new Promise<void>((resolve, reject) => {
         this.channel!.publish(exchange, routingKey, rawContent, { persistent: true, mandatory: true }, (err: any) => (err ? reject(err) : resolve()));
       });
@@ -241,4 +266,3 @@ process.on('SIGTERM', async () => {
 });
 
 export default messageQueueService;
-
