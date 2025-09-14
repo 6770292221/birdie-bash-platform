@@ -12,7 +12,6 @@ import {
   deleteEvent,
   getEventStatus,
 } from "./controllers/eventController";
-import { registerMember, registerGuest, getPlayers, cancelPlayerRegistration } from "./controllers/registrationController";
 
 dotenv.config();
 
@@ -24,7 +23,7 @@ app.use(express.json());
 
 // API Docs
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpecs));
-app.get('/api-docs.json', (_req: Request, res: Response) => {
+app.get("/api-docs.json", (_req: Request, res: Response) => {
   res.json(swaggerSpecs);
 });
 
@@ -57,12 +56,6 @@ app.get("/api/events/:id", getEvent);
 app.patch("/api/events/:id", updateEvent);
 app.delete("/api/events/:id", deleteEvent);
 app.get("/api/events/:id/status", getEventStatus);
-app.get("/api/events/:id/players", getPlayers);
-app.post("/api/events/:id/members", registerMember);
-// Alias singular form for convenience
-app.post("/api/events/:id/member", registerMember);
-app.post("/api/events/:id/guests", registerGuest);
-app.post("/api/events/:id/players/:pid/cancel", cancelPlayerRegistration);
 
 // Initialize DB connection (non-blocking)
 connectEventDB();
@@ -77,7 +70,9 @@ function startEventService(port: number, attempt = 0) {
     if (err && err.code === "EADDRINUSE" && attempt < 10) {
       const nextPort = port + 1;
       console.warn(
-        `[Event] Port ${port} in use. Retrying on ${nextPort} (attempt ${attempt + 1}/10)...`
+        `[Event] Port ${port} in use. Retrying on ${nextPort} (attempt ${
+          attempt + 1
+        }/10)...`
       );
       setTimeout(() => startEventService(nextPort, attempt + 1), 200);
     } else {
