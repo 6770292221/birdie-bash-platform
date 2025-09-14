@@ -313,6 +313,22 @@ export const registerMember = async (
       playerData.startTime = registrationData.startTime;
     if (registrationData.endTime) playerData.endTime = registrationData.endTime;
 
+    // Validate time format HH:MM if provided
+    const isHHMM = (t: string) => /^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(t);
+    const timeErrors: Record<string, string> = {};
+    if (playerData.startTime && !isHHMM(playerData.startTime)) {
+      timeErrors.startTime = `Invalid time format: ${playerData.startTime}. Expected HH:MM`;
+    }
+    if (playerData.endTime && !isHHMM(playerData.endTime)) {
+      timeErrors.endTime = `Invalid time format: ${playerData.endTime}. Expected HH:MM`;
+    }
+    if (Object.keys(timeErrors).length > 0) {
+      res
+        .status(400)
+        .json({ code: "VALIDATION_ERROR", message: "Invalid time format", details: timeErrors });
+      return;
+    }
+
     if (playerData.startTime && playerData.endTime) {
       const startTime = new Date(`1970-01-01T${playerData.startTime}:00`);
       const endTime = new Date(`1970-01-01T${playerData.endTime}:00`);
