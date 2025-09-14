@@ -61,6 +61,52 @@ async function fetchEventById(eventId: string): Promise<any | null> {
   });
 }
 
+async function fetchEventStatus(eventId: string): Promise<any | null> {
+  const base = process.env.EVENT_SERVICE_URL || "http://localhost:3002";
+  const target = new URL(`/api/events/${eventId}/status`, base);
+  const lib = target.protocol === "https:" ? https : http;
+  return new Promise((resolve) => {
+    const req = lib.request(
+      {
+        method: "GET",
+        hostname: target.hostname,
+        port: target.port || (target.protocol === "https:" ? 443 : 80),
+        path: target.pathname + (target.search || ""),
+        headers: { Accept: "application/json" },
+        timeout: 3000,
+      },
+      (res) => {
+        const status = res.statusCode || 0;
+        if (status === 404) {
+          resolve(null);
+          return;
+        }
+        if (status >= 400) {
+          resolve(null);
+          return;
+        }
+        const chunks: Buffer[] = [];
+        res.on("data", (c) => chunks.push(c));
+        res.on("end", () => {
+          try {
+            const body = Buffer.concat(chunks).toString("utf8");
+            const json = JSON.parse(body);
+            resolve(json || null);
+          } catch (_e) {
+            resolve(null);
+          }
+        });
+      }
+    );
+    req.on("error", () => resolve(null));
+    req.on("timeout", () => {
+      req.destroy(new Error("timeout"));
+      resolve(null);
+    });
+    req.end();
+  });
+}
+
 export const getPlayers = async (
   req: Request,
   res: Response
@@ -660,18 +706,19 @@ export const registerGuest = async (
       }
     }
 
+    // Get real-time event status for accurate capacity
+    const eventStatus = await fetchEventStatus(eventId);
+    const capacity = eventStatus?.capacity || event.capacity;
+
     const availableSlots = Number(
-      event.capacity?.availableSlots ??
+      capacity?.availableSlots ??
         Math.max(
           0,
-          Number(event.capacity?.maxParticipants ?? 0) -
-            Number(event.capacity?.currentParticipants ?? 0)
+          Number(capacity?.maxParticipants ?? 0) -
+            Number(capacity?.currentParticipants ?? 0)
         )
     );
-    const waitlistEnabled = Boolean(
-      (event.capacity as any)?.waitlistEnabled ??
-        (isActive && availableSlots <= 0)
-    );
+    const waitlistEnabled = Boolean(capacity?.waitlistEnabled);
 
     if (availableSlots > 0) {
       playerData.status = "registered";
@@ -685,8 +732,8 @@ export const registerGuest = async (
           message: "Event is full and waitlist is not enabled",
           details: {
             eventId,
-            maxParticipants: event.capacity.maxParticipants,
-            currentParticipants: event.capacity.currentParticipants,
+            maxParticipants: capacity?.maxParticipants,
+            currentParticipants: capacity?.currentParticipants,
             availableSlots,
             waitlistEnabled,
           },

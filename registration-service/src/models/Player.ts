@@ -65,7 +65,10 @@ const PlayerSchema: Schema = new Schema(
   }
 );
 
-PlayerSchema.index({ eventId: 1, userId: 1 }, { unique: true, sparse: true });
+PlayerSchema.index({ eventId: 1, userId: 1 }, {
+  unique: true,
+  partialFilterExpression: { userId: { $exists: true, $ne: null } }
+});
 // Enforce uniqueness of phoneNumber per event only when a non-null phoneNumber is provided
 PlayerSchema.index(
   { eventId: 1, phoneNumber: 1 },
