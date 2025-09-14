@@ -5,7 +5,7 @@ import cors from "cors";
 import swaggerUi from "swagger-ui-express";
 import swaggerSpecs from "./config/swagger";
 import { connectRegistrationDB } from "./config/registrationDatabase";
-import { registerMember, registerGuest, getPlayers, cancelPlayerRegistration } from "./controllers/registrationController";
+import registrationRoutes from "./routes/registrationRoutes";
 
 // Ensure service-specific .env is loaded regardless of CWD
 dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
@@ -44,11 +44,7 @@ app.use((req: any, res: Response, next: any) => {
 });
 
 // Registration endpoints (namespaced under /api/registration)
-app.get("/api/registration/events/:id/players", getPlayers);
-app.post("/api/registration/events/:id/members", registerMember);
-app.post("/api/registration/events/:id/member", registerMember);
-app.post("/api/registration/events/:id/guests", registerGuest);
-app.post("/api/registration/events/:id/players/:pid/cancel", cancelPlayerRegistration);
+app.use("/api/registration", registrationRoutes);
 
 // Initialize DB connection
 connectRegistrationDB();
