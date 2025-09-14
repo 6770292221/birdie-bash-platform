@@ -6,7 +6,7 @@ export interface ProxyRoute {
   methods?: string[];
 }
 
-export function getRoutes(authUrl: string, eventUrl: string): ProxyRoute[] {
+export function getRoutes(authUrl: string, eventUrl: string, settlementUrl: string): ProxyRoute[] {
   return [
     { path: "/api/auth", target: authUrl, protected: false },
     {
@@ -19,6 +19,12 @@ export function getRoutes(authUrl: string, eventUrl: string): ProxyRoute[] {
     {
       path: "/api/events",
       target: eventUrl,
+      protected: true,
+      adminRequired: false,
+    },
+    {
+      path: "/api/settlements",
+      target: settlementUrl,
       protected: true,
       adminRequired: false,
     },

@@ -20,12 +20,14 @@ const AUTH_SERVICE_URL =
   process.env.AUTH_SERVICE_URL || "http://localhost:3001";
 const EVENT_SERVICE_URL =
   process.env.EVENT_SERVICE_URL || "http://localhost:3002";
+const SETTLEMENT_SERVICE_URL =  process.env.SETTLEMENT_SERVICE_URL || "http://localhost:3004";
 
 app.use(cors());
 app.use(express.json());
 app.use(attachUserFromJwt(JWT_SECRET));
 
 // Docs aggregator (Swagger UI + merged JSON)
+//TODO MIND
 registerDocs(app, AUTH_SERVICE_URL, EVENT_SERVICE_URL);
 
 // Authentication middleware is now in ./middleware/auth
@@ -64,7 +66,7 @@ app.get("/health", (_req, res) => {
 });
 
 // Routes configuration
-const routes = getRoutes(AUTH_SERVICE_URL, EVENT_SERVICE_URL);
+const routes = getRoutes(AUTH_SERVICE_URL, EVENT_SERVICE_URL, SETTLEMENT_SERVICE_URL);
 
 // Setup proxies for each service
 routes.forEach((route) => {
