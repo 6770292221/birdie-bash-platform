@@ -20,7 +20,7 @@ const AUTH_SERVICE_URL =
   process.env.AUTH_SERVICE_URL || "http://localhost:3001";
 const EVENT_SERVICE_URL =
   process.env.EVENT_SERVICE_URL || "http://localhost:3002";
-const SETTLEMENT_SERVICE_URL =  process.env.SETTLEMENT_SERVICE_URL || "http://localhost:3004";
+const SETTLEMENT_SERVICE_URL =  process.env.SETTLEMENT_SERVICE_URL || "http://localhost:3005";
 
 app.use(cors());
 app.use(express.json());
