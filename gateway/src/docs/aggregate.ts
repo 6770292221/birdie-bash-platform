@@ -148,27 +148,40 @@ export function registerDocs(app: Express, authServiceUrl: string, eventServiceU
     const host = req.headers.host || `localhost`;
     const baseUrl = `${proto}://${host}`;
     try {
-      const promises: Promise<any>[] = [
-        fetchJson(`${authServiceUrl}/api-docs.json`),
-        fetchJson(`${eventServiceUrl}/api-docs.json`),
+      const upstreams = [
+        { name: 'auth', url: `${authServiceUrl}/api-docs.json` },
+        { name: 'event', url: `${eventServiceUrl}/api-docs.json` },
+        ...(registrationServiceUrl ? [{ name: 'registration', url: `${registrationServiceUrl}/api-docs.json` }] : []),
       ];
-      if (registrationServiceUrl) {
-        promises.push(fetchJson(`${registrationServiceUrl}/api-docs.json`));
-      }
-      const results = await Promise.allSettled(promises);
+
+      const results = await Promise.allSettled(upstreams.map(u => fetchJson(u.url)));
 
       const specs: any[] = [buildGatewaySpec()];
-      results.forEach(r => { if (r.status === 'fulfilled') specs.push(r.value); });
+      const status: Record<string, { ok: boolean; url: string; error?: string }> = {};
+
+      results.forEach((r, i) => {
+        const u = upstreams[i];
+        if (r.status === 'fulfilled') {
+          specs.push(r.value);
+          status[u.name] = { ok: true, url: u.url };
+        } else {
+          // eslint-disable-next-line no-console
+          console.warn(`[GATEWAY] Failed to load ${u.name} API docs from ${u.url}:`, r.reason?.message || r.reason);
+          status[u.name] = { ok: false, url: u.url, error: String(r.reason?.message || r.reason) };
+        }
+      });
 
       if (specs.length === 1) {
         res.status(503).json({
           error: "Failed to load upstream API docs",
-          services: [authServiceUrl, eventServiceUrl, registrationServiceUrl].filter(Boolean),
+          services: status,
         });
         return;
       }
 
       const merged = mergeOpenApi(specs, baseUrl);
+      // Attach diagnostic info for visibility in Swagger UI (vendor extension)
+      (merged as any)['x-upstreams'] = status;
       res.json(merged);
     } catch (e: any) {
       // eslint-disable-next-line no-console

@@ -15,11 +15,11 @@ const swaggerDefinition = {
   ],
   components: {
     securitySchemes: {
-      GatewayAuth: {
-        type: 'apiKey',
-        in: 'header',
-        name: 'x-user-id',
-        description: 'User ID passed from API Gateway after JWT validation',
+      BearerAuth: {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        description: 'JWT Bearer token validated at the API Gateway',
       },
     },
     schemas: {
@@ -99,7 +99,7 @@ const swaggerDefinition = {
       },
     },
   },
-  security: [{ GatewayAuth: [] }],
+  security: [{ BearerAuth: [] }],
 };
 
 const options = {
