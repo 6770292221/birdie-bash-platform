@@ -142,25 +142,27 @@ function buildGatewaySpec() {
   };
 }
 
-export function registerDocs(app: Express, authServiceUrl: string, eventServiceUrl: string) {
+export function registerDocs(app: Express, authServiceUrl: string, eventServiceUrl: string, settlementServiceUrl: string) {
   app.get("/api-docs.json", async (req: Request, res: Response) => {
     const proto = (req.headers["x-forwarded-proto"] as string) || (req.protocol || "http");
     const host = req.headers.host || `localhost`;
     const baseUrl = `${proto}://${host}`;
     try {
-      const [authSpec, eventSpec] = await Promise.allSettled([
+      const [authSpec, eventSpec, settlementSpec] = await Promise.allSettled([
         fetchJson(`${authServiceUrl}/api-docs.json`),
         fetchJson(`${eventServiceUrl}/api-docs.json`),
+        fetchJson(`${settlementServiceUrl}/api-docs.json`),
       ]);
 
       const specs: any[] = [buildGatewaySpec()];
       if (authSpec.status === "fulfilled") specs.push(authSpec.value);
       if (eventSpec.status === "fulfilled") specs.push(eventSpec.value);
+      if (settlementSpec.status === "fulfilled") specs.push(settlementSpec.value);
 
       if (specs.length === 1) {
         res.status(503).json({
           error: "Failed to load upstream API docs",
-          services: [authServiceUrl, eventServiceUrl],
+          services: [authServiceUrl, eventServiceUrl, settlementServiceUrl],
         });
         return;
       }

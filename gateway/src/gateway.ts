@@ -27,8 +27,7 @@ app.use(express.json());
 app.use(attachUserFromJwt(JWT_SECRET));
 
 // Docs aggregator (Swagger UI + merged JSON)
-//TODO MIND
-registerDocs(app, AUTH_SERVICE_URL, EVENT_SERVICE_URL);
+registerDocs(app, AUTH_SERVICE_URL, EVENT_SERVICE_URL, SETTLEMENT_SERVICE_URL);
 
 // Authentication middleware is now in ./middleware/auth
 
@@ -183,6 +182,7 @@ function startGateway(port: number, attempt = 0) {
     console.log("Service endpoints:");
     console.log(` ✅ Auth Service: ${AUTH_SERVICE_URL}`);
     console.log(` ✅ Event Service: ${EVENT_SERVICE_URL}`);
+    console.log(` ✅ Settlement Service: ${SETTLEMENT_SERVICE_URL}`);
     console.log(` 📘 Gateway docs: http://localhost:${port}/api-docs`);
   });
 

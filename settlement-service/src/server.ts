@@ -1,6 +1,8 @@
 import express, { Request, Response } from "express";
 import dotenv from "dotenv";
 import cors from "cors";
+import swaggerUi from "swagger-ui-express";
+import swaggerSpecs from "./config/swagger";
 import { connectSettlementDB } from "./config/settlementDatabase";
 import { errorHandler } from "./middleware/errorHandler";
 import { Logger } from "./utils/logger";
@@ -16,6 +18,12 @@ const BASE_PORT = Number(process.env.PORT) || 3005;
 
 app.use(cors());
 app.use(express.json());
+
+// API Docs
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpecs));
+app.get('/api-docs.json', (_req: Request, res: Response) => {
+  res.json(swaggerSpecs);
+});
 
 // Settlement API routes
 app.use('/api/settlements', settlementRoutes);
@@ -33,7 +41,8 @@ app.get('/health', (_req: Request, res: Response) => {
       endpoints: {
         health: '/health',
         settlements: '/api/settlements',
-        test: '/test-db'
+        test: '/test-db',
+        docs: '/api-docs'
       }
     }
   });
@@ -93,6 +102,7 @@ app.listen(BASE_PORT, () => {
   });
   Logger.info(`Health check available at: http://localhost:${BASE_PORT}/health`);
   Logger.info(`Settlement API available at: http://localhost:${BASE_PORT}/api/settlements`);
+  Logger.info(`📘 API Documentation: http://localhost:${BASE_PORT}/api-docs`);
   Logger.grpc(`Connects to Payment Service gRPC at: localhost:${process.env.GRPC_PORT || '50051'}`);
 });
 

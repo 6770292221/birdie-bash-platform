@@ -8,8 +8,37 @@ const paymentClient = new PaymentServiceClient();
 // Settlement endpoints that call the gRPC Payment Service
 
 /**
- * POST /api/settlements/charges
- * Issue charges for a settlement
+ * @swagger
+ * /api/settlements/charges:
+ *   post:
+ *     summary: Issue charges for a settlement
+ *     description: Creates settlement charges via gRPC call to Payment Service
+ *     tags: [Settlements]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/SettlementChargeRequest'
+ *     responses:
+ *       201:
+ *         description: Settlement charge issued successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SettlementResponse'
+ *       400:
+ *         description: Invalid request data
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Settlement charge failed
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.post('/charges', async (req: Request, res: Response) => {
   try {
@@ -85,8 +114,38 @@ router.post('/charges', async (req: Request, res: Response) => {
 });
 
 /**
- * PUT /api/settlements/:settlement_id/confirm
- * Confirm a settlement payment
+ * @swagger
+ * /api/settlements/{settlement_id}/confirm:
+ *   put:
+ *     summary: Confirm a settlement payment
+ *     description: Confirms settlement payment via gRPC call to Payment Service
+ *     tags: [Settlements]
+ *     parameters:
+ *       - in: path
+ *         name: settlement_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Settlement ID to confirm
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/ConfirmPaymentRequest'
+ *     responses:
+ *       200:
+ *         description: Settlement payment confirmed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SettlementResponse'
+ *       500:
+ *         description: Settlement confirmation failed
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.put('/:settlement_id/confirm', async (req: Request, res: Response) => {
   try {
