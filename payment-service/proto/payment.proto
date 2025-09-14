@@ -1,0 +1,123 @@
+syntax = "proto3";
+
+package payment;
+
+// Payment service definition
+service PaymentService {
+  // Issue charges for a payment
+  rpc IssueCharges(ChargeRequest) returns (PaymentResponse);
+  
+  // Confirm a payment
+  rpc ConfirmPayment(ConfirmationRequest) returns (PaymentResponse);
+  
+  // Refund a payment
+  rpc RefundPayment(RefundRequest) returns (PaymentResponse);
+  
+  // Get payment status
+  rpc GetPaymentStatus(PaymentStatusRequest) returns (PaymentStatusResponse);
+  
+  // Get payments for a player
+  rpc GetPlayerPayments(PlayerPaymentsRequest) returns (PlayerPaymentsResponse);
+}
+
+// Request messages
+message ChargeRequest {
+  string event_id = 1;
+  string player_id = 2;
+  double amount = 3;
+  string currency = 4;
+  string description = 5;
+  string payment_method_id = 6;
+  map<string, string> metadata = 7;
+}
+
+message ConfirmationRequest {
+  string payment_id = 1;
+  string payment_method_id = 2;
+  string payment_intent_id = 3;
+}
+
+message RefundRequest {
+  string payment_id = 1;
+  double amount = 2; // Optional - full refund if not specified
+  string reason = 3;
+}
+
+message PaymentStatusRequest {
+  string payment_id = 1;
+}
+
+message PlayerPaymentsRequest {
+  string player_id = 1;
+  string status = 2; // Optional filter
+  string event_id = 3; // Optional filter
+}
+
+// Response messages
+message PaymentResponse {
+  string id = 1;
+  PaymentStatus status = 2;
+  double amount = 3;
+  string currency = 4;
+  string payment_intent_id = 5;
+  string client_secret = 6;
+  string error_message = 7;
+  int64 created_at = 8;
+  int64 updated_at = 9;
+}
+
+message PaymentStatusResponse {
+  string payment_id = 1;
+  PaymentStatus status = 2;
+  double amount = 3;
+  string currency = 4;
+  double refunded_amount = 5;
+  string event_id = 6;
+  string player_id = 7;
+  int64 created_at = 8;
+  int64 updated_at = 9;
+  int64 last_status_change = 10;
+  repeated PaymentTransaction transactions = 11;
+}
+
+message PlayerPaymentsResponse {
+  repeated PaymentSummary payments = 1;
+}
+
+message PaymentSummary {
+  string payment_id = 1;
+  PaymentStatus status = 2;
+  double amount = 3;
+  string currency = 4;
+  double refunded_amount = 5;
+  string event_id = 6;
+  int64 created_at = 7;
+  int64 updated_at = 8;
+}
+
+message PaymentTransaction {
+  string id = 1;
+  TransactionType type = 2;
+  double amount = 3;
+  PaymentStatus status = 4;
+  string transaction_id = 5;
+  int64 timestamp = 6;
+  map<string, string> metadata = 7;
+}
+
+// Enums
+enum PaymentStatus {
+  PENDING = 0;
+  PROCESSING = 1;
+  COMPLETED = 2;
+  FAILED = 3;
+  REFUNDED = 4;
+  PARTIALLY_REFUNDED = 5;
+  CANCELLED = 6;
+}
+
+enum TransactionType {
+  CHARGE = 0;
+  REFUND = 1;
+  AUTHORIZATION = 2;
+}
