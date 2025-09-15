@@ -6,6 +6,7 @@ export interface IUser {
   role: 'admin' | 'user';
   name: string;
   skill: SkillType;
+  phoneNumber?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -15,6 +16,7 @@ export interface IUserCreate {
   password: string;
   name: string;
   skill: SkillType;
+  phoneNumber?: string;
   role?: 'admin' | 'user';
 }
 

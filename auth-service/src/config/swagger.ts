@@ -31,16 +31,18 @@ const swaggerDefinition = {
           email: { type: 'string', format: 'email' },
           name: { type: 'string' },
           skill: { type: 'string', enum: ['S','P','BG','N'] },
+          phoneNumber: { type: 'string', description: 'Phone number (optional)', example: '+66812345678' },
           role: { type: 'string', enum: ['admin','user'] },
         }
       },
       UserCreate: {
         type: 'object', required: ['email','password','name','skill'],
         properties: {
-          email: { type: 'string', format: 'email' },
-          password: { type: 'string', minLength: 6 },
-          name: { type: 'string' },
-          skill: { type: 'string', enum: ['S','P','BG','N'] },
+          email: { type: 'string', format: 'email', example: 'user@example.com' },
+          password: { type: 'string', minLength: 6, example: 'password123' },
+          name: { type: 'string', example: 'John Doe' },
+          skill: { type: 'string', enum: ['S','P','BG','N'], example: 'BG' },
+          phoneNumber: { type: 'string', description: 'Phone number (optional)', example: '+66812345678' },
           role: { type: 'string', enum: ['admin','user'], default: 'user' },
         }
       },

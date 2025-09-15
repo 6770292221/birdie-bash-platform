@@ -6,7 +6,7 @@ import { IUserCreate, IUserLogin } from '../types/user';
 
 export const register = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { email, password, name, skill, role = 'user' }: IUserCreate = req.body;
+    const { email, password, name, skill, phoneNumber, role = 'user' }: IUserCreate = req.body;
 
     const missing: string[] = [];
     if (!email) missing.push('email');
@@ -26,6 +26,7 @@ export const register = async (req: Request, res: Response, next: NextFunction):
       password_hash,
       name,
       skill,
+      phoneNumber,
       role,
     });
 
@@ -45,6 +46,7 @@ export const register = async (req: Request, res: Response, next: NextFunction):
         email: user.email,
         name: user.name,
         skill: user.skill,
+        phoneNumber: user.phoneNumber,
         role: user.role,
       },
     });
@@ -80,6 +82,7 @@ export const login = async (req: Request, res: Response, next: NextFunction): Pr
         email: user.email,
         name: user.name,
         skill: user.skill,
+        phoneNumber: user.phoneNumber,
         role: user.role,
       },
     });

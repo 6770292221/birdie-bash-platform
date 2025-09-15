@@ -31,6 +31,18 @@ const UserSchema: Schema = new Schema(
       enum: ['S', 'P', 'BG', 'N'],
       required: true,
     },
+    phoneNumber: {
+      type: String,
+      trim: true,
+      validate: {
+        validator: function(v: string) {
+          // Optional field, but if provided, should be valid phone format
+          if (!v) return true; // Allow empty
+          return /^(\+|00)[1-9]\d{0,4}\d{4,14}$/.test(v) || /^0[0-9]{8,9}$/.test(v);
+        },
+        message: 'Phone number format is invalid'
+      }
+    },
   },
   {
     timestamps: true,
