@@ -13,7 +13,7 @@ export class PaymentServiceClient {
 
   constructor(serverAddress: string = 'localhost:50051') {
     // Load the protobuf
-    const PROTO_PATH = path.join(__dirname, '../proto/payment.proto');
+    const PROTO_PATH = path.join(__dirname, '../../proto/payment.proto');
     const packageDefinition = protoLoader.loadSync(PROTO_PATH, {
       keepCase: true,
       longs: String,

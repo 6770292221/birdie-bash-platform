@@ -18,28 +18,36 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 This is the **Settlement Service** for the Birdie Bash Platform - a microservice architecture using both HTTP and gRPC protocols.
 
 ### Service Architecture
-- **HTTP Server**: Minimal Express.js server providing only a `/health` endpoint (port 3004 by default)
+- **HTTP Server**: Express.js server with RESTful API endpoints (port 3004 by default)
+- **RESTful API**: Complete settlement operations API that proxies to gRPC Payment Service
 - **gRPC Communication**: Uses protobuf definitions for inter-service communication with the Payment Service
 - **Database**: MongoDB connection via Mongoose for settlement data storage
 
 ### Key Components
 
 1. **Server Entry Point** (`src/server.ts`):
-   - Express app with health check endpoint only
+   - Express app with RESTful API endpoints
+   - Settlement routes mounting at `/api/settlements`
+   - Health check endpoint at `/health`
    - Database connection initialization
    - Error handling middleware
 
-2. **gRPC Client** (`src/clients/paymentClient.ts`):
+2. **Settlement Routes** (`src/routes/settlementRoutes.ts`):
+   - RESTful endpoints for settlement operations
+   - Proxies HTTP requests to gRPC Payment Service
+   - Handles request validation and response formatting
+
+3. **gRPC Client** (`src/clients/paymentClient.ts`):
    - Client for communicating with Payment Service
    - Implements all payment operations: IssueCharges, ConfirmPayment, RefundPayment, GetPaymentStatus, GetPlayerPayments
    - Uses protobuf definitions from `proto/payment.proto`
 
-3. **Database Configuration** (`src/config/settlementDatabase.ts`):
+4. **Database Configuration** (`src/config/settlementDatabase.ts`):
    - MongoDB connection handling
    - Connection error handling and logging
    - Uses environment variable `SETTLEMENT_DB_URI` for connection string
 
-4. **Protocol Definitions** (`proto/payment.proto`):
+5. **Protocol Definitions** (`proto/payment.proto`):
    - Defines gRPC service interface with Payment Service
    - Payment status enums and transaction types
    - Request/response message structures
@@ -50,11 +58,22 @@ src/
 ├── clients/         # gRPC clients for external services
 ├── config/          # Database and service configuration
 ├── middleware/      # Express middleware (error handling)
+├── routes/          # RESTful API route handlers
 ├── utils/           # Utilities (logging)
 └── server.ts        # Main HTTP server entry point
 
 proto/               # Protocol buffer definitions
 ```
+
+### RESTful API Endpoints
+
+All endpoints are prefixed with `/api/settlements`:
+
+- `POST /charges` - Issue settlement charges
+- `PUT /:settlement_id/confirm` - Confirm settlement payment
+- `POST /:settlement_id/refund` - Refund settlement payment
+- `GET /:settlement_id/status` - Get settlement status
+- `GET /player/:player_id` - Get all settlements for a player
 
 ### Environment Variables
 - `PORT` - HTTP server port (default: 3004)
@@ -63,7 +82,8 @@ proto/               # Protocol buffer definitions
 
 ### Development Notes
 - The service is designed as part of a microservices architecture
-- HTTP endpoints are minimal - main functionality through gRPC
-- Payment Client is currently example code for future microservice communication
+- RESTful API endpoints proxy requests to gRPC Payment Service
+- Settlement service acts as an HTTP-to-gRPC bridge
 - Uses TypeScript with strict compilation
 - MongoDB connection fails gracefully to allow service startup
+- All API responses follow consistent JSON format with success/error handling

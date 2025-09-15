@@ -8,7 +8,7 @@ export class Logger {
   }
 
   private static formatService(): string {
-    return chalk.magenta.bold('[PAYMENT-SERVICE]');
+    return chalk.magenta.bold('[SETTLEMENT-SERVICE]');
   }
 
   static info(message: string, data?: any): void {
@@ -108,7 +108,7 @@ export class Logger {
     console.log(chalk.cyan.bold('╔══════════════════════════════════════════════════════════╗'));
     console.log(chalk.cyan.bold('║                                                          ║'));
     console.log(chalk.cyan.bold('║') + chalk.yellow.bold('             🏸 BIRDIE BASH PLATFORM 🏸                   ') + chalk.cyan.bold('║'));
-    console.log(chalk.cyan.bold('║') + chalk.white.bold('                   Payment Service                        ' ) + chalk.cyan.bold('║'));
+    console.log(chalk.cyan.bold('║') + chalk.white.bold('                 Settlement Service                       ' ) + chalk.cyan.bold('║'));
     console.log(chalk.cyan.bold('║                                                          ║'));
     console.log(chalk.cyan.bold('╚══════════════════════════════════════════════════════════╝'));
     console.log('\n');
