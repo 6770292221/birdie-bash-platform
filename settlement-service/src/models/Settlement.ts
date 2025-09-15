@@ -43,6 +43,10 @@ export interface ISettlement extends Document {
   };
   calculationResults: Array<{
     playerId: string;
+    playerDetails?: {
+      name: string;
+      phoneNumber?: string;
+    };
     courtFee: number;
     shuttlecockFee: number;
     penaltyFee: number;
@@ -100,7 +104,7 @@ const SettlementSchema: Schema = new Schema({
   eventId: { type: String, required: true },
   eventData: {
     players: [{
-      playerId: { type: String, required: true },
+      playerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
       startTime: { type: String, required: true },
       endTime: { type: String, required: true },
       status: { type: String, required: true, enum: ['played', 'canceled', 'waitlist'] }
@@ -119,7 +123,7 @@ const SettlementSchema: Schema = new Schema({
     currency: { type: String, required: true, default: 'THB' }
   },
   calculationResults: [{
-    playerId: { type: String, required: true },
+    playerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     courtFee: { type: Number, required: true },
     shuttlecockFee: { type: Number, required: true },
     penaltyFee: { type: Number, required: true },

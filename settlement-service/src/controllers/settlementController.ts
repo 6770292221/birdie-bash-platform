@@ -3,10 +3,36 @@ import { PaymentServiceClient } from '../clients/paymentClient';
 import { Logger } from '../utils/logger';
 import { SettlementCalculator } from '../services/settlementCalculator';
 import { Settlement, SettlementStatus } from '../models/Settlement';
+import { UserRef } from '../models/User';
 import { v4 as uuidv4 } from 'uuid';
 
 const paymentClient = new PaymentServiceClient();
 const calculator = new SettlementCalculator();
+
+// Helper function to populate user details for settlement results
+const populateUserDetails = async (settlements: any[]) => {
+  for (const settlement of settlements) {
+    if (settlement.calculationResults) {
+      for (const result of settlement.calculationResults) {
+        try {
+          const user = await UserRef.findById(result.playerId).select('name phoneNumber');
+          if (user) {
+            result.playerDetails = {
+              name: user.name,
+              phoneNumber: user.phoneNumber
+            };
+          }
+        } catch (error) {
+          Logger.error('Failed to populate user details', {
+            playerId: result.playerId,
+            error: error instanceof Error ? error.message : 'Unknown error'
+          });
+        }
+      }
+    }
+  }
+  return settlements;
+};
 
 export const issueCharges = async (req: Request, res: Response) => {
   try {
@@ -624,9 +650,12 @@ export const getAllSettlements = async (req: Request, res: Response) => {
       totalPages
     });
 
+    // Populate user details
+    const settlementsWithUsers = await populateUserDetails(settlements.map(s => s.toObject()));
+
     // Transform settlements to remove _id from subdocuments
-    const transformedSettlements = settlements.map(settlement => {
-      const settlementObj = settlement.toObject();
+    const transformedSettlements = settlementsWithUsers.map(settlement => {
+      const settlementObj = settlement;
 
       // Remove _id from calculationResults and nested courtSessions
       if (settlementObj.calculationResults) {
@@ -697,8 +726,11 @@ export const getSettlementById = async (req: Request, res: Response) => {
       eventId: settlement.eventId
     });
 
+    // Populate user details for single settlement
+    const settlementWithUsers = await populateUserDetails([settlement.toObject()]);
+
     // Transform settlement to remove _id from subdocuments
-    const settlementObj = settlement.toObject();
+    const settlementObj = settlementWithUsers[0];
 
     // Remove _id from calculationResults and nested courtSessions
     if (settlementObj.calculationResults) {
