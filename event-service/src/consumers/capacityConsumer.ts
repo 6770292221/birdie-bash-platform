@@ -89,6 +89,8 @@ async function main() {
       const payload = JSON.parse(content);
       const data = payload?.data || {};
 
+      console.log('🔔 Received message', { routingKey, service: payload?.service });
+
       if (routingKey.endsWith('participant.joined')) {
         if (data?.eventId && data?.status === 'registered') {
           await Event.findByIdAndUpdate(data.eventId, {
@@ -100,6 +102,7 @@ async function main() {
           console.log('✅ capacity updated (joined)', { eventId: data.eventId });
         }
       } else if (routingKey.endsWith('participant.cancelled')) {
+        console.log('🔍 Debug cancelled event', { eventId: data.eventId, wasRegistered: data.wasRegistered, data });
         if (data?.eventId && data?.wasRegistered) {
           await Event.findByIdAndUpdate(data.eventId, {
             $inc: {
@@ -109,9 +112,20 @@ async function main() {
           }).catch(() => {});
           console.log('✅ capacity updated (cancelled)', { eventId: data.eventId });
 
+          // Small delay to ensure capacity is propagated before promotion
+          await new Promise(resolve => setTimeout(resolve, 100));
+
           // Try to promote from waitlist
+          console.log('🎯 Calling promotion for eventId:', data.eventId);
           await promoteFromWaitlist(data.eventId);
+        } else {
+          console.log('⚠️ Skipping promotion - wasRegistered:', data.wasRegistered);
         }
+      } else if (routingKey.endsWith('waitlist.promoted')) {
+        console.log('🎉 Processing waitlist promotion', { eventId: data.eventId, playerId: data.playerId });
+        // Waitlist promotion: no capacity change needed since player was already counted
+        // The status change from waitlist to registered doesn't affect total capacity
+        console.log('✅ Waitlist promotion processed (no capacity change needed)', { eventId: data.eventId });
       }
 
       ch.ack(msg);

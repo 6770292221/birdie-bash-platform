@@ -349,6 +349,7 @@ export const registerMember = async (
       name: userName || "",
       email: userEmail || "",
       registrationTime: new Date(),
+      userType: 'member',
     };
 
     const userPhoneNumber = req.headers["x-user-phone"] as string;
@@ -499,6 +500,7 @@ export const registerMember = async (
         playerName: req.headers["x-user-name"] as string,
         playerEmail: req.headers["x-user-email"] as string,
         status: playerData.status as "registered" | "waitlist",
+        userType: 'member',
       });
       console.log('[registration] Published participant event OK');
     } catch (error) {
@@ -537,6 +539,27 @@ export const promoteWaitlist = async (
   try {
     const { id: eventId } = req.params;
 
+    // Check event exists and get capacity
+    const eventData = await fetchEventById(eventId);
+    if (!eventData) {
+      res.status(404).json({
+        error: "EVENT_NOT_FOUND",
+        message: "Event not found",
+        eventId
+      });
+      return;
+    }
+
+    const capacity = eventData.capacity;
+    if (!capacity || capacity.availableSlots <= 0) {
+      res.status(200).json({
+        message: 'No available slots for promotion',
+        eventId,
+        capacity
+      });
+      return;
+    }
+
     // Find the first person in waitlist (earliest registration)
     const waitlistPlayer = await Player.findOne({
       eventId,
@@ -555,18 +578,21 @@ export const promoteWaitlist = async (
     waitlistPlayer.status = 'registered';
     await waitlistPlayer.save();
 
-    // Publish promotion event
+    // Publish as participant.joined to update capacity properly
     try {
-      await messageQueueService.publishEvent('participant.promoted', {
+      await messageQueueService.publishEvent('participant.joined', {
         eventId,
         playerId: waitlistPlayer.id,
         userId: waitlistPlayer.userId || undefined,
-        promotedAt: new Date().toISOString(),
         playerName: waitlistPlayer.name,
         playerEmail: waitlistPlayer.email,
+        status: 'registered',
+        promotedFromWaitlist: true,
+        promotedAt: new Date().toISOString(),
       });
+      console.log('📤 Published participant.joined for promotion', { eventId, playerId: waitlistPlayer.id });
     } catch (error) {
-      console.error('Failed to publish participant.promoted event:', error);
+      console.error('Failed to publish participant.joined event:', error);
     }
 
     console.log('🎉 Waitlist player promoted', {
@@ -701,6 +727,7 @@ export const registerGuest = async (
       phoneNumber: registrationData.phoneNumber,
       registrationTime: new Date(),
       createdBy: adminUserId,
+      userType: 'guest',
     };
     if (registrationData.startTime)
       playerData.startTime = registrationData.startTime;
@@ -835,6 +862,7 @@ export const registerGuest = async (
         playerName: registrationData.name,
         playerEmail: undefined,
         status: playerData.status as "registered" | "waitlist",
+        userType: 'guest',
       });
       console.log('[registration] Published participant event (guest) OK');
     } catch (error) {

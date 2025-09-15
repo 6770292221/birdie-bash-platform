@@ -1,5 +1,6 @@
 export type EventStatus = 'active' | 'canceled' | 'completed';
 export type PlayerStatus = 'registered' | 'waitlist' | 'canceled';
+export type UserType = 'member' | 'guest';
 
 export interface CapacityInfo {
   maxParticipants: number;
@@ -53,6 +54,7 @@ export interface IPlayer {
   endTime?: string;
   registrationTime: Date;
   status: PlayerStatus;
+  userType: UserType;
   createdAt: Date;
   updatedAt: Date;
 }

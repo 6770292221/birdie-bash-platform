@@ -54,6 +54,11 @@ const PlayerSchema: Schema = new Schema(
       enum: ['registered', 'waitlist', 'canceled'],
       default: 'registered',
     },
+    userType: {
+      type: String,
+      enum: ['member', 'guest'],
+      required: true,
+    },
     createdBy: {
       type: String,
       required: false,
