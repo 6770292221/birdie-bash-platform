@@ -142,7 +142,7 @@ function buildGatewaySpec() {
   };
 }
 
-export function registerDocs(app: Express, authServiceUrl: string, eventServiceUrl: string, registrationServiceUrl?: string) {
+export function registerDocs(app: Express, authServiceUrl: string, eventServiceUrl: string, registrationServiceUrl?: string, settlementServiceUrl?: string) {
   app.get("/api-docs.json", async (req: Request, res: Response) => {
     const proto = (req.headers["x-forwarded-proto"] as string) || (req.protocol || "http");
     const host = req.headers.host || `localhost`;
@@ -152,6 +152,7 @@ export function registerDocs(app: Express, authServiceUrl: string, eventServiceU
         { name: 'auth', url: `${authServiceUrl}/api-docs.json` },
         { name: 'event', url: `${eventServiceUrl}/api-docs.json` },
         ...(registrationServiceUrl ? [{ name: 'registration', url: `${registrationServiceUrl}/api-docs.json` }] : []),
+        {name: 'settlement', url: `${settlementServiceUrl}/api-docs.json`},
       ];
 
       const results = await Promise.allSettled(upstreams.map(u => fetchJson(u.url)));

@@ -6,7 +6,7 @@ export interface ProxyRoute {
   methods?: string[];
 }
 
-export function getRoutes(authUrl: string, eventUrl: string, registrationUrl?: string): ProxyRoute[] {
+export function getRoutes(authUrl: string, eventUrl: string, settlementUrl: string ,registrationUrl?: string): ProxyRoute[] {
   return [
     // Registration service routes first (more specific)
     ...(registrationUrl
@@ -36,6 +36,12 @@ export function getRoutes(authUrl: string, eventUrl: string, registrationUrl?: s
     {
       path: "/api/events",
       target: eventUrl,
+      protected: true,
+      adminRequired: false,
+    },
+    {
+      path: "/api/settlements",
+      target: settlementUrl,
       protected: true,
       adminRequired: false,
     },
