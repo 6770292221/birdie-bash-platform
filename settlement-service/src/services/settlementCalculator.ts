@@ -3,6 +3,9 @@ export interface PlayerSession {
   startTime: string; // "HH:mm"
   endTime: string;   // "HH:mm"
   status: 'played' | 'canceled' | 'waitlist';
+  role: 'member' | 'admin' | 'guest';
+  name?: string;     // For guest players
+  phoneNumber?: string; // For guest players
 }
 
 export interface CourtSession {

@@ -14,19 +14,33 @@ const populateUserDetails = async (settlements: any[]) => {
   for (const settlement of settlements) {
     if (settlement.calculationResults) {
       for (const result of settlement.calculationResults) {
-        try {
-          const user = await UserRef.findById(result.playerId).select('name phoneNumber');
-          if (user) {
-            result.playerDetails = {
-              name: user.name,
-              phoneNumber: user.phoneNumber
-            };
+        // Check if this player is a guest (has embedded data in eventData)
+        const playerInEvent = settlement.eventData?.players?.find(
+          (p: any) => p.playerId === result.playerId
+        );
+
+        if (playerInEvent?.role === 'guest' && playerInEvent.guestInfo) {
+          // Use embedded guest data
+          result.playerDetails = {
+            name: playerInEvent.guestInfo.name,
+            phoneNumber: playerInEvent.guestInfo.phoneNumber
+          };
+        } else {
+          // For members/admins, query from auth database
+          try {
+            const user = await UserRef.findById(result.playerId).select('name phoneNumber');
+            if (user) {
+              result.playerDetails = {
+                name: user.name,
+                phoneNumber: user.phoneNumber
+              };
+            }
+          } catch (error) {
+            Logger.error('Failed to populate user details', {
+              playerId: result.playerId,
+              error: error instanceof Error ? error.message : 'Unknown error'
+            });
           }
-        } catch (error) {
-          Logger.error('Failed to populate user details', {
-            playerId: result.playerId,
-            error: error instanceof Error ? error.message : 'Unknown error'
-          });
         }
       }
     }
@@ -446,7 +460,17 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
       settlementId,
       eventId: event_id,
       eventData: {
-        players,
+        players: players.map((player: any) => ({
+          playerId: player.playerId,
+          startTime: player.startTime,
+          endTime: player.endTime,
+          status: player.status,
+          role: player.role || 'member', // Default to member if not specified
+          guestInfo: player.role === 'guest' ? {
+            name: player.name,
+            phoneNumber: player.phoneNumber
+          } : undefined
+        })),
         courts,
         costs,
         currency

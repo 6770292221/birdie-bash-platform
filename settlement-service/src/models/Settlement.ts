@@ -27,6 +27,11 @@ export interface ISettlement extends Document {
       startTime: string;
       endTime: string;
       status: 'played' | 'canceled' | 'waitlist';
+      role: 'member' | 'admin' | 'guest';
+      guestInfo?: {
+        name: string;
+        phoneNumber: string;
+      };
     }>;
     courts: Array<{
       courtNumber: number;
@@ -104,10 +109,15 @@ const SettlementSchema: Schema = new Schema({
   eventId: { type: String, required: true },
   eventData: {
     players: [{
-      playerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+      playerId: { type: String, required: true }, // Can be ObjectId for members or generated ID for guests
       startTime: { type: String, required: true },
       endTime: { type: String, required: true },
-      status: { type: String, required: true, enum: ['played', 'canceled', 'waitlist'] }
+      status: { type: String, required: true, enum: ['played', 'canceled', 'waitlist'] },
+      role: { type: String, required: true, enum: ['member', 'admin', 'guest'] },
+      guestInfo: {
+        name: { type: String },
+        phoneNumber: { type: String }
+      }
     }],
     courts: [{
       courtNumber: { type: Number, required: true },
