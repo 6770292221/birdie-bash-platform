@@ -349,6 +349,7 @@ export const registerMember = async (
       name: userName || "",
       email: userEmail || "",
       registrationTime: new Date(),
+      userType: 'member',
     };
 
     const userPhoneNumber = req.headers["x-user-phone"] as string;
@@ -499,6 +500,7 @@ export const registerMember = async (
         playerName: req.headers["x-user-name"] as string,
         playerEmail: req.headers["x-user-email"] as string,
         status: playerData.status as "registered" | "waitlist",
+        userType: 'member',
       });
       console.log('[registration] Published participant event OK');
     } catch (error) {
@@ -725,6 +727,7 @@ export const registerGuest = async (
       phoneNumber: registrationData.phoneNumber,
       registrationTime: new Date(),
       createdBy: adminUserId,
+      userType: 'guest',
     };
     if (registrationData.startTime)
       playerData.startTime = registrationData.startTime;
@@ -859,6 +862,7 @@ export const registerGuest = async (
         playerName: registrationData.name,
         playerEmail: undefined,
         status: playerData.status as "registered" | "waitlist",
+        userType: 'guest',
       });
       console.log('[registration] Published participant event (guest) OK');
     } catch (error) {

@@ -161,6 +161,7 @@ class MessageQueueService {
     playerName?: string;
     playerEmail?: string;
     status: 'registered' | 'waitlist';
+    userType?: 'member' | 'guest';
   }): Promise<void> {
     const eventType = eventData.status === 'registered' ? 'participant.joined' : 'waiting.added';
     await this.publishEvent(eventType, eventData);
