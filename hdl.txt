@@ -1,0 +1,116 @@
+title Event-Driven Microservices (Registration checks Event status)
+
+// ---------- Users / Clients ----------
+Users [icon: users, color: gray] {
+  Organizer [icon: user, color: red]
+  Player [icon: user, color: green]
+  Web Client [icon: monitor, color: blue, label: "Web Client (Browser)"]
+}
+
+// ---------- Ingress ----------
+API Gateway [icon: aws-api-gateway, color: orange, label: "API Gateway\n(REST Routing)"]
+
+// ---------- Services ----------
+Auth Service [icon: lock, color: blue, label: "AUTH SERVICE (REST)"] {
+  AuthDB [icon: mongodb, color: green, label: "MongoDB: users"]
+}
+
+Event Service [icon: calendar, color: blue, label: "EVENT SERVICE (REST)"] {
+  EventDB [icon: mongodb, color: green, label: "MongoDB: events"]
+  Capacity Consumer [icon:server, color:purple, label:"capacity-consumer"]
+}
+
+Registration Service [icon: edit, color: blue, label: "REGISTRATION SERVICE (REST)"] {
+  RegDB [icon: mongodb, color: green, label: "MongoDB: registrations"]
+}
+
+Notification Service [icon: bell, color: blue, label: "NOTIFICATION SERVICE (REST)"] {
+  NotificationDB [icon: mongodb, color: green, label: "MongoDB: notifications"]
+  Notification Consumer [icon: server, color: purple, label: "notification-consumer"]
+}
+
+Settlement Service [icon: dollar-sign, color: blue, label: "SETTLEMENT SERVICE (REST)"] {
+  SettleDB [icon: mongodb, color: green, label: "MongoDB: settlements"]
+}
+
+Payment Service [icon: credit-card, color: red, label: "PAYMENT SERVICE (gRPC)"] {
+  PayDB [icon: mysql, color: blue, label: "MySQL: payments"]
+}
+
+Matching Service [icon: shuffle, color: blue, label: "MATCHING SERVICE (REST)"] {
+  MatchingDB [icon: mongodb, color: green, label: "MongoDB: matching"]
+}
+
+// ---------- MQ Hub ----------
+RabbitMQ [icon: rabbitmq, color: purple, label: "RabbitMQ (topic: events)"]
+
+// ---------- External ----------
+Stripe [icon: qr-code, color: gray, label: "Stripe / PromptPay"]
+Stripe Webhook [icon: webhook, color: gray, label: "Webhook (Inbound)"]
+LINE [icon: message-circle, color: green, label: "LINE outbound"]
+SMS [icon: message-square, color: green, label: "SMS outbound"]
+
+// ---------- Connections ----------
+
+// Users to Web Client
+Organizer > Web Client
+Player > Web Client
+
+// Web Client to API Gateway
+Web Client > API Gateway: HTTPS REST
+
+// API Gateway to Services
+API Gateway > Auth Service: REST
+API Gateway > Event Service: REST
+API Gateway > Notification Service: REST
+API Gateway > Settlement Service: REST
+API Gateway > Payment Service: gRPC
+API Gateway > Matching Service: REST
+
+// Service DBs
+
+// Event Service <-> RabbitMQ
+Event Service --> RabbitMQ: event.created
+Event Service --> RabbitMQ: event.updated
+Event Service --> RabbitMQ: event.deleted
+Event Service <-- RabbitMQ: event.participant.joined
+Event Service <-- RabbitMQ: event.participant.cancelled
+
+
+// Registration Service <-> RabbitMQ
+Registration Service --> RabbitMQ: event.participant.joined
+Registration Service --> RabbitMQ: event.participant.cancelled
+Registration Service --> RabbitMQ: event.waiting.promoted
+
+// Registration Service status check call
+Registration Service > Event Service: GET \n /api/events/{id}/\nstatus
+
+// Event Service internal promote call
+Event Service > Registration Service: POST /registra/waitlist/promote
+
+// Notification Service <-> RabbitMQ
+Notification Service --> RabbitMQ: notification.sent
+
+// Notification Consumer <-> RabbitMQ
+Notification Consumer <-- RabbitMQ: event.participant.joined
+Notification Consumer <-- RabbitMQ: event.waiting.promoted
+Notification Consumer <-- RabbitMQ: payment.success
+Notification Consumer <-- RabbitMQ: payment.failed
+
+// Notification Consumer outbound
+Notification Consumer > LINE: LINE outbound
+Notification Consumer > SMS: SMS outbound
+
+// Settlement Service <-> RabbitMQ
+// Settlement Service --> RabbitMQ: settlement.ready
+
+// Payment Service <-> RabbitMQ
+// Payment Service <-- RabbitMQ: settlement.ready
+// Payment Service --> RabbitMQ: payment.success
+// Payment Service --> RabbitMQ: payment.failed
+
+// Payment Service <-> Stripe
+Payment Service > Stripe: Create QR Payment
+Stripe Webhook > Payment Service: payment status
+Capacity Consumer <-- RabbitMQ: event.participant.joined
+Capacity Consumer <-- RabbitMQ: event.participant.cancelled
