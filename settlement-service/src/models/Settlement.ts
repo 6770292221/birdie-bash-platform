@@ -20,18 +20,48 @@ export enum TransactionType {
 
 export interface ISettlement extends Document {
   settlementId: string;
-  eventId?: string;
-  playerId: string;
-  amount: number;
-  currency: string;
+  eventId: string;
+  eventData?: {
+    players: Array<{
+      playerId: string;
+      startTime: string;
+      endTime: string;
+      status: 'played' | 'no_show';
+    }>;
+    courts: Array<{
+      courtNumber: number;
+      startTime: string;
+      endTime: string;
+      hourlyRate: number;
+    }>;
+    costs: {
+      shuttlecockPrice: number;
+      shuttlecockCount: number;
+      penaltyFee: number;
+    };
+    currency: string;
+  };
+  calculationResults: Array<{
+    playerId: string;
+    courtFee: number;
+    shuttlecockFee: number;
+    penaltyFee: number;
+    totalAmount: number;
+    paymentId?: string;
+    paymentStatus?: string;
+    breakdown: {
+      hoursPlayed: number;
+      courtSessions: Array<{
+        hour: string;
+        playersInSession: number;
+        costPerPlayer: number;
+      }>;
+    };
+  }>;
+  totalCollected: number;
+  successfulCharges: number;
+  failedCharges: number;
   status: SettlementStatus;
-  paymentIntentId?: string;
-  paymentMethodId?: string;
-  chargeId?: string;
-  description?: string;
-  refundedAmount: number;
-  transactions: ISettlementTransaction[];
-  metadata?: Record<string, any>;
   createdAt: Date;
   updatedAt: Date;
   lastStatusChange: Date;
@@ -67,34 +97,63 @@ const SettlementTransactionSchema: Schema = new Schema({
 
 const SettlementSchema: Schema = new Schema({
   settlementId: { type: String, required: true, unique: true },
-  eventId: { type: String },
-  playerId: { type: String, required: true },
-  amount: { type: Number, required: true },
-  currency: { type: String, required: true, default: 'THB' },
+  eventId: { type: String, required: true },
+  eventData: {
+    players: [{
+      playerId: { type: String, required: true },
+      startTime: { type: String, required: true },
+      endTime: { type: String, required: true },
+      status: { type: String, required: true, enum: ['played', 'no_show'] }
+    }],
+    courts: [{
+      courtNumber: { type: Number, required: true },
+      startTime: { type: String, required: true },
+      endTime: { type: String, required: true },
+      hourlyRate: { type: Number, required: true }
+    }],
+    costs: {
+      shuttlecockPrice: { type: Number, required: true },
+      shuttlecockCount: { type: Number, required: true },
+      penaltyFee: { type: Number, required: true }
+    },
+    currency: { type: String, required: true, default: 'THB' }
+  },
+  calculationResults: [{
+    playerId: { type: String, required: true },
+    courtFee: { type: Number, required: true },
+    shuttlecockFee: { type: Number, required: true },
+    penaltyFee: { type: Number, required: true },
+    totalAmount: { type: Number, required: true },
+    paymentId: { type: String },
+    paymentStatus: { type: String },
+    breakdown: {
+      hoursPlayed: { type: Number, required: true },
+      courtSessions: [{
+        hour: { type: String, required: true },
+        playersInSession: { type: Number, required: true },
+        costPerPlayer: { type: Number, required: true }
+      }]
+    }
+  }],
+  totalCollected: { type: Number, required: true },
+  successfulCharges: { type: Number, default: 0 },
+  failedCharges: { type: Number, default: 0 },
   status: {
     type: String,
     required: true,
     enum: Object.values(SettlementStatus),
     default: SettlementStatus.PENDING
   },
-  paymentIntentId: { type: String },
-  paymentMethodId: { type: String },
-  chargeId: { type: String },
-  description: { type: String },
-  refundedAmount: { type: Number, default: 0 },
-  transactions: [SettlementTransactionSchema],
-  metadata: { type: Schema.Types.Mixed },
   lastStatusChange: { type: Date, default: Date.now }
 }, {
   timestamps: true
 });
 
 // Indexes for better query performance
-SettlementSchema.index({ playerId: 1 });
 SettlementSchema.index({ eventId: 1 });
 SettlementSchema.index({ status: 1 });
-SettlementSchema.index({ paymentIntentId: 1 });
 SettlementSchema.index({ createdAt: -1 });
 SettlementSchema.index({ settlementId: 1 });
+SettlementSchema.index({ 'calculationResults.playerId': 1 });
 
 export const Settlement = mongoose.model<ISettlement>('Settlement', SettlementSchema);

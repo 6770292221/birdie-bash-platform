@@ -2,6 +2,8 @@ import { Request, Response } from 'express';
 import { PaymentServiceClient } from '../clients/paymentClient';
 import { Logger } from '../utils/logger';
 import { SettlementCalculator } from '../services/settlementCalculator';
+import { Settlement, SettlementStatus } from '../models/Settlement';
+import { v4 as uuidv4 } from 'uuid';
 
 const paymentClient = new PaymentServiceClient();
 const calculator = new SettlementCalculator();
@@ -360,7 +362,34 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
     const settlements = calculator.calculateSettlements(players, courts, costs);
     const totalCollected = settlements.reduce((sum, s) => sum + s.totalAmount, 0);
 
+    // Create settlement record in database
+    const settlementId = `settlement_${Date.now()}_${uuidv4().split('-')[0]}`;
+
+    const settlementRecord = new Settlement({
+      settlementId,
+      eventId: event_id,
+      eventData: {
+        players,
+        courts,
+        costs,
+        currency
+      },
+      calculationResults: settlements.map(settlement => ({
+        playerId: settlement.playerId,
+        courtFee: settlement.courtFee,
+        shuttlecockFee: settlement.shuttlecockFee,
+        penaltyFee: settlement.penaltyFee,
+        totalAmount: settlement.totalAmount,
+        breakdown: settlement.breakdown
+      })),
+      totalCollected: Math.round(totalCollected * 100) / 100,
+      successfulCharges: 0,
+      failedCharges: 0,
+      status: SettlementStatus.PROCESSING
+    });
+
     Logger.info('Settlement calculation completed, proceeding to charge players', {
+      settlementId,
       settlementsCount: settlements.length,
       totalAmount: totalCollected
     });
@@ -396,6 +425,13 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
           });
 
           const paymentResponse = await paymentClient.issueCharges(chargeRequest);
+
+          // Update settlement record with payment info
+          const resultIndex = settlementRecord.calculationResults.findIndex(r => r.playerId === settlement.playerId);
+          if (resultIndex >= 0) {
+            settlementRecord.calculationResults[resultIndex].paymentId = paymentResponse.id;
+            settlementRecord.calculationResults[resultIndex].paymentStatus = paymentResponse.status;
+          }
 
           chargeResults.push({
             playerId: settlement.playerId,
@@ -451,7 +487,16 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
       }
     }
 
+    // Update settlement record with final results
+    settlementRecord.successfulCharges = successfulCharges;
+    settlementRecord.failedCharges = failedCharges;
+    settlementRecord.status = failedCharges === 0 ? SettlementStatus.COMPLETED : SettlementStatus.PARTIALLY_REFUNDED;
+
+    // Save to database
+    await settlementRecord.save();
+
     Logger.success('Settlement calculate-and-charge completed', {
+      settlementId,
       event_id,
       totalAmount: totalCollected,
       successfulCharges,
@@ -461,6 +506,7 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
     res.status(201).json({
       success: true,
       data: {
+        settlementId,
         event_id,
         settlements: chargeResults,
         totalCollected: Math.round(totalCollected * 100) / 100,
@@ -482,6 +528,118 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
       success: false,
       code: 'SETTLEMENT_CALCULATE_AND_CHARGE_FAILED',
       message: 'Failed to calculate settlements and issue charges',
+      details: { error: error instanceof Error ? error.message : 'Unknown error' }
+    });
+  }
+};
+
+export const getAllSettlements = async (req: Request, res: Response) => {
+  try {
+    const { page = 1, limit = 10, event_id, status } = req.query;
+    const pageNumber = parseInt(page as string);
+    const limitNumber = parseInt(limit as string);
+    const skip = (pageNumber - 1) * limitNumber;
+
+    // Build filter
+    const filter: any = {};
+    if (event_id) filter.eventId = event_id;
+    if (status) filter.status = status;
+
+    Logger.info('Get all settlements request received', {
+      filter,
+      page: pageNumber,
+      limit: limitNumber
+    });
+
+    // Get settlements with pagination
+    const [settlements, total] = await Promise.all([
+      Settlement.find(filter)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNumber)
+        .select('-__v'),
+      Settlement.countDocuments(filter)
+    ]);
+
+    const totalPages = Math.ceil(total / limitNumber);
+
+    Logger.success('Settlements retrieved successfully', {
+      count: settlements.length,
+      total,
+      page: pageNumber,
+      totalPages
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        settlements,
+        pagination: {
+          page: pageNumber,
+          limit: limitNumber,
+          total,
+          totalPages,
+          hasNext: pageNumber < totalPages,
+          hasPrev: pageNumber > 1
+        }
+      },
+      message: 'Settlements retrieved successfully'
+    });
+
+  } catch (error) {
+    Logger.error('Get all settlements failed', error);
+
+    res.status(500).json({
+      success: false,
+      code: 'GET_SETTLEMENTS_FAILED',
+      message: 'Failed to retrieve settlements',
+      details: { error: error instanceof Error ? error.message : 'Unknown error' }
+    });
+  }
+};
+
+export const getSettlementById = async (req: Request, res: Response) => {
+  try {
+    const { settlement_id } = req.params;
+
+    Logger.info('Get settlement by ID request received', { settlement_id });
+
+    const settlement = await Settlement.findOne({
+      $or: [
+        { settlementId: settlement_id },
+        { _id: settlement_id }
+      ]
+    }).select('-__v');
+
+    if (!settlement) {
+      return res.status(404).json({
+        success: false,
+        code: 'SETTLEMENT_NOT_FOUND',
+        message: 'Settlement not found',
+        details: { settlement_id }
+      });
+    }
+
+    Logger.success('Settlement retrieved successfully', {
+      settlement_id: settlement.settlementId,
+      eventId: settlement.eventId
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        settlement
+      },
+      message: 'Settlement retrieved successfully'
+    });
+
+  } catch (error) {
+    Logger.error('Get settlement by ID failed', error);
+
+    res.status(500).json({
+      success: false,
+      code: 'GET_SETTLEMENT_FAILED',
+      message: 'Failed to retrieve settlement',
       details: { error: error instanceof Error ? error.message : 'Unknown error' }
     });
   }
