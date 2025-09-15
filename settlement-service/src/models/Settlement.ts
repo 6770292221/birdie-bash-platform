@@ -26,7 +26,7 @@ export interface ISettlement extends Document {
       playerId: string;
       startTime: string;
       endTime: string;
-      status: 'played' | 'no_show';
+      status: 'played' | 'canceled' | 'waitlist';
     }>;
     courts: Array<{
       courtNumber: number;
@@ -103,7 +103,7 @@ const SettlementSchema: Schema = new Schema({
       playerId: { type: String, required: true },
       startTime: { type: String, required: true },
       endTime: { type: String, required: true },
-      status: { type: String, required: true, enum: ['played', 'no_show'] }
+      status: { type: String, required: true, enum: ['played', 'canceled', 'waitlist'] }
     }],
     courts: [{
       courtNumber: { type: Number, required: true },

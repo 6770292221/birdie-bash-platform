@@ -557,7 +557,7 @@ export const getAllSettlements = async (req: Request, res: Response) => {
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limitNumber)
-        .select('-__v'),
+        .select('_id settlementId eventId calculationResults status createdAt updatedAt'),
       Settlement.countDocuments(filter)
     ]);
 
@@ -570,10 +570,31 @@ export const getAllSettlements = async (req: Request, res: Response) => {
       totalPages
     });
 
+    // Transform settlements to remove _id from subdocuments
+    const transformedSettlements = settlements.map(settlement => {
+      const settlementObj = settlement.toObject();
+
+      // Remove _id from calculationResults and nested courtSessions
+      if (settlementObj.calculationResults) {
+        settlementObj.calculationResults = settlementObj.calculationResults.map((result: any) => {
+          const { _id, ...resultWithoutId } = result;
+          if (resultWithoutId.breakdown && resultWithoutId.breakdown.courtSessions) {
+            resultWithoutId.breakdown.courtSessions = resultWithoutId.breakdown.courtSessions.map((session: any) => {
+              const { _id, ...sessionWithoutId } = session;
+              return sessionWithoutId;
+            });
+          }
+          return resultWithoutId;
+        });
+      }
+
+      return settlementObj;
+    });
+
     res.status(200).json({
       success: true,
       data: {
-        settlements,
+        settlements: transformedSettlements,
         pagination: {
           page: pageNumber,
           limit: limitNumber,
@@ -605,11 +626,8 @@ export const getSettlementById = async (req: Request, res: Response) => {
     Logger.info('Get settlement by ID request received', { settlement_id });
 
     const settlement = await Settlement.findOne({
-      $or: [
-        { settlementId: settlement_id },
-        { _id: settlement_id }
-      ]
-    }).select('-__v');
+      settlementId: settlement_id
+    }).select('_id settlementId eventId calculationResults status createdAt updatedAt');
 
     if (!settlement) {
       return res.status(404).json({
@@ -625,10 +643,27 @@ export const getSettlementById = async (req: Request, res: Response) => {
       eventId: settlement.eventId
     });
 
+    // Transform settlement to remove _id from subdocuments
+    const settlementObj = settlement.toObject();
+
+    // Remove _id from calculationResults and nested courtSessions
+    if (settlementObj.calculationResults) {
+      settlementObj.calculationResults = settlementObj.calculationResults.map((result: any) => {
+        const { _id, ...resultWithoutId } = result;
+        if (resultWithoutId.breakdown && resultWithoutId.breakdown.courtSessions) {
+          resultWithoutId.breakdown.courtSessions = resultWithoutId.breakdown.courtSessions.map((session: any) => {
+            const { _id, ...sessionWithoutId } = session;
+            return sessionWithoutId;
+          });
+        }
+        return resultWithoutId;
+      });
+    }
+
     res.status(200).json({
       success: true,
       data: {
-        settlement
+        settlement: settlementObj
       },
       message: 'Settlement retrieved successfully'
     });

@@ -2,7 +2,7 @@ export interface PlayerSession {
   playerId: string;
   startTime: string; // "HH:mm"
   endTime: string;   // "HH:mm"
-  status: 'played' | 'no_show';
+  status: 'played' | 'canceled' | 'waitlist';
 }
 
 export interface CourtSession {
@@ -44,13 +44,16 @@ export class SettlementCalculator {
     costs: EventCosts
   ): PlayerSettlement[] {
     const settlements: PlayerSettlement[] = [];
-    const playedPlayers = players.filter(p => p.status === 'played');
-    const noShowPlayers = players.filter(p => p.status === 'no_show');
+
+    // Filter out waitlist players - they don't need to be processed
+    const processablePlayers = players.filter(p => p.status !== 'waitlist');
+    const playedPlayers = processablePlayers.filter(p => p.status === 'played');
+    const canceledPlayers = processablePlayers.filter(p => p.status === 'canceled');
 
     // สร้าง time slots สำหรับคำนวณ (แบ่งเป็นชั่วโมง)
     const timeSlots = this.generateTimeSlots(courts);
 
-    for (const player of players) {
+    for (const player of processablePlayers) {
       const settlement: PlayerSettlement = {
         playerId: player.playerId,
         courtFee: 0,
@@ -63,8 +66,8 @@ export class SettlementCalculator {
         }
       };
 
-      if (player.status === 'no_show') {
-        // คนไม่มา - เก็บค่าปรับ
+      if (player.status === 'canceled') {
+        // คนที่ยกเลิก - เก็บค่าปรับ
         settlement.penaltyFee = costs.penaltyFee;
       } else {
         // คนที่มาเล่น
@@ -162,7 +165,7 @@ const players: PlayerSession[] = [
   { playerId: 'A', startTime: '20:00', endTime: '22:00', status: 'played' },
   { playerId: 'B', startTime: '20:00', endTime: '21:00', status: 'played' },
   { playerId: 'C', startTime: '21:00', endTime: '22:00', status: 'played' },
-  { playerId: 'D', startTime: '20:00', endTime: '22:00', status: 'no_show' }
+  { playerId: 'D', startTime: '20:00', endTime: '22:00', status: 'canceled' }
 ];
 
 const courts: CourtSession[] = [

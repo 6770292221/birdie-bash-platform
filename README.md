@@ -63,6 +63,7 @@ cp event-service/.env.example event-service/.env
 cp gateway/.env.example gateway/.env
 cp payment-service/.env.example payment-service/.env
 cp settlement-service/.env.example settlement-service/.env
+cp registration-service/.env.example registration-service/.env
 ```
 
 5. Start application services:
