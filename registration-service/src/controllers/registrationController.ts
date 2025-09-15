@@ -537,6 +537,27 @@ export const promoteWaitlist = async (
   try {
     const { id: eventId } = req.params;
 
+    // Check event exists and get capacity
+    const eventData = await fetchEventById(eventId);
+    if (!eventData) {
+      res.status(404).json({
+        error: "EVENT_NOT_FOUND",
+        message: "Event not found",
+        eventId
+      });
+      return;
+    }
+
+    const capacity = eventData.capacity;
+    if (!capacity || capacity.availableSlots <= 0) {
+      res.status(200).json({
+        message: 'No available slots for promotion',
+        eventId,
+        capacity
+      });
+      return;
+    }
+
     // Find the first person in waitlist (earliest registration)
     const waitlistPlayer = await Player.findOne({
       eventId,
@@ -555,18 +576,21 @@ export const promoteWaitlist = async (
     waitlistPlayer.status = 'registered';
     await waitlistPlayer.save();
 
-    // Publish promotion event
+    // Publish as participant.joined to update capacity properly
     try {
-      await messageQueueService.publishEvent('participant.promoted', {
+      await messageQueueService.publishEvent('participant.joined', {
         eventId,
         playerId: waitlistPlayer.id,
         userId: waitlistPlayer.userId || undefined,
-        promotedAt: new Date().toISOString(),
         playerName: waitlistPlayer.name,
         playerEmail: waitlistPlayer.email,
+        status: 'registered',
+        promotedFromWaitlist: true,
+        promotedAt: new Date().toISOString(),
       });
+      console.log('📤 Published participant.joined for promotion', { eventId, playerId: waitlistPlayer.id });
     } catch (error) {
-      console.error('Failed to publish participant.promoted event:', error);
+      console.error('Failed to publish participant.joined event:', error);
     }
 
     console.log('🎉 Waitlist player promoted', {
