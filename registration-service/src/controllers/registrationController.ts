@@ -530,6 +530,70 @@ export const registerMember = async (
   }
 };
 
+export const promoteWaitlist = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    const { id: eventId } = req.params;
+
+    // Find the first person in waitlist (earliest registration)
+    const waitlistPlayer = await Player.findOne({
+      eventId,
+      status: 'waitlist'
+    }).sort({ registrationTime: 1 });
+
+    if (!waitlistPlayer) {
+      res.status(200).json({
+        message: 'No waitlist players to promote',
+        eventId
+      });
+      return;
+    }
+
+    // Promote to registered
+    waitlistPlayer.status = 'registered';
+    await waitlistPlayer.save();
+
+    // Publish promotion event
+    try {
+      await messageQueueService.publishEvent('participant.promoted', {
+        eventId,
+        playerId: waitlistPlayer.id,
+        userId: waitlistPlayer.userId || undefined,
+        promotedAt: new Date().toISOString(),
+        playerName: waitlistPlayer.name,
+        playerEmail: waitlistPlayer.email,
+      });
+    } catch (error) {
+      console.error('Failed to publish participant.promoted event:', error);
+    }
+
+    console.log('🎉 Waitlist player promoted', {
+      eventId,
+      playerId: waitlistPlayer.id,
+      playerName: waitlistPlayer.name
+    });
+
+    res.status(200).json({
+      message: 'Waitlist player promoted successfully',
+      player: {
+        playerId: waitlistPlayer.id,
+        eventId: waitlistPlayer.eventId.toString(),
+        status: waitlistPlayer.status,
+        promotedAt: new Date().toISOString(),
+      },
+    });
+  } catch (error) {
+    console.error('Promote waitlist error:', error);
+    res.status(500).json({
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'Internal server error',
+      details: {},
+    });
+  }
+};
+
 export const registerGuest = async (
   req: ExtendedRequest,
   res: Response

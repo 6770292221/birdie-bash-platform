@@ -2,6 +2,8 @@ import amqp from 'amqplib';
 import dotenv from 'dotenv';
 import path from 'path';
 import mongoose from 'mongoose';
+import http from 'http';
+import https from 'https';
 import Event from '../models/Event';
 
 // Load env regardless of CWD
@@ -11,6 +13,50 @@ async function connectMongo() {
   const uri = process.env.EVENT_DB_URI || 'mongodb://localhost:27017/birdie_events';
   await mongoose.connect(uri);
   console.log('Capacity Worker - MongoDB Connected');
+}
+
+async function promoteFromWaitlist(eventId: string): Promise<void> {
+  const registrationServiceUrl = process.env.REGISTRATION_SERVICE_URL || 'http://localhost:3005';
+  const target = new URL(`/api/registration/events/${eventId}/promote-waitlist`, registrationServiceUrl);
+  const lib = target.protocol === 'https:' ? https : http;
+
+  return new Promise((resolve, reject) => {
+    const req = lib.request(
+      {
+        method: 'POST',
+        hostname: target.hostname,
+        port: target.port || (target.protocol === 'https:' ? 443 : 80),
+        path: target.pathname,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        timeout: 5000,
+      },
+      (res) => {
+        const status = res.statusCode || 0;
+        if (status >= 200 && status < 300) {
+          console.log('✅ Waitlist promotion triggered', { eventId });
+          resolve();
+        } else {
+          console.log('⚠️ Waitlist promotion failed', { eventId, status });
+          resolve(); // Don't fail the whole process
+        }
+      }
+    );
+
+    req.on('error', (err) => {
+      console.error('❌ Failed to call waitlist promotion:', err.message);
+      resolve(); // Don't fail the whole process
+    });
+
+    req.on('timeout', () => {
+      req.destroy();
+      console.error('❌ Waitlist promotion timeout');
+      resolve();
+    });
+
+    req.end();
+  });
 }
 
 async function main() {
@@ -62,6 +108,9 @@ async function main() {
             },
           }).catch(() => {});
           console.log('✅ capacity updated (cancelled)', { eventId: data.eventId });
+
+          // Try to promote from waitlist
+          await promoteFromWaitlist(data.eventId);
         }
       }
 
