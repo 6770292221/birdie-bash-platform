@@ -16,4 +16,8 @@ db.createCollection('courts');
 db = db.getSiblingDB('birdie_payments');
 db.createCollection('payments');
 
+
+db = db.getSiblingDB('birdie_settlements');
+db.createCollection('settlements');
+
 print('MongoDB databases initialized for Birdie Bash Platform');

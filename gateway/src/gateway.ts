@@ -20,14 +20,16 @@ const AUTH_SERVICE_URL =
   process.env.AUTH_SERVICE_URL || "http://localhost:3001";
 const EVENT_SERVICE_URL =
   process.env.EVENT_SERVICE_URL || "http://localhost:3002";
-const SETTLEMENT_SERVICE_URL =  process.env.SETTLEMENT_SERVICE_URL || "http://localhost:3005";
+const SETTLEMENT_SERVICE_URL =  process.env.SETTLEMENT_SERVICE_URL || "http://localhost:3006";
+const REGISTRATION_SERVICE_URL =
+  process.env.REGISTRATION_SERVICE_URL || "http://localhost:3005";
 
 app.use(cors());
 app.use(express.json());
 app.use(attachUserFromJwt(JWT_SECRET));
 
 // Docs aggregator (Swagger UI + merged JSON)
-registerDocs(app, AUTH_SERVICE_URL, EVENT_SERVICE_URL, SETTLEMENT_SERVICE_URL);
+registerDocs(app, AUTH_SERVICE_URL, EVENT_SERVICE_URL, REGISTRATION_SERVICE_URL, SETTLEMENT_SERVICE_URL);
 
 // Authentication middleware is now in ./middleware/auth
 
@@ -65,7 +67,7 @@ app.get("/health", (_req, res) => {
 });
 
 // Routes configuration
-const routes = getRoutes(AUTH_SERVICE_URL, EVENT_SERVICE_URL, SETTLEMENT_SERVICE_URL);
+const routes = getRoutes(AUTH_SERVICE_URL, EVENT_SERVICE_URL, SETTLEMENT_SERVICE_URL, REGISTRATION_SERVICE_URL );
 
 // Setup proxies for each service
 routes.forEach((route) => {
@@ -182,6 +184,7 @@ function startGateway(port: number, attempt = 0) {
     console.log("Service endpoints:");
     console.log(` ✅ Auth Service: ${AUTH_SERVICE_URL}`);
     console.log(` ✅ Event Service: ${EVENT_SERVICE_URL}`);
+    console.log(` ✅ Registration Service: ${REGISTRATION_SERVICE_URL}`);
     console.log(` ✅ Settlement Service: ${SETTLEMENT_SERVICE_URL}`);
     console.log(` 📘 Gateway docs: http://localhost:${port}/api-docs`);
   });
