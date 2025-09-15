@@ -340,7 +340,7 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
   try {
     const { event_id, players, courts, costs, currency = 'THB' } = req.body;
 
-    Logger.info('Settlement calculate-and-charge request received', {
+    Logger.info('Settlement issue request received', {
       event_id,
       playersCount: players?.length || 0,
       courtsCount: courts?.length || 0,
@@ -355,6 +355,57 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
         code: 'INVALID_REQUEST',
         message: 'Missing required fields: event_id, players, courts, and costs are required',
         details: { required_fields: ['event_id', 'players', 'courts', 'costs'] }
+      });
+    }
+
+    // Get event details to extract createdBy
+    let eventCreatorPhoneNumber: string | undefined;
+    try {
+      Logger.info('Fetching event details', { event_id });
+      const eventResponse = await fetch(`http://localhost:8080/api/events/${event_id}`, {
+        headers: {
+          'Authorization': req.headers.authorization || ''
+        }
+      });
+
+      if (eventResponse.ok) {
+        const eventData = await eventResponse.json() as any;
+        const createdBy = eventData.event?.createdBy;
+
+        if (createdBy) {
+          Logger.info('Fetching event creator details', { createdBy });
+          const userResponse = await fetch(`http://localhost:8080/api/auth/user/${createdBy}`, {
+            headers: {
+              'Authorization': req.headers.authorization || ''
+            }
+          });
+
+          if (userResponse.ok) {
+            const userData = await userResponse.json() as any;
+            eventCreatorPhoneNumber = userData.user?.phoneNumber;
+            Logger.info('Event creator phone number retrieved', {
+              createdBy,
+              phoneNumber: eventCreatorPhoneNumber
+            });
+          } else {
+            Logger.error('Failed to fetch user details', {
+              createdBy,
+              status: userResponse.status
+            });
+          }
+        } else {
+          Logger.error('Event createdBy not found', { event_id });
+        }
+      } else {
+        Logger.error('Failed to fetch event details', {
+          event_id,
+          status: eventResponse.status
+        });
+      }
+    } catch (error) {
+      Logger.error('Error fetching event or user details', {
+        event_id,
+        error: error instanceof Error ? error.message : 'Unknown error'
       });
     }
 
@@ -414,7 +465,8 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
               shuttlecock_fee: settlement.shuttlecockFee.toString(),
               penalty_fee: settlement.penaltyFee.toString(),
               hours_played: settlement.breakdown.hoursPlayed.toString(),
-              settlement_type: 'event_settlement'
+              settlement_type: 'event_settlement',
+              event_creator_phone: eventCreatorPhoneNumber || ''
             }
           };
 
@@ -423,6 +475,8 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
             amount: settlement.totalAmount,
             currency
           });
+
+          console.log(chargeRequest)
 
           const paymentResponse = await paymentClient.issueCharges(chargeRequest);
 
@@ -495,7 +549,7 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
     // Save to database
     await settlementRecord.save();
 
-    Logger.success('Settlement calculate-and-charge completed', {
+    Logger.success('Settlement issue completed', {
       settlementId,
       event_id,
       totalAmount: totalCollected,
@@ -522,7 +576,7 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
     });
 
   } catch (error) {
-    Logger.error('Settlement calculate-and-charge failed', error);
+    Logger.error('Settlement issue failed', error);
 
     res.status(500).json({
       success: false,

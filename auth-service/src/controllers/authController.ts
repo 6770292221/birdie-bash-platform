@@ -95,3 +95,26 @@ export const verifyToken = (req: Request, res: Response): void => {
     user: (req as any).user,
   });
 };
+
+export const getUserById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    if (!id) { res.status(400).json({ code: 'VALIDATION_ERROR', message: 'User ID is required' }); return; }
+
+    const user = await User.findById(id);
+    if (!user) { res.status(404).json({ code: 'USER_NOT_FOUND', message: 'User not found' }); return; }
+
+    res.status(200).json({
+      message: 'User retrieved successfully',
+      user: {
+        id: user._id as any,
+        email: user.email,
+        name: user.name,
+        skill: user.skill,
+        phoneNumber: user.phoneNumber,
+        role: user.role,
+      },
+    });
+  } catch (error) { next(error as any); }
+};

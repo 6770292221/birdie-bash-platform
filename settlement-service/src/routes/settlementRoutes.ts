@@ -259,7 +259,7 @@ router.put('/:settlement_id/confirm', confirmPayment);
 
 /**
  * @swagger
- * /api/settlements/calculate-and-charge:
+ * /api/settlements/issue:
  *   post:
  *     summary: Calculate settlements and issue charges to Payment Service
  *     description: Calculates settlement amounts and automatically issues charges via gRPC to Payment Service
@@ -366,7 +366,7 @@ router.put('/:settlement_id/confirm', confirmPayment);
  *       500:
  *         description: Settlement calculation or charging failed
  */
-router.post('/calculate-and-charge', calculateAndCharge);
+router.post('/issue', calculateAndCharge);
 
 export default router;
 
