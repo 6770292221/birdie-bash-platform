@@ -4,6 +4,7 @@ import {
   registerMember,
   registerGuest,
   cancelPlayerRegistration,
+  promoteWaitlist,
 } from "../controllers/registrationController";
 
 const router = express.Router();
@@ -166,12 +167,9 @@ router.post("/events/:id/member", registerMember); // alias
  *           schema:
  *             $ref: '#/components/schemas/RegisterGuestRequest'
  *           examples:
- *             minimal:
- *               summary: Minimal payload
- *               value: { name: 'Guest A', phoneNumber: '080-000-0000' }
- *             withTime:
- *               summary: With time range
- *               value: { name: 'Guest A', phoneNumber: '080-000-0000', startTime: '19:00', endTime: '21:00' }
+ *             withTimeSlot:
+ *               summary: Guest registration with time slot
+ *               value: { name: 'Jane Smith', phoneNumber: '0887654321', startTime: '18:30', endTime: '20:00' }
  *     responses:
  *       201:
  *         description: Guest registered successfully
@@ -262,5 +260,46 @@ router.post("/events/:id/guests", registerGuest);
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.post("/events/:id/players/:pid/cancel", cancelPlayerRegistration);
+
+/**
+ * @swagger
+ * /api/registration/events/{id}/promote-waitlist:
+ *   post:
+ *     summary: Promote the first waitlist player to registered (Internal API)
+ *     tags: [Internal APIs]
+ *     description: Internal endpoint called by capacity worker when a registered player cancels. Not available through API Gateway.
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Event ID
+ *     responses:
+ *       200:
+ *         description: Waitlist player promoted successfully or no waitlist players found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 player:
+ *                   type: object
+ *                   properties:
+ *                     playerId:
+ *                       type: string
+ *                     eventId:
+ *                       type: string
+ *                     status:
+ *                       type: string
+ *                     promotedAt:
+ *                       type: string
+ *       500:
+ *         description: Internal server error
+ */
+// Internal API for waitlist promotion (called by capacity worker)
+router.post("/events/:id/promote-waitlist", promoteWaitlist);
 
 export default router;
