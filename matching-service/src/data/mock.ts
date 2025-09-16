@@ -1,0 +1,118 @@
+import { Player } from "../models/player";
+import { PlayerState, SkillRank } from "../models/enums";
+
+// Helper to make ISO with Bangkok offset +07:00
+const d = (t: string) => `2025-09-16T${t}+07:00`;
+
+export function buildMockPlayers(): Player[] {
+  return [
+    {
+      id: "p1",
+      name: "สมชาย",
+      skill: SkillRank.P,
+      availableStart: d("20:00:00"),
+      availableEnd: d("22:00:00"),
+      gamesPlayed: 0,
+      state: PlayerState.Idle,
+    },
+    {
+      id: "p2",
+      name: "สมหญิง",
+      skill: SkillRank.BG,
+      availableStart: d("20:00:00"),
+      availableEnd: d("22:00:00"),
+      gamesPlayed: 0,
+      state: PlayerState.Idle,
+    },
+    {
+      id: "p3",
+      name: "วิชัย",
+      skill: SkillRank.N,
+      availableStart: d("20:00:00"),
+      availableEnd: d("22:00:00"),
+      gamesPlayed: 0,
+      state: PlayerState.Idle,
+    },
+    {
+      id: "p4",
+      name: "มานี",
+      skill: SkillRank.S,
+      availableStart: d("20:00:00"),
+      availableEnd: d("21:30:00"),
+      gamesPlayed: 0,
+      state: PlayerState.Idle,
+    },
+    {
+      id: "p5",
+      name: "ประชา",
+      skill: SkillRank.P,
+      availableStart: d("20:00:00"),
+      availableEnd: d("22:00:00"),
+      gamesPlayed: 0,
+      state: PlayerState.Idle,
+    },
+    {
+      id: "p6",
+      name: "นิภา",
+      skill: SkillRank.BG,
+      availableStart: d("20:00:00"),
+      availableEnd: d("22:00:00"),
+      gamesPlayed: 0,
+      state: PlayerState.Idle,
+    },
+    {
+      id: "p7",
+      name: "ธีระ",
+      skill: SkillRank.S,
+      availableStart: d("20:00:00"),
+      availableEnd: d("22:00:00"),
+      gamesPlayed: 0,
+      state: PlayerState.Idle,
+    },
+    {
+      id: "p8",
+      name: "ศศิ",
+      skill: SkillRank.N,
+      availableStart: d("20:00:00"),
+      availableEnd: d("21:00:00"),
+      gamesPlayed: 0,
+      state: PlayerState.Idle,
+    },
+    {
+      id: "p9",
+      name: "อานนท์",
+      skill: SkillRank.BG,
+      availableStart: d("20:00:00"),
+      availableEnd: d("22:00:00"),
+      gamesPlayed: 0,
+      state: PlayerState.Idle,
+    },
+    {
+      id: "p10",
+      name: "แพรว",
+      skill: SkillRank.S,
+      availableStart: d("20:15:00"),
+      availableEnd: d("22:00:00"),
+      gamesPlayed: 0,
+      state: PlayerState.Idle,
+    },
+    {
+      id: "p11",
+      name: "เก่ง",
+      skill: SkillRank.P,
+      availableStart: d("20:30:00"),
+      availableEnd: d("22:00:00"),
+      gamesPlayed: 0,
+      state: PlayerState.Idle,
+    },
+    {
+      id: "p12",
+      name: "บีม",
+      skill: SkillRank.N,
+      availableStart: d("20:00:00"),
+      availableEnd: d("21:45:00"),
+      gamesPlayed: 0,
+      state: PlayerState.Idle,
+    },
+  ];
+}
