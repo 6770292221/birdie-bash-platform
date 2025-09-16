@@ -433,11 +433,7 @@ export function startGrpcServer() {
       Logger.error('Failed to start gRPC server', err);
       return;
     }
-    Logger.server(`gRPC server running on port ${port}`, {
-      port,
-      bindAddress,
-      services: ['PaymentService']
-    });
+    Logger.server(`gRPC server running on port ${port}`);
     server.start();
   });
 
