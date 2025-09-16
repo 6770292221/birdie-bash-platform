@@ -3,6 +3,7 @@ import * as protoLoader from '@grpc/proto-loader';
 import path from 'path';
 import { Payment } from './models/Payment';
 import { PaymentService } from './services/paymentService';
+import { omiseService } from './services/omiseService';
 import { PaymentStatus, PaymentType } from './types/payment';
 import { v4 as uuidv4 } from 'uuid';
 import { Logger } from './utils/logger';
@@ -73,45 +74,78 @@ const grpcService = {
         });
         return;
       }
-      // Create payment record
+
+      // Convert amount to satang (smallest unit for THB)
+      const amountInSatang = Math.round(request.amount * 100);
+      const currency = (request.currency || 'THB').toUpperCase();
+
+      Logger.info('Creating Omise source', {
+        amount: amountInSatang,
+        currency: currency
+      });
+
+      // Step 1: Create Omise source for PromptPay
+      const omiseSource = await omiseService.createSource(amountInSatang, currency);
+      
+      Logger.success('Omise source created', {
+        sourceId: omiseSource.id,
+        type: omiseSource.type,
+        amount: omiseSource.amount
+      });
+
+      // Step 2: Create Omise charge using the source
+      const omiseCharge = await omiseService.createCharge(
+        amountInSatang, 
+        currency, 
+        omiseSource.id
+      );
+
+      Logger.success('Omise charge created', {
+        chargeId: omiseCharge.id,
+        status: omiseCharge.status,
+        amount: omiseCharge.amount
+      });
+
+      // Step 3: Display QR code in console
+      if (omiseCharge.source?.scannable_code?.image?.download_uri) {
+        await omiseService.displayQRCode(omiseCharge.source.scannable_code.image.download_uri);
+      }
+
+      // Step 4: Create payment record in database
       const paymentId = uuidv4();
       const payment = new Payment({
         id: paymentId,
         eventId: request.event_id,
         playerId: request.player_id,
-        amount: request.amount,
-        currency: request.currency || 'thb', // Default to Thai Baht for prompt-pay
+        amount: request.amount, // Store original amount (not in satang)
+        currency: currency.toLowerCase(),
         status: PaymentStatus.PENDING,
         paymentType: request.event_id ? PaymentType.EVENT_REGISTRATION : PaymentType.MEMBERSHIP_FEE,
         description: request.description,
-        metadata: request.metadata,
-        transactions: [],
-        refundedAmount: 0,
-        lastStatusChange: new Date()
-      });
-
-      await payment.save();
-
-      // Create payment intent (QR code data for prompt-pay)
-      const paymentData = await paymentService.createPaymentIntent({
-        amount: request.amount,
-        currency: request.currency || 'thb',
-        paymentMethodId: request.payment_method_id,
         metadata: {
-          paymentId,
-          playerId: request.player_id,
-          eventId: request.event_id
-        }
+          ...request.metadata,
+          omiseSourceId: omiseSource.id,
+          omiseChargeId: omiseCharge.id,
+          qrCodeUri: omiseCharge.source?.scannable_code?.image?.download_uri
+        },
+        transactions: [{
+          id: uuidv4(),
+          type: 'charge',
+          amount: request.amount,
+          status: PaymentStatus.PENDING,
+          transactionId: omiseCharge.id,
+          timestamp: new Date(),
+          metadata: {
+            omiseStatus: omiseCharge.status,
+            sourceType: omiseSource.type
+          }
+        }],
+        refundedAmount: 0,
+        lastStatusChange: new Date(),
+        paymentIntentId: omiseCharge.id, // Store Omise charge ID
+        chargeId: omiseCharge.id
       });
 
-      // Update payment with payment reference and QR data
-      payment.paymentIntentId = paymentData.paymentReference; // Store payment reference
-      payment.metadata = {
-        ...payment.metadata,
-        qrCodeData: paymentData.qrCodeData,
-        bankAccount: paymentData.bankAccount,
-        promptPayId: paymentData.promptPayId
-      };
       await payment.save();
 
       const response = {
@@ -119,17 +153,19 @@ const grpcService = {
         status: convertStatusToProto(payment.status),
         amount: payment.amount,
         currency: payment.currency,
-        payment_intent_id: paymentData.paymentReference,
-        client_secret: paymentData.qrCodeData, // QR code data for frontend
+        payment_intent_id: omiseCharge.id,
+        client_secret: omiseCharge.source?.scannable_code?.image?.download_uri || '', // QR code URL
         created_at: payment.createdAt.getTime(),
         updated_at: payment.updatedAt.getTime()
       };
 
-      Logger.success('IssueCharges completed successfully', {
+      Logger.success('IssueCharges completed successfully with Omise', {
         paymentId,
-        paymentReference: paymentData.paymentReference,
+        omiseChargeId: omiseCharge.id,
+        omiseSourceId: omiseSource.id,
         amount: payment.amount,
-        currency: payment.currency
+        currency: payment.currency,
+        qrCodeUri: omiseCharge.source?.scannable_code?.image?.download_uri
       });
 
       callback(null, response);
