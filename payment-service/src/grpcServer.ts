@@ -451,6 +451,41 @@ const grpcService = {
         message: error instanceof Error ? error.message : 'Unknown error'
       });
     }
+  },
+
+  async getEventPayments(call: grpc.ServerUnaryCall<any, any>, callback: grpc.sendUnaryData<any>) {
+    try {
+      const request = call.request;
+      
+      if (!request.event_id) {
+        callback({
+          code: grpc.status.INVALID_ARGUMENT,
+          message: 'Event ID is required'
+        });
+        return;
+      }
+
+      const filter: any = { eventId: request.event_id };
+      if (request.status) filter.status = convertStatusFromProto(parseInt(request.status));
+
+      const payments = await Payment.find(filter).sort({ createdAt: -1 });
+
+      const response = {
+        payments: payments.map(payment => ({
+          player_id: payment.playerId,
+          amount: payment.amount,
+          status: convertStatusToProto(payment.status)
+        }))
+      };
+
+      callback(null, response);
+    } catch (error) {
+      console.error('gRPC getEventPayments error:', error);
+      callback({
+        code: grpc.status.INTERNAL,
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
   }
 };
 
