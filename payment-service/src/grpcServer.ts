@@ -1,10 +1,10 @@
 import * as grpc from '@grpc/grpc-js';
 import * as protoLoader from '@grpc/proto-loader';
 import path from 'path';
-import { Payment } from './models/Payment';
+import { prisma } from './config/paymentDatabase';
+import { IPayment, PaymentStatus, PaymentType, TransactionType } from './models/Payment';
 import { PaymentService } from './services/paymentService';
 import { omiseService } from './services/omiseService';
-import { PaymentStatus, PaymentType } from './types/payment';
 import { v4 as uuidv4 } from 'uuid';
 import { Logger } from './utils/logger';
 
@@ -113,40 +113,45 @@ const grpcService = {
 
       // Step 4: Create payment record in database
       const paymentId = uuidv4();
-      const payment = new Payment({
-        id: paymentId,
-        eventId: request.event_id,
-        playerId: request.player_id,
-        amount: request.amount, // Store original amount (not in satang)
-        currency: currency.toLowerCase(),
-        status: PaymentStatus.PENDING,
-        paymentType: request.event_id ? PaymentType.EVENT_REGISTRATION : PaymentType.MEMBERSHIP_FEE,
-        description: request.description,
-        metadata: {
-          ...request.metadata,
-          omiseSourceId: omiseSource.id,
-          omiseChargeId: omiseCharge.id,
-          qrCodeUri: omiseCharge.source?.scannable_code?.image?.download_uri
-        },
-        transactions: [{
-          id: uuidv4(),
-          type: 'charge',
-          amount: request.amount,
+      const payment = await prisma.payment.create({
+        data: {
+          id: paymentId,
+          eventId: request.event_id || null,
+          playerId: request.player_id,
+          amount: request.amount, // Store original amount (not in satang)
+          currency: currency.toLowerCase(),
           status: PaymentStatus.PENDING,
-          transactionId: omiseCharge.id,
-          timestamp: new Date(),
+          paymentType: request.event_id ? PaymentType.EVENT_REGISTRATION : PaymentType.MEMBERSHIP_FEE,
+          description: request.description || null,
           metadata: {
-            omiseStatus: omiseCharge.status,
-            sourceType: omiseSource.type
+            ...request.metadata,
+            omiseSourceId: omiseSource.id,
+            omiseChargeId: omiseCharge.id,
+            qrCodeUri: omiseCharge.source?.scannable_code?.image?.download_uri
+          },
+          refundedAmount: 0,
+          lastStatusChange: new Date(),
+          paymentIntentId: omiseCharge.id, // Store Omise charge ID
+          chargeId: omiseCharge.id,
+          transactions: {
+            create: {
+              id: uuidv4(),
+              type: TransactionType.charge,
+              amount: request.amount,
+              status: PaymentStatus.PENDING,
+              transactionId: omiseCharge.id,
+              timestamp: new Date(),
+              metadata: {
+                omiseStatus: omiseCharge.status,
+                sourceType: omiseSource.type
+              }
+            }
           }
-        }],
-        refundedAmount: 0,
-        lastStatusChange: new Date(),
-        paymentIntentId: omiseCharge.id, // Store Omise charge ID
-        chargeId: omiseCharge.id
+        },
+        include: {
+          transactions: true
+        }
       });
-
-      await payment.save();
 
       const response = {
         id: paymentId,
@@ -197,7 +202,10 @@ const grpcService = {
         return;
       }
 
-      const payment = await Payment.findOne({ id: request.payment_id });
+      const payment = await prisma.payment.findUnique({ 
+        where: { id: request.payment_id },
+        include: { transactions: true }
+      });
       if (!payment) {
         Logger.error('Payment not found', { payment_id: request.payment_id });
         callback({
@@ -214,46 +222,53 @@ const grpcService = {
       );
 
       // Update payment status - for MVP, payments require manual confirmation
-      payment.status = confirmedPayment.status === 'succeeded' 
-        ? PaymentStatus.COMPLETED 
-        : confirmedPayment.status === 'requires_confirmation'
-        ? PaymentStatus.PENDING
-        : PaymentStatus.FAILED;
-      payment.lastStatusChange = new Date();
-      
-      if (confirmedPayment.latest_charge) {
-        payment.chargeId = confirmedPayment.latest_charge; // Store payment reference
-      }
-
-      // Add transaction record
-      payment.transactions.push({
-        id: uuidv4(),
-        type: 'charge',
-        amount: payment.amount,
-        status: payment.status,
-        transactionId: confirmedPayment.id,
-        timestamp: new Date(),
-        metadata: { 
-          confirmationMethod: 'manual',
-          originalStatus: confirmedPayment.status 
+      const updatedPayment = await prisma.payment.update({
+        where: { id: payment.id },
+        data: {
+          status: confirmedPayment.status === 'succeeded' 
+            ? PaymentStatus.COMPLETED 
+            : confirmedPayment.status === 'requires_confirmation'
+            ? PaymentStatus.PENDING
+            : PaymentStatus.FAILED,
+          lastStatusChange: new Date(),
+          chargeId: confirmedPayment.latest_charge || payment.chargeId,
+          transactions: {
+            create: {
+              id: uuidv4(),
+              type: TransactionType.charge,
+              amount: payment.amount,
+              status: confirmedPayment.status === 'succeeded' 
+                ? PaymentStatus.COMPLETED 
+                : confirmedPayment.status === 'requires_confirmation'
+                ? PaymentStatus.PENDING
+                : PaymentStatus.FAILED,
+              transactionId: confirmedPayment.id,
+              timestamp: new Date(),
+              metadata: { 
+                confirmationMethod: 'manual',
+                originalStatus: confirmedPayment.status 
+              }
+            }
+          }
+        },
+        include: {
+          transactions: true
         }
       });
 
-      await payment.save();
-
       const response = {
-        id: payment.id,
-        status: convertStatusToProto(payment.status),
-        amount: payment.amount,
-        currency: payment.currency,
-        payment_intent_id: payment.paymentIntentId,
-        created_at: payment.createdAt.getTime(),
-        updated_at: payment.updatedAt.getTime()
+        id: updatedPayment.id,
+        status: convertStatusToProto(updatedPayment.status),
+        amount: updatedPayment.amount,
+        currency: updatedPayment.currency,
+        payment_intent_id: updatedPayment.paymentIntentId,
+        created_at: updatedPayment.createdAt.getTime(),
+        updated_at: updatedPayment.updatedAt.getTime()
       };
 
       Logger.success('ConfirmPayment completed', {
-        payment_id: payment.id,
-        status: payment.status,
+        payment_id: updatedPayment.id,
+        status: updatedPayment.status,
         confirmation_status: confirmedPayment.status
       });
 
@@ -280,7 +295,10 @@ const grpcService = {
         return;
       }
 
-      const payment = await Payment.findOne({ id: request.payment_id });
+      const payment = await prisma.payment.findUnique({ 
+        where: { id: request.payment_id },
+        include: { transactions: true }
+      });
       if (!payment) {
         callback({
           code: grpc.status.NOT_FOUND,
@@ -315,36 +333,42 @@ const grpcService = {
       });
 
       // Update payment record
-      payment.refundedAmount += refundAmount;
-      payment.status = payment.refundedAmount >= payment.amount 
-        ? PaymentStatus.REFUNDED 
-        : PaymentStatus.PARTIALLY_REFUNDED;
-      payment.lastStatusChange = new Date();
-
-      // Add refund transaction record
-      payment.transactions.push({
-        id: uuidv4(),
-        type: 'refund',
-        amount: refundAmount,
-        status: PaymentStatus.PENDING, // Refunds are manual process
-        transactionId: refund.id,
-        timestamp: new Date(),
-        metadata: { 
-          reason: request.reason,
-          refundMethod: 'manual',
-          refundReference: refund.id
+      const updatedPayment = await prisma.payment.update({
+        where: { id: payment.id },
+        data: {
+          refundedAmount: payment.refundedAmount + refundAmount,
+          status: (payment.refundedAmount + refundAmount) >= payment.amount 
+            ? PaymentStatus.REFUNDED 
+            : PaymentStatus.PARTIALLY_REFUNDED,
+          lastStatusChange: new Date(),
+          transactions: {
+            create: {
+              id: uuidv4(),
+              type: TransactionType.refund,
+              amount: refundAmount,
+              status: PaymentStatus.PENDING, // Refunds are manual process
+              transactionId: refund.id,
+              timestamp: new Date(),
+              metadata: { 
+                reason: request.reason,
+                refundMethod: 'manual',
+                refundReference: refund.id
+              }
+            }
+          }
+        },
+        include: {
+          transactions: true
         }
       });
 
-      await payment.save();
-
       const response = {
-        id: payment.id,
-        status: convertStatusToProto(payment.status),
+        id: updatedPayment.id,
+        status: convertStatusToProto(updatedPayment.status),
         amount: refundAmount,
-        currency: payment.currency,
-        created_at: payment.createdAt.getTime(),
-        updated_at: payment.updatedAt.getTime()
+        currency: updatedPayment.currency,
+        created_at: updatedPayment.createdAt.getTime(),
+        updated_at: updatedPayment.updatedAt.getTime()
       };
 
       callback(null, response);
@@ -370,7 +394,10 @@ const grpcService = {
         return;
       }
 
-      const payment = await Payment.findOne({ id: request.payment_id });
+      const payment = await prisma.payment.findUnique({ 
+        where: { id: request.payment_id },
+        include: { transactions: true }
+      });
       if (!payment) {
         callback({
           code: grpc.status.NOT_FOUND,
@@ -390,7 +417,7 @@ const grpcService = {
         created_at: payment.createdAt.getTime(),
         updated_at: payment.updatedAt.getTime(),
         last_status_change: payment.lastStatusChange.getTime(),
-        transactions: payment.transactions.map(tx => ({
+        transactions: payment.transactions.map((tx: any) => ({
           id: tx.id,
           type: tx.type === 'charge' ? 0 : tx.type === 'refund' ? 1 : 2,
           amount: tx.amount,
@@ -428,10 +455,13 @@ const grpcService = {
       if (request.status) filter.status = convertStatusFromProto(parseInt(request.status));
       if (request.event_id) filter.eventId = request.event_id;
 
-      const payments = await Payment.find(filter).sort({ createdAt: -1 });
+      const payments = await prisma.payment.findMany({
+        where: filter,
+        orderBy: { createdAt: 'desc' }
+      });
 
       const response = {
-        payments: payments.map(payment => ({
+        payments: payments.map((payment: any) => ({
           payment_id: payment.id,
           status: convertStatusToProto(payment.status),
           amount: payment.amount,
@@ -468,10 +498,13 @@ const grpcService = {
       const filter: any = { eventId: request.event_id };
       if (request.status) filter.status = convertStatusFromProto(parseInt(request.status));
 
-      const payments = await Payment.find(filter).sort({ createdAt: -1 });
+      const payments = await prisma.payment.findMany({
+        where: filter,
+        orderBy: { createdAt: 'desc' }
+      });
 
       const response = {
-        payments: payments.map(payment => ({
+        payments: payments.map((payment: any) => ({
           player_id: payment.playerId,
           amount: payment.amount,
           status: convertStatusToProto(payment.status)
