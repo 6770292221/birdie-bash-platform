@@ -6,47 +6,219 @@ import {
   getPaymentStatus,
   getPlayerPayments,
   calculateSettlements,
-  calculateAndCharge
+  calculateAndCharge,
+  getAllSettlements,
+  getSettlementById
 } from '../controllers/settlementController';
 
 const router = Router();
 
-// Settlement endpoints that call the gRPC Payment Service
+/**
+ * @swagger
+ * /api/settlements:
+ *   get:
+ *     summary: Get all settlements with pagination and filters
+ *     description: Retrieves all settlements with optional filtering and pagination
+ *     tags: [Settlements]
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Page number for pagination
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *         description: Number of items per page
+ *       - in: query
+ *         name: event_id
+ *         schema:
+ *           type: string
+ *         description: Filter by event ID
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [pending, processing, completed, failed, refunded, partially_refunded, cancelled]
+ *         description: Filter by settlement status
+ *     responses:
+ *       200:
+ *         description: Settlements retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     settlements:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           settlementId:
+ *                             type: string
+ *                           eventId:
+ *                             type: string
+ *                           eventData:
+ *                             type: object
+ *                           calculationResults:
+ *                             type: array
+ *                             items:
+ *                               type: object
+ *                               properties:
+ *                                 playerId:
+ *                                   type: string
+ *                                 courtFee:
+ *                                   type: number
+ *                                 shuttlecockFee:
+ *                                   type: number
+ *                                 penaltyFee:
+ *                                   type: number
+ *                                 totalAmount:
+ *                                   type: number
+ *                                 paymentId:
+ *                                   type: string
+ *                                 paymentStatus:
+ *                                   type: string
+ *                           totalCollected:
+ *                             type: number
+ *                           successfulCharges:
+ *                             type: number
+ *                           failedCharges:
+ *                             type: number
+ *                           status:
+ *                             type: string
+ *                           createdAt:
+ *                             type: string
+ *                             format: date-time
+ *                           updatedAt:
+ *                             type: string
+ *                             format: date-time
+ *                     pagination:
+ *                       type: object
+ *                       properties:
+ *                         page:
+ *                           type: integer
+ *                         limit:
+ *                           type: integer
+ *                         total:
+ *                           type: integer
+ *                         totalPages:
+ *                           type: integer
+ *                         hasNext:
+ *                           type: boolean
+ *                         hasPrev:
+ *                           type: boolean
+ *                 message:
+ *                   type: string
+ *       500:
+ *         description: Failed to retrieve settlements
+ */
+router.get('/', getAllSettlements);
 
 /**
  * @swagger
- * /api/settlements/charges:
- *   post:
- *     summary: Issue charges for a settlement
- *     description: Creates settlement charges via gRPC call to Payment Service
+ * /api/settlements/{settlement_id}:
+ *   get:
+ *     summary: Get settlement by ID
+ *     description: Retrieves a specific settlement by its ID
  *     tags: [Settlements]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/SettlementChargeRequest'
+ *     parameters:
+ *       - in: path
+ *         name: settlement_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Settlement ID or MongoDB ObjectId
  *     responses:
- *       201:
- *         description: Settlement charge issued successfully
+ *       200:
+ *         description: Settlement retrieved successfully
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/SettlementResponse'
- *       400:
- *         description: Invalid request data
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     settlement:
+ *                       type: object
+ *                       properties:
+ *                         settlementId:
+ *                           type: string
+ *                         eventId:
+ *                           type: string
+ *                         eventData:
+ *                           type: object
+ *                           description: Original calculation input data
+ *                         calculationResults:
+ *                           type: array
+ *                           items:
+ *                             type: object
+ *                             properties:
+ *                               playerId:
+ *                                 type: string
+ *                               courtFee:
+ *                                 type: number
+ *                               shuttlecockFee:
+ *                                 type: number
+ *                               penaltyFee:
+ *                                 type: number
+ *                               totalAmount:
+ *                                 type: number
+ *                               paymentId:
+ *                                 type: string
+ *                               paymentStatus:
+ *                                 type: string
+ *                               breakdown:
+ *                                 type: object
+ *                         totalCollected:
+ *                           type: number
+ *                         successfulCharges:
+ *                           type: number
+ *                         failedCharges:
+ *                           type: number
+ *                         status:
+ *                           type: string
+ *                         createdAt:
+ *                           type: string
+ *                           format: date-time
+ *                         updatedAt:
+ *                           type: string
+ *                           format: date-time
+ *                 message:
+ *                   type: string
+ *       404:
+ *         description: Settlement not found
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/Error'
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 code:
+ *                   type: string
+ *                   example: "SETTLEMENT_NOT_FOUND"
+ *                 message:
+ *                   type: string
+ *                   example: "Settlement not found"
+ *                 details:
+ *                   type: object
  *       500:
- *         description: Settlement charge failed
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
+ *         description: Failed to retrieve settlement
  */
-router.post('/charges', issueCharges);
+router.get('/:settlement_id', getSettlementById);
 
 /**
  * @swagger
@@ -84,185 +256,10 @@ router.post('/charges', issueCharges);
  */
 router.put('/:settlement_id/confirm', confirmPayment);
 
-/**
- * POST /api/settlements/:settlement_id/refund
- * Refund a settlement payment
- */
-router.post('/:settlement_id/refund', refundPayment);
-
-/**
- * GET /api/settlements/:settlement_id/status
- * Get settlement status
- */
-router.get('/:settlement_id/status', getPaymentStatus);
-
-/**
- * GET /api/settlements/player/:player_id
- * Get settlements for a specific player
- */
-router.get('/player/:player_id', getPlayerPayments);
 
 /**
  * @swagger
- * /api/settlements/calculate:
- *   post:
- *     summary: Calculate settlement amounts for event participants
- *     description: Calculates court fees, shuttlecock fees, and penalties based on player participation
- *     tags: [Settlements]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required: [players, courts, costs]
- *             properties:
- *               players:
- *                 type: array
- *                 items:
- *                   type: object
- *                   required: [playerId, startTime, endTime, status]
- *                   properties:
- *                     playerId:
- *                       type: string
- *                       description: Player ID
- *                     startTime:
- *                       type: string
- *                       description: Start time (HH:mm format)
- *                       example: "20:00"
- *                     endTime:
- *                       type: string
- *                       description: End time (HH:mm format)
- *                       example: "22:00"
- *                     status:
- *                       type: string
- *                       enum: [played, no_show]
- *                       description: Player participation status
- *               courts:
- *                 type: array
- *                 items:
- *                   type: object
- *                   required: [courtNumber, startTime, endTime, hourlyRate]
- *                   properties:
- *                     courtNumber:
- *                       type: number
- *                       description: Court number
- *                     startTime:
- *                       type: string
- *                       description: Court start time (HH:mm format)
- *                       example: "20:00"
- *                     endTime:
- *                       type: string
- *                       description: Court end time (HH:mm format)
- *                       example: "22:00"
- *                     hourlyRate:
- *                       type: number
- *                       description: Court hourly rate in THB
- *                       example: 200
- *               costs:
- *                 type: object
- *                 required: [shuttlecockPrice, shuttlecockCount, penaltyFee]
- *                 properties:
- *                   shuttlecockPrice:
- *                     type: number
- *                     description: Price per shuttlecock in THB
- *                     example: 40
- *                   shuttlecockCount:
- *                     type: number
- *                     description: Number of shuttlecocks used
- *                     example: 3
- *                   penaltyFee:
- *                     type: number
- *                     description: Penalty fee for no-show players in THB
- *                     example: 100
- *           example:
- *             players:
- *               - playerId: "player_A"
- *                 startTime: "20:00"
- *                 endTime: "22:00"
- *                 status: "played"
- *               - playerId: "player_B"
- *                 startTime: "20:00"
- *                 endTime: "21:00"
- *                 status: "played"
- *               - playerId: "player_C"
- *                 startTime: "21:00"
- *                 endTime: "22:00"
- *                 status: "played"
- *               - playerId: "player_D"
- *                 startTime: "20:00"
- *                 endTime: "22:00"
- *                 status: "no_show"
- *             courts:
- *               - courtNumber: 1
- *                 startTime: "20:00"
- *                 endTime: "22:00"
- *                 hourlyRate: 200
- *             costs:
- *               shuttlecockPrice: 40
- *               shuttlecockCount: 3
- *               penaltyFee: 100
- *     responses:
- *       200:
- *         description: Settlement calculation successful
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 data:
- *                   type: object
- *                   properties:
- *                     settlements:
- *                       type: array
- *                       items:
- *                         type: object
- *                         properties:
- *                           playerId:
- *                             type: string
- *                           courtFee:
- *                             type: number
- *                           shuttlecockFee:
- *                             type: number
- *                           penaltyFee:
- *                             type: number
- *                           totalAmount:
- *                             type: number
- *                           breakdown:
- *                             type: object
- *                             properties:
- *                               hoursPlayed:
- *                                 type: number
- *                               courtSessions:
- *                                 type: array
- *                                 items:
- *                                   type: object
- *                                   properties:
- *                                     hour:
- *                                       type: string
- *                                     playersInSession:
- *                                       type: number
- *                                     costPerPlayer:
- *                                       type: number
- *                     totalCollected:
- *                       type: number
- *                       description: Total amount to be collected from all players
- *                 message:
- *                   type: string
- *       400:
- *         description: Invalid request data
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
- */
-router.post('/calculate', calculateSettlements);
-
-/**
- * @swagger
- * /api/settlements/calculate-and-charge:
+ * /api/settlements/issue:
  *   post:
  *     summary: Calculate settlements and issue charges to Payment Service
  *     description: Calculates settlement amounts and automatically issues charges via gRPC to Payment Service
@@ -369,6 +366,8 @@ router.post('/calculate', calculateSettlements);
  *       500:
  *         description: Settlement calculation or charging failed
  */
-router.post('/calculate-and-charge', calculateAndCharge);
+router.post('/issue', calculateAndCharge);
 
 export default router;
+
+//  ช่วยเพิ่ม get เพื่อดู settlement ให้หน่อยได้มั้ย ขอแบบ getall กับ getbyId 

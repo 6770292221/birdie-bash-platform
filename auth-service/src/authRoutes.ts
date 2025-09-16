@@ -1,5 +1,5 @@
 import express from 'express';
-import { register, login, verifyToken } from './controllers/authController';
+import { register, login, verifyToken, getUserById } from './controllers/authController';
 import { authenticateToken } from './middleware/auth';
 
 const router = express.Router();
@@ -133,5 +133,65 @@ router.post('/login', login);
  *               message: 'Invalid or expired token'
  */
 router.get('/verify', authenticateToken, verifyToken);
+
+/**
+ * @swagger
+ * /api/auth/user/{id}:
+ *   get:
+ *     summary: Get user by ID
+ *     tags: [Authentication]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: User ID
+ *     responses:
+ *       200:
+ *         description: User retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 user:
+ *                   $ref: '#/components/schemas/User'
+ *       400:
+ *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *             example:
+ *               code: 'VALIDATION_ERROR'
+ *               message: 'User ID is required'
+ *       404:
+ *         description: User not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *             example:
+ *               code: 'USER_NOT_FOUND'
+ *               message: 'User not found'
+ *       401:
+ *         description: Access token required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       403:
+ *         description: Invalid or expired token
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.get('/user/:id', authenticateToken, getUserById);
 
 export default router;

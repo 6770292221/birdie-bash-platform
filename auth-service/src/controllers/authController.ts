@@ -6,7 +6,7 @@ import { IUserCreate, IUserLogin } from '../types/user';
 
 export const register = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { email, password, name, skill, role = 'user' }: IUserCreate = req.body;
+    const { email, password, name, skill, phoneNumber, role = 'user' }: IUserCreate = req.body;
 
     const missing: string[] = [];
     if (!email) missing.push('email');
@@ -26,6 +26,7 @@ export const register = async (req: Request, res: Response, next: NextFunction):
       password_hash,
       name,
       skill,
+      phoneNumber,
       role,
     });
 
@@ -45,6 +46,7 @@ export const register = async (req: Request, res: Response, next: NextFunction):
         email: user.email,
         name: user.name,
         skill: user.skill,
+        phoneNumber: user.phoneNumber,
         role: user.role,
       },
     });
@@ -80,6 +82,7 @@ export const login = async (req: Request, res: Response, next: NextFunction): Pr
         email: user.email,
         name: user.name,
         skill: user.skill,
+        phoneNumber: user.phoneNumber,
         role: user.role,
       },
     });
@@ -91,4 +94,27 @@ export const verifyToken = (req: Request, res: Response): void => {
     message: 'Token is valid',
     user: (req as any).user,
   });
+};
+
+export const getUserById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    if (!id) { res.status(400).json({ code: 'VALIDATION_ERROR', message: 'User ID is required' }); return; }
+
+    const user = await User.findById(id);
+    if (!user) { res.status(404).json({ code: 'USER_NOT_FOUND', message: 'User not found' }); return; }
+
+    res.status(200).json({
+      message: 'User retrieved successfully',
+      user: {
+        id: user._id as any,
+        email: user.email,
+        name: user.name,
+        skill: user.skill,
+        phoneNumber: user.phoneNumber,
+        role: user.role,
+      },
+    });
+  } catch (error) { next(error as any); }
 };

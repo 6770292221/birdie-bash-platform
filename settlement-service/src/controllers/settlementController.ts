@@ -2,9 +2,51 @@ import { Request, Response } from 'express';
 import { PaymentServiceClient } from '../clients/paymentClient';
 import { Logger } from '../utils/logger';
 import { SettlementCalculator } from '../services/settlementCalculator';
+import { Settlement, SettlementStatus } from '../models/Settlement';
+import { UserRef } from '../models/User';
+import { v4 as uuidv4 } from 'uuid';
 
 const paymentClient = new PaymentServiceClient();
 const calculator = new SettlementCalculator();
+
+// Helper function to populate user details for settlement results
+const populateUserDetails = async (settlements: any[]) => {
+  for (const settlement of settlements) {
+    if (settlement.calculationResults) {
+      for (const result of settlement.calculationResults) {
+        // Check if this player is a guest (has embedded data in eventData)
+        const playerInEvent = settlement.eventData?.players?.find(
+          (p: any) => p.playerId === result.playerId
+        );
+
+        if (playerInEvent?.role === 'guest' && playerInEvent.guestInfo) {
+          // Use embedded guest data
+          result.playerDetails = {
+            name: playerInEvent.guestInfo.name,
+            phoneNumber: playerInEvent.guestInfo.phoneNumber
+          };
+        } else {
+          // For members/admins, query from auth database
+          try {
+            const user = await UserRef.findById(result.playerId).select('name phoneNumber');
+            if (user) {
+              result.playerDetails = {
+                name: user.name,
+                phoneNumber: user.phoneNumber
+              };
+            }
+          } catch (error) {
+            Logger.error('Failed to populate user details', {
+              playerId: result.playerId,
+              error: error instanceof Error ? error.message : 'Unknown error'
+            });
+          }
+        }
+      }
+    }
+  }
+  return settlements;
+};
 
 export const issueCharges = async (req: Request, res: Response) => {
   try {
@@ -338,7 +380,7 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
   try {
     const { event_id, players, courts, costs, currency = 'THB' } = req.body;
 
-    Logger.info('Settlement calculate-and-charge request received', {
+    Logger.info('Settlement issue request received', {
       event_id,
       playersCount: players?.length || 0,
       courtsCount: courts?.length || 0,
@@ -356,11 +398,99 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
       });
     }
 
+    // Get event details to extract createdBy
+    let eventCreatorPhoneNumber: string | undefined;
+    try {
+      Logger.info('Fetching event details', { event_id });
+      const eventResponse = await fetch(`http://localhost:8080/api/events/${event_id}`, {
+        headers: {
+          'Authorization': req.headers.authorization || ''
+        }
+      });
+
+      if (eventResponse.ok) {
+        const eventData = await eventResponse.json() as any;
+        const createdBy = eventData.event?.createdBy;
+
+        if (createdBy) {
+          Logger.info('Fetching event creator details', { createdBy });
+          const userResponse = await fetch(`http://localhost:8080/api/auth/user/${createdBy}`, {
+            headers: {
+              'Authorization': req.headers.authorization || ''
+            }
+          });
+
+          if (userResponse.ok) {
+            const userData = await userResponse.json() as any;
+            eventCreatorPhoneNumber = userData.user?.phoneNumber;
+            Logger.info('Event creator phone number retrieved', {
+              createdBy,
+              phoneNumber: eventCreatorPhoneNumber
+            });
+          } else {
+            Logger.error('Failed to fetch user details', {
+              createdBy,
+              status: userResponse.status
+            });
+          }
+        } else {
+          Logger.error('Event createdBy not found', { event_id });
+        }
+      } else {
+        Logger.error('Failed to fetch event details', {
+          event_id,
+          status: eventResponse.status
+        });
+      }
+    } catch (error) {
+      Logger.error('Error fetching event or user details', {
+        event_id,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+
     // Calculate settlements
     const settlements = calculator.calculateSettlements(players, courts, costs);
     const totalCollected = settlements.reduce((sum, s) => sum + s.totalAmount, 0);
 
+    // Create settlement record in database
+    const settlementId = `settlement_${Date.now()}_${uuidv4().split('-')[0]}`;
+
+    const settlementRecord = new Settlement({
+      settlementId,
+      eventId: event_id,
+      eventData: {
+        players: players.map((player: any) => ({
+          playerId: player.playerId,
+          startTime: player.startTime,
+          endTime: player.endTime,
+          status: player.status,
+          role: player.role || 'member', // Default to member if not specified
+          guestInfo: player.role === 'guest' ? {
+            name: player.name,
+            phoneNumber: player.phoneNumber
+          } : undefined
+        })),
+        courts,
+        costs,
+        currency
+      },
+      calculationResults: settlements.map(settlement => ({
+        playerId: settlement.playerId,
+        courtFee: settlement.courtFee,
+        shuttlecockFee: settlement.shuttlecockFee,
+        penaltyFee: settlement.penaltyFee,
+        totalAmount: settlement.totalAmount,
+        breakdown: settlement.breakdown
+      })),
+      totalCollected: Math.round(totalCollected * 100) / 100,
+      successfulCharges: 0,
+      failedCharges: 0,
+      status: SettlementStatus.PROCESSING
+    });
+
     Logger.info('Settlement calculation completed, proceeding to charge players', {
+      settlementId,
       settlementsCount: settlements.length,
       totalAmount: totalCollected
     });
@@ -385,7 +515,8 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
               shuttlecock_fee: settlement.shuttlecockFee.toString(),
               penalty_fee: settlement.penaltyFee.toString(),
               hours_played: settlement.breakdown.hoursPlayed.toString(),
-              settlement_type: 'event_settlement'
+              settlement_type: 'event_settlement',
+              event_creator_phone: eventCreatorPhoneNumber || ''
             }
           };
 
@@ -395,7 +526,16 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
             currency
           });
 
+          console.log(chargeRequest)
+
           const paymentResponse = await paymentClient.issueCharges(chargeRequest);
+
+          // Update settlement record with payment info
+          const resultIndex = settlementRecord.calculationResults.findIndex(r => r.playerId === settlement.playerId);
+          if (resultIndex >= 0) {
+            settlementRecord.calculationResults[resultIndex].paymentId = paymentResponse.id;
+            settlementRecord.calculationResults[resultIndex].paymentStatus = paymentResponse.status;
+          }
 
           chargeResults.push({
             playerId: settlement.playerId,
@@ -451,7 +591,16 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
       }
     }
 
-    Logger.success('Settlement calculate-and-charge completed', {
+    // Update settlement record with final results
+    settlementRecord.successfulCharges = successfulCharges;
+    settlementRecord.failedCharges = failedCharges;
+    settlementRecord.status = failedCharges === 0 ? SettlementStatus.COMPLETED : SettlementStatus.PARTIALLY_REFUNDED;
+
+    // Save to database
+    await settlementRecord.save();
+
+    Logger.success('Settlement issue completed', {
+      settlementId,
       event_id,
       totalAmount: totalCollected,
       successfulCharges,
@@ -461,6 +610,7 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
     res.status(201).json({
       success: true,
       data: {
+        settlementId,
         event_id,
         settlements: chargeResults,
         totalCollected: Math.round(totalCollected * 100) / 100,
@@ -476,12 +626,165 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
     });
 
   } catch (error) {
-    Logger.error('Settlement calculate-and-charge failed', error);
+    Logger.error('Settlement issue failed', error);
 
     res.status(500).json({
       success: false,
       code: 'SETTLEMENT_CALCULATE_AND_CHARGE_FAILED',
       message: 'Failed to calculate settlements and issue charges',
+      details: { error: error instanceof Error ? error.message : 'Unknown error' }
+    });
+  }
+};
+
+export const getAllSettlements = async (req: Request, res: Response) => {
+  try {
+    const { page = 1, limit = 10, event_id, status } = req.query;
+    const pageNumber = parseInt(page as string);
+    const limitNumber = parseInt(limit as string);
+    const skip = (pageNumber - 1) * limitNumber;
+
+    // Build filter
+    const filter: any = {};
+    if (event_id) filter.eventId = event_id;
+    if (status) filter.status = status;
+
+    Logger.info('Get all settlements request received', {
+      filter,
+      page: pageNumber,
+      limit: limitNumber
+    });
+
+    // Get settlements with pagination
+    const [settlements, total] = await Promise.all([
+      Settlement.find(filter)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNumber)
+        .select('_id settlementId eventId calculationResults status createdAt updatedAt'),
+      Settlement.countDocuments(filter)
+    ]);
+
+    const totalPages = Math.ceil(total / limitNumber);
+
+    Logger.success('Settlements retrieved successfully', {
+      count: settlements.length,
+      total,
+      page: pageNumber,
+      totalPages
+    });
+
+    // Populate user details
+    const settlementsWithUsers = await populateUserDetails(settlements.map(s => s.toObject()));
+
+    // Transform settlements to remove _id from subdocuments
+    const transformedSettlements = settlementsWithUsers.map(settlement => {
+      const settlementObj = settlement;
+
+      // Remove _id from calculationResults and nested courtSessions
+      if (settlementObj.calculationResults) {
+        settlementObj.calculationResults = settlementObj.calculationResults.map((result: any) => {
+          const { _id, ...resultWithoutId } = result;
+          if (resultWithoutId.breakdown && resultWithoutId.breakdown.courtSessions) {
+            resultWithoutId.breakdown.courtSessions = resultWithoutId.breakdown.courtSessions.map((session: any) => {
+              const { _id, ...sessionWithoutId } = session;
+              return sessionWithoutId;
+            });
+          }
+          return resultWithoutId;
+        });
+      }
+
+      return settlementObj;
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        settlements: transformedSettlements,
+        pagination: {
+          page: pageNumber,
+          limit: limitNumber,
+          total,
+          totalPages,
+          hasNext: pageNumber < totalPages,
+          hasPrev: pageNumber > 1
+        }
+      },
+      message: 'Settlements retrieved successfully'
+    });
+
+  } catch (error) {
+    Logger.error('Get all settlements failed', error);
+
+    res.status(500).json({
+      success: false,
+      code: 'GET_SETTLEMENTS_FAILED',
+      message: 'Failed to retrieve settlements',
+      details: { error: error instanceof Error ? error.message : 'Unknown error' }
+    });
+  }
+};
+
+export const getSettlementById = async (req: Request, res: Response) => {
+  try {
+    const { settlement_id } = req.params;
+
+    Logger.info('Get settlement by ID request received', { settlement_id });
+
+    const settlement = await Settlement.findOne({
+      settlementId: settlement_id
+    }).select('_id settlementId eventId calculationResults status createdAt updatedAt');
+
+    if (!settlement) {
+      return res.status(404).json({
+        success: false,
+        code: 'SETTLEMENT_NOT_FOUND',
+        message: 'Settlement not found',
+        details: { settlement_id }
+      });
+    }
+
+    Logger.success('Settlement retrieved successfully', {
+      settlement_id: settlement.settlementId,
+      eventId: settlement.eventId
+    });
+
+    // Populate user details for single settlement
+    const settlementWithUsers = await populateUserDetails([settlement.toObject()]);
+
+    // Transform settlement to remove _id from subdocuments
+    const settlementObj = settlementWithUsers[0];
+
+    // Remove _id from calculationResults and nested courtSessions
+    if (settlementObj.calculationResults) {
+      settlementObj.calculationResults = settlementObj.calculationResults.map((result: any) => {
+        const { _id, ...resultWithoutId } = result;
+        if (resultWithoutId.breakdown && resultWithoutId.breakdown.courtSessions) {
+          resultWithoutId.breakdown.courtSessions = resultWithoutId.breakdown.courtSessions.map((session: any) => {
+            const { _id, ...sessionWithoutId } = session;
+            return sessionWithoutId;
+          });
+        }
+        return resultWithoutId;
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        settlement: settlementObj
+      },
+      message: 'Settlement retrieved successfully'
+    });
+
+  } catch (error) {
+    Logger.error('Get settlement by ID failed', error);
+
+    res.status(500).json({
+      success: false,
+      code: 'GET_SETTLEMENT_FAILED',
+      message: 'Failed to retrieve settlement',
       details: { error: error instanceof Error ? error.message : 'Unknown error' }
     });
   }
