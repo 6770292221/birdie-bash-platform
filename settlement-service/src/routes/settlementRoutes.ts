@@ -225,8 +225,17 @@ router.get('/:settlement_id', getSettlementById);
  * @swagger
  * /api/settlements/issue:
  *   post:
- *     summary: Calculate settlements and issue charges to Payment Service
- *     description: Calculates settlement amounts and automatically issues charges via gRPC to Payment Service
+ *     summary: Calculate settlements and issue charges to Payment Service (Auto-fetch event data)
+ *     description: |
+ *       Automatically fetches event details and participants, then calculates settlement amounts and issues charges via gRPC to Payment Service.
+ *
+ *       **Data Sources:**
+ *       - Event details from Event Service (port 3002)
+ *       - Players/participants from Registration Service (port 3005)
+ *       - Court and cost information from event configuration
+ *
+ *       **Automatic Actions:**
+ *       - Updates event status to "completed" after successful settlement
  *     tags: [Settlements]
  *     requestBody:
  *       required: true
@@ -234,59 +243,12 @@ router.get('/:settlement_id', getSettlementById);
  *         application/json:
  *           schema:
  *             type: object
- *             required: [event_id, players, courts, costs]
+ *             required: [event_id]
  *             properties:
  *               event_id:
  *                 type: string
- *                 description: Event ID for the settlement
+ *                 description: Event ID for the settlement - all other data will be fetched automatically
  *                 example: "event_123"
- *               players:
- *                 type: array
- *                 items:
- *                   type: object
- *                   required: [playerId, startTime, endTime, status]
- *                   properties:
- *                     playerId:
- *                       type: string
- *                     startTime:
- *                       type: string
- *                       example: "20:00"
- *                     endTime:
- *                       type: string
- *                       example: "22:00"
- *                     status:
- *                       type: string
- *                       enum: [played, no_show]
- *               courts:
- *                 type: array
- *                 items:
- *                   type: object
- *                   required: [courtNumber, startTime, endTime, hourlyRate]
- *                   properties:
- *                     courtNumber:
- *                       type: number
- *                     startTime:
- *                       type: string
- *                       example: "20:00"
- *                     endTime:
- *                       type: string
- *                       example: "22:00"
- *                     hourlyRate:
- *                       type: number
- *                       example: 200
- *               costs:
- *                 type: object
- *                 required: [shuttlecockPrice, shuttlecockCount, penaltyFee]
- *                 properties:
- *                   shuttlecockPrice:
- *                     type: number
- *                     example: 40
- *                   shuttlecockCount:
- *                     type: number
- *                     example: 3
- *                   penaltyFee:
- *                     type: number
- *                     example: 100
  *               currency:
  *                 type: string
  *                 description: Currency code

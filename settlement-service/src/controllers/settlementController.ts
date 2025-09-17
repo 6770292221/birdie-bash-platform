@@ -390,31 +390,29 @@ export const calculateSettlements = async (req: Request, res: Response) => {
 
 export const calculateAndCharge = async (req: Request, res: Response) => {
   try {
-    const { event_id, players, courts, costs, currency = 'THB' } = req.body;
+    const { event_id, shuttlecockCount, penaltyFee, currency = 'THB' } = req.body;
 
     Logger.info('Settlement issue request received', {
       event_id,
-      playersCount: players?.length || 0,
-      courtsCount: courts?.length || 0,
       currency,
       timestamp: new Date().toISOString()
     });
 
     // Validate required fields
-    if (!event_id || !players || !courts || !costs) {
+    if (!event_id) {
       return res.status(400).json({
         success: false,
         code: 'INVALID_REQUEST',
-        message: 'Missing required fields: event_id, players, courts, and costs are required',
-        details: { required_fields: ['event_id', 'players', 'courts', 'costs'] }
+        message: 'Missing required field: event_id is required',
+        details: { required_fields: ['event_id'] }
       });
     }
 
-    // Get event details to extract createdBy
-    let eventCreatorPhoneNumber: string | undefined;
+    // Fetch event details
+    let eventData: any;
     try {
       Logger.info('Fetching event details', { event_id });
-      const eventResponse = await fetch(`http://localhost:8080/api/events/${event_id}`, {
+      const eventResponse = await fetch(`http://localhost:3002/api/events/${event_id}`, {
         headers: {
           'Authorization': req.headers.authorization || ''
         }
@@ -436,74 +434,154 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
         });
       }
 
-      const eventData = await eventResponse.json() as any;
-      const createdBy = eventData.event?.createdBy;
+      const eventResponseData = await eventResponse.json() as any;
+      eventData = eventResponseData.event;
 
-      if (!createdBy) {
-        Logger.error('Event createdBy not found', { event_id });
+      if (!eventData) {
+        Logger.error('Event data not found in response', { event_id });
         return res.status(400).json({
           success: false,
-          code: 'EVENT_CREATOR_NOT_FOUND',
-          message: 'Event creator information is missing',
+          code: 'EVENT_DATA_NOT_FOUND',
+          message: 'Event data is missing from response',
           details: { event_id }
         });
       }
 
-      Logger.info('Fetching event creator details', { createdBy });
-      const userResponse = await fetch(`http://localhost:8080/api/auth/user/${createdBy}`, {
-        headers: {
-          'Authorization': req.headers.authorization || ''
-        }
-      });
-
-      if (!userResponse.ok) {
-        Logger.error('Failed to fetch user details', {
-          createdBy,
-          status: userResponse.status
-        });
-        return res.status(404).json({
-          success: false,
-          code: 'USER_NOT_FOUND',
-          message: `User with ID ${createdBy} not found`,
-          details: {
-            createdBy,
-            status: userResponse.status
-          }
-        });
-      }
-
-      const userData = await userResponse.json() as any;
-      eventCreatorPhoneNumber = userData.user?.phoneNumber;
-
-      if (!eventCreatorPhoneNumber) {
-        Logger.error('Event creator phone number not found', { createdBy });
-        return res.status(400).json({
-          success: false,
-          code: 'USER_PHONE_NOT_FOUND',
-          message: 'Event creator phone number is missing',
-          details: { createdBy }
-        });
-      }
-
-      Logger.info('Event creator phone number retrieved', {
-        createdBy,
-        phoneNumber: eventCreatorPhoneNumber
-      });
-
     } catch (error) {
-      Logger.error('Error fetching event or user details', {
+      Logger.error('Error fetching event details', {
         event_id,
         error: error instanceof Error ? error.message : 'Unknown error'
       });
       return res.status(500).json({
         success: false,
-        code: 'FETCH_ERROR',
-        message: 'Failed to fetch event or user information',
+        code: 'FETCH_EVENT_ERROR',
+        message: 'Failed to fetch event information',
         details: {
           event_id,
           error: error instanceof Error ? error.message : 'Unknown error'
         }
       });
+    }
+
+    // Fetch players/participants
+    let players: any[];
+    try {
+      Logger.info('Fetching event players', { event_id });
+      const playersResponse = await fetch(`http://localhost:3005/api/registrations/events/${event_id}/players`, {
+        headers: {
+          'Authorization': req.headers.authorization || ''
+        }
+      });
+
+      if (!playersResponse.ok) {
+        Logger.error('Failed to fetch event players', {
+          event_id,
+          status: playersResponse.status
+        });
+        return res.status(404).json({
+          success: false,
+          code: 'PLAYERS_NOT_FOUND',
+          message: `Players for event ${event_id} not found`,
+          details: {
+            event_id,
+            status: playersResponse.status
+          }
+        });
+      }
+
+      const playersResponseData = await playersResponse.json() as any;
+      players = playersResponseData.players || [];
+
+      if (players.length === 0) {
+        return res.status(400).json({
+          success: false,
+          code: 'NO_PLAYERS_FOUND',
+          message: 'No players found for this event',
+          details: { event_id }
+        });
+      }
+
+      // Transform players to settlement format
+      players = players.map((player: any) => ({
+        playerId: player.playerId || player.id,
+        startTime: player.startTime || "20:00", // Default if not provided
+        endTime: player.endTime || "22:00", // Default if not provided
+        status: player.status || "played", // Default to played
+        role: player.role || "member",
+        name: player.name,
+        phoneNumber: player.phoneNumber
+      }));
+
+    } catch (error) {
+      Logger.error('Error fetching event players', {
+        event_id,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      return res.status(500).json({
+        success: false,
+        code: 'FETCH_PLAYERS_ERROR',
+        message: 'Failed to fetch event players',
+        details: {
+          event_id,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        }
+      });
+    }
+
+    // Transform event data to settlement format
+    const courts = eventData.courts.map((court: any) => ({
+      courtNumber: court.courtNumber,
+      startTime: court.startTime,
+      endTime: court.endTime,
+      hourlyRate: eventData.courtHourlyRate
+    }));
+
+    const costs = {
+      shuttlecockPrice: eventData.shuttlecockPrice,
+      shuttlecockCount: shuttlecockCount,
+      penaltyFee: penaltyFee // Default penalty, could be configurable
+    };
+
+    Logger.info('Event data transformed for settlement', {
+      event_id,
+      playersCount: players.length,
+      courtsCount: courts.length,
+      costs
+    });
+
+    // Get event creator details
+    let eventCreatorPhoneNumber: string | undefined;
+    const createdBy = eventData.createdBy;
+
+    if (createdBy) {
+      try {
+        Logger.info('Fetching event creator details', { createdBy });
+        const userResponse = await fetch(`http://localhost:3001/api/auth/user/${createdBy}`, {
+          headers: {
+            'Authorization': req.headers.authorization || ''
+          }
+        });
+
+        if (userResponse.ok) {
+          const userData = await userResponse.json() as any;
+          eventCreatorPhoneNumber = userData.user?.phoneNumber;
+
+          Logger.info('Event creator phone number retrieved', {
+            createdBy,
+            phoneNumber: eventCreatorPhoneNumber
+          });
+        } else {
+          Logger.error('Failed to fetch user details', {
+            createdBy,
+            status: userResponse.status
+          });
+        }
+      } catch (error) {
+        Logger.error('Error fetching event creator details', {
+          createdBy,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
     }
 
     // Calculate settlements
