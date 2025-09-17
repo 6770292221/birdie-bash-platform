@@ -408,44 +408,89 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
         }
       });
 
-      if (eventResponse.ok) {
-        const eventData = await eventResponse.json() as any;
-        const createdBy = eventData.event?.createdBy;
-
-        if (createdBy) {
-          Logger.info('Fetching event creator details', { createdBy });
-          const userResponse = await fetch(`http://localhost:8080/api/auth/user/${createdBy}`, {
-            headers: {
-              'Authorization': req.headers.authorization || ''
-            }
-          });
-
-          if (userResponse.ok) {
-            const userData = await userResponse.json() as any;
-            eventCreatorPhoneNumber = userData.user?.phoneNumber;
-            Logger.info('Event creator phone number retrieved', {
-              createdBy,
-              phoneNumber: eventCreatorPhoneNumber
-            });
-          } else {
-            Logger.error('Failed to fetch user details', {
-              createdBy,
-              status: userResponse.status
-            });
-          }
-        } else {
-          Logger.error('Event createdBy not found', { event_id });
-        }
-      } else {
+      if (!eventResponse.ok) {
         Logger.error('Failed to fetch event details', {
           event_id,
           status: eventResponse.status
         });
+        return res.status(404).json({
+          success: false,
+          code: 'EVENT_NOT_FOUND',
+          message: `Event with ID ${event_id} not found`,
+          details: {
+            event_id,
+            status: eventResponse.status
+          }
+        });
       }
+
+      const eventData = await eventResponse.json() as any;
+      const createdBy = eventData.event?.createdBy;
+
+      if (!createdBy) {
+        Logger.error('Event createdBy not found', { event_id });
+        return res.status(400).json({
+          success: false,
+          code: 'EVENT_CREATOR_NOT_FOUND',
+          message: 'Event creator information is missing',
+          details: { event_id }
+        });
+      }
+
+      Logger.info('Fetching event creator details', { createdBy });
+      const userResponse = await fetch(`http://localhost:8080/api/auth/user/${createdBy}`, {
+        headers: {
+          'Authorization': req.headers.authorization || ''
+        }
+      });
+
+      if (!userResponse.ok) {
+        Logger.error('Failed to fetch user details', {
+          createdBy,
+          status: userResponse.status
+        });
+        return res.status(404).json({
+          success: false,
+          code: 'USER_NOT_FOUND',
+          message: `User with ID ${createdBy} not found`,
+          details: {
+            createdBy,
+            status: userResponse.status
+          }
+        });
+      }
+
+      const userData = await userResponse.json() as any;
+      eventCreatorPhoneNumber = userData.user?.phoneNumber;
+
+      if (!eventCreatorPhoneNumber) {
+        Logger.error('Event creator phone number not found', { createdBy });
+        return res.status(400).json({
+          success: false,
+          code: 'USER_PHONE_NOT_FOUND',
+          message: 'Event creator phone number is missing',
+          details: { createdBy }
+        });
+      }
+
+      Logger.info('Event creator phone number retrieved', {
+        createdBy,
+        phoneNumber: eventCreatorPhoneNumber
+      });
+
     } catch (error) {
       Logger.error('Error fetching event or user details', {
         event_id,
         error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      return res.status(500).json({
+        success: false,
+        code: 'FETCH_ERROR',
+        message: 'Failed to fetch event or user information',
+        details: {
+          event_id,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        }
       });
     }
 
