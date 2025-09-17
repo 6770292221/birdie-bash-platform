@@ -8,7 +8,7 @@ const swaggerDefinition = {
     description: "Settlement management microservice for Birdie Bash Platform - HTTP-to-gRPC bridge for Payment Service",
   },
   servers: [
-    { url: "http://localhost:3005", description: "Settlement Service (local)" },
+    { url: "http://localhost:3006", description: "Settlement Service (local)" },
   ],
   components: {
     securitySchemes: {

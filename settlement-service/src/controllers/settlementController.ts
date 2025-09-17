@@ -3,14 +3,13 @@ import { PaymentServiceClient } from '../clients/paymentClient';
 import { Logger } from '../utils/logger';
 import { SettlementCalculator } from '../services/settlementCalculator';
 import { Settlement, SettlementStatus } from '../models/Settlement';
-import { UserRef } from '../models/User';
 import { v4 as uuidv4 } from 'uuid';
 
 const paymentClient = new PaymentServiceClient();
 const calculator = new SettlementCalculator();
 
 // Helper function to populate user details for settlement results
-const populateUserDetails = async (settlements: any[]) => {
+const populateUserDetails = async (settlements: any[], authToken?: string) => {
   for (const settlement of settlements) {
     if (settlement.calculationResults) {
       for (const result of settlement.calculationResults) {
@@ -26,14 +25,27 @@ const populateUserDetails = async (settlements: any[]) => {
             phoneNumber: playerInEvent.guestInfo.phoneNumber
           };
         } else {
-          // For members/admins, query from auth database
+          // For members/admins, call auth API
           try {
-            const user = await UserRef.findById(result.playerId).select('name phoneNumber');
-            if (user) {
-              result.playerDetails = {
-                name: user.name,
-                phoneNumber: user.phoneNumber
-              };
+            const userResponse = await fetch(`http://localhost:3001/api/auth/user/${result.playerId}`, {
+              headers: {
+                'Authorization': authToken || ''
+              }
+            });
+
+            if (userResponse.ok) {
+              const userData = await userResponse.json() as any;
+              if (userData.user) {
+                result.playerDetails = {
+                  name: userData.user.name,
+                  phoneNumber: userData.user.phoneNumber
+                };
+              }
+            } else {
+              Logger.error('Failed to fetch user details from API', {
+                playerId: result.playerId,
+                status: userResponse.status
+              });
             }
           } catch (error) {
             Logger.error('Failed to populate user details', {
@@ -720,7 +732,7 @@ export const getAllSettlements = async (req: Request, res: Response) => {
     });
 
     // Populate user details
-    const settlementsWithUsers = await populateUserDetails(settlements.map(s => s.toObject()));
+    const settlementsWithUsers = await populateUserDetails(settlements.map(s => s.toObject()), req.headers.authorization);
 
     // Transform settlements to remove _id from subdocuments
     const transformedSettlements = settlementsWithUsers.map(settlement => {
@@ -796,7 +808,7 @@ export const getSettlementById = async (req: Request, res: Response) => {
     });
 
     // Populate user details for single settlement
-    const settlementWithUsers = await populateUserDetails([settlement.toObject()]);
+    const settlementWithUsers = await populateUserDetails([settlement.toObject()], req.headers.authorization);
 
     // Transform settlement to remove _id from subdocuments
     const settlementObj = settlementWithUsers[0];

@@ -23,8 +23,8 @@ const UserRefSchema: Schema = new Schema({
 });
 
 // Create connection to auth database
-const authConnection = mongoose.createConnection(
-  process.env.AUTH_DB_URI || 'mongodb://localhost:27017/birdie_auth'
-);
+// const authConnection = mongoose.createConnection(
+//   process.env.AUTH_DB_URI || 'mongodb://localhost:27017/birdie_auth'
+// );
 
-export const UserRef = authConnection.model<IUserRef>('User', UserRefSchema);
+// export const UserRef = authConnection.model<IUserRef>('User', UserRefSchema);
