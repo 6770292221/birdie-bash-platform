@@ -1,0 +1,80 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider          = "mysql"
+  url               = env("DATABASE_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
+}
+
+model Payment {
+  id                String   @id @default(uuid())
+  eventId           String?
+  playerId          String
+  amount            Float
+  currency          String   @default("thb")
+  status            PaymentStatus @default(PENDING)
+  paymentType       PaymentType
+  paymentIntentId   String?
+  paymentMethodId   String?
+  chargeId          String?
+  description       String?  @db.Text
+  refundedAmount    Float    @default(0)
+  metadata          Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  lastStatusChange  DateTime @default(now())
+  
+  transactions      PaymentTransaction[]
+  
+  @@index([playerId])
+  @@index([eventId])
+  @@index([status])
+  @@index([paymentIntentId])
+  @@index([createdAt])
+}
+
+model PaymentTransaction {
+  id            String   @id @default(uuid())
+  paymentId     String
+  type          TransactionType
+  amount        Float
+  status        PaymentStatus
+  transactionId String?
+  timestamp     DateTime @default(now())
+  metadata      Json?
+  
+  payment       Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  
+  @@index([paymentId])
+  @@index([type])
+  @@index([timestamp])
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  REFUNDED
+  PARTIALLY_REFUNDED
+  CANCELLED
+}
+
+enum PaymentType {
+  EVENT_REGISTRATION
+  MEMBERSHIP_FEE
+  GUEST_FEE
+  DEPOSIT
+  PENALTY
+}
+
+enum TransactionType {
+  charge
+  refund
+  authorization
+}

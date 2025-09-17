@@ -77,3 +77,37 @@ export interface PaymentTransaction {
   timestamp: Date;
   metadata?: Record<string, any>;
 }
+
+// Omise Webhook Types
+export interface OmiseWebhookEvent {
+  object: 'event';
+  id: string;
+  livemode: boolean;
+  location: string;
+  created_at: string;
+  data: OmiseWebhookData;
+  key: string;
+  team_uid?: string;
+  user_id?: string;
+}
+
+export interface OmiseWebhookData {
+  object: string;
+  id: string;
+  amount?: number;
+  currency?: string;
+  status?: string;
+  charge_id?: string;
+  transaction_id?: string;
+  created_at: string;
+  updated_at?: string;
+  [key: string]: any; // Allow for additional fields from Omise
+}
+
+export interface WebhookResponse {
+  received: boolean;
+  timestamp: string;
+  event_type: string;
+  event_id: string;
+  message: string;
+}
