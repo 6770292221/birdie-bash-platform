@@ -853,12 +853,7 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
         settlements: chargeResults,
         totalCollected: Math.round(totalCollected * 100) / 100,
         successfulCharges,
-        failedCharges,
-        summary: {
-          totalPlayers: settlements.length,
-          playersCharged: successfulCharges,
-          chargesFailed: failedCharges
-        }
+        failedCharges
       },
       message: `Settlement calculation and charging completed. ${successfulCharges} successful, ${failedCharges} failed charges.`
     });
