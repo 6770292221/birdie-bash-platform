@@ -894,7 +894,7 @@ export const getAllSettlements = async (req: Request, res: Response) => {
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limitNumber)
-        .select('_id settlementId eventId calculationResults status createdAt updatedAt'),
+        .select('settlementId eventId calculationResults'),
       Settlement.countDocuments(filter)
     ]);
 
@@ -964,7 +964,7 @@ export const getSettlementById = async (req: Request, res: Response) => {
 
     const settlement = await Settlement.findOne({
       settlementId: settlement_id
-    }).select('_id settlementId eventId calculationResults status createdAt updatedAt');
+    }).select('settlementId eventId calculationResults');
 
     if (!settlement) {
       return res.status(404).json({
@@ -980,29 +980,39 @@ export const getSettlementById = async (req: Request, res: Response) => {
       eventId: settlement.eventId
     });
 
-    // Transform settlement to remove _id from subdocuments
+    // Transform settlement to return only required fields
     const settlementObj = settlement.toObject();
 
-    // Remove _id from calculationResults and nested courtSessions
-    if (settlementObj.calculationResults) {
-      settlementObj.calculationResults = settlementObj.calculationResults.map((result: any) => {
-        const { _id, ...resultWithoutId } = result;
-        if (resultWithoutId.breakdown && resultWithoutId.breakdown.courtSessions) {
-          resultWithoutId.breakdown.courtSessions = resultWithoutId.breakdown.courtSessions.map((session: any) => {
-            const { _id, ...sessionWithoutId } = session;
-            return sessionWithoutId;
-          });
-        }
-        return resultWithoutId;
-      });
-    }
+    // Create clean response with only required fields
+    const cleanSettlement = {
+      settlementId: settlementObj.settlementId,
+      eventId: settlementObj.eventId,
+      calculationResults: settlementObj.calculationResults.map((result: any) => ({
+        playerDetails: {
+          name: result.playerDetails?.name,
+          phoneNumber: result.playerDetails?.phoneNumber
+        },
+        breakdown: {
+          hoursPlayed: result.breakdown?.hoursPlayed,
+          courtSessions: result.breakdown?.courtSessions?.map((session: any) => ({
+            hour: session.hour,
+            playersInSession: session.playersInSession,
+            costPerPlayer: session.costPerPlayer
+          })) || []
+        },
+        playerId: result.playerId,
+        courtFee: result.courtFee,
+        shuttlecockFee: result.shuttlecockFee,
+        penaltyFee: result.penaltyFee,
+        totalAmount: result.totalAmount
+      }))
+    };
 
     res.status(200).json({
       success: true,
       data: {
-        settlement: settlementObj
-      },
-      message: 'Settlement retrieved successfully'
+        settlement: cleanSettlement
+      }
     });
 
   } catch (error) {
