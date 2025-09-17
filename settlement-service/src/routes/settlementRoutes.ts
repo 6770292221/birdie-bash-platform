@@ -248,12 +248,20 @@ router.get('/:settlement_id', getSettlementById);
  *               event_id:
  *                 type: string
  *                 description: Event ID for the settlement - all other data will be fetched automatically
- *                 example: "event_123"
+ *                 example: "68caed4a19d4dfc0aaba9de9"
  *               currency:
  *                 type: string
  *                 description: Currency code
  *                 default: "THB"
  *                 example: "THB"
+ *               shuttlecockCount:
+ *                 type: number
+ *                 description: Number of shuttlecocks used (optional, defaults from event if not provided)
+ *                 example: 4
+ *               penaltyFee:
+ *                 type: number
+ *                 description: Penalty fee amount (optional, defaults from event if not provided)
+ *                 example: 10000
  *     responses:
  *       201:
  *         description: Settlements calculated and charges issued successfully

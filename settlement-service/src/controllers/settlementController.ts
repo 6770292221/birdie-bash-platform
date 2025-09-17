@@ -8,57 +8,6 @@ import { v4 as uuidv4 } from 'uuid';
 const paymentClient = new PaymentServiceClient();
 const calculator = new SettlementCalculator();
 
-// Helper function to populate user details for settlement results
-const populateUserDetails = async (settlements: any[], authToken?: string) => {
-  for (const settlement of settlements) {
-    if (settlement.calculationResults) {
-      for (const result of settlement.calculationResults) {
-        // Check if this player is a guest (has embedded data in eventData)
-        const playerInEvent = settlement.eventData?.players?.find(
-          (p: any) => p.playerId === result.playerId
-        );
-
-        if (playerInEvent?.role === 'guest' && playerInEvent.guestInfo) {
-          // Use embedded guest data
-          result.playerDetails = {
-            name: playerInEvent.guestInfo.name,
-            phoneNumber: playerInEvent.guestInfo.phoneNumber
-          };
-        } else {
-          // For members/admins, call auth API
-          try {
-            const userResponse = await fetch(`http://localhost:3001/api/auth/user/${result.playerId}`, {
-              headers: {
-                'Authorization': authToken || ''
-              }
-            });
-
-            if (userResponse.ok) {
-              const userData = await userResponse.json() as any;
-              if (userData.user) {
-                result.playerDetails = {
-                  name: userData.user.name,
-                  phoneNumber: userData.user.phoneNumber
-                };
-              }
-            } else {
-              Logger.error('Failed to fetch user details from API', {
-                playerId: result.playerId,
-                status: userResponse.status
-              });
-            }
-          } catch (error) {
-            Logger.error('Failed to populate user details', {
-              playerId: result.playerId,
-              error: error instanceof Error ? error.message : 'Unknown error'
-            });
-          }
-        }
-      }
-    }
-  }
-  return settlements;
-};
 
 export const issueCharges = async (req: Request, res: Response) => {
   try {
@@ -467,12 +416,13 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
     let players: any[];
     try {
       Logger.info('Fetching event players', { event_id });
-      const playersResponse = await fetch(`http://localhost:3005/api/registrations/events/${event_id}/players`, {
+      const playersResponse = await fetch(`http://localhost:3005/api/registration/events/${event_id}/players`, {
         headers: {
           'Authorization': req.headers.authorization || ''
         }
       });
-
+      console.log(event_id)
+      console.log(playersResponse);
       if (!playersResponse.ok) {
         Logger.error('Failed to fetch event players', {
           event_id,
@@ -501,15 +451,85 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
         });
       }
 
+      console.log('player >>> ', players);
+
       // Transform players to settlement format
-      players = players.map((player: any) => ({
-        playerId: player.playerId || player.id,
-        startTime: player.startTime || "20:00", // Default if not provided
-        endTime: player.endTime || "22:00", // Default if not provided
-        status: player.status || "played", // Default to played
-        role: player.role || "member",
-        name: player.name,
-        phoneNumber: player.phoneNumber
+      players = await Promise.all(players.map(async (player: any) => {
+        // Map registration status to settlement status
+        let settlementStatus = "played"; // Default
+        if (player.status === "registered") {
+          settlementStatus = "played";
+        } else if (player.status === "cancelled") {
+          settlementStatus = "canceled";
+        } else if (player.status === "waitlisted") {
+          settlementStatus = "waitlist";
+        }
+
+        // Determine role and fetch name based on userId presence
+        let playerRole = "guest"; // Default
+        let playerName = player.name; // Default from registration
+        let playerPhoneNumber = player.phoneNumber; // Default from registration
+
+        if (player.userId) {
+          playerRole = "member";
+
+          // Fetch user details from auth API
+          try {
+            Logger.info('Fetching user details for player transformation', {
+              userId: player.userId,
+              playerId: player.playerId
+            });
+
+            const userResponse = await fetch(`http://localhost:3001/api/auth/user/${player.userId}`, {
+              headers: {
+                'Authorization': req.headers.authorization || ''
+              }
+            });
+
+            if (userResponse.ok) {
+              const userData = await userResponse.json() as any;
+              console.log('Auth API response for player transform, userId', player.userId, ':', JSON.stringify(userData, null, 2));
+
+              if (userData.user && userData.user.name) {
+                playerName = userData.user.name; // Use auth API name
+                playerPhoneNumber = userData.user.phoneNumber || player.phoneNumber; // Use auth API phoneNumber if available
+                Logger.info('Using auth API data for player transform', {
+                  userId: player.userId,
+                  authName: userData.user.name,
+                  registrationName: player.name
+                });
+              } else {
+                Logger.info('Auth API returned no name, keeping registration name', {
+                  userId: player.userId,
+                  registrationName: player.name
+                });
+              }
+            } else {
+              Logger.error('Failed to fetch user details for player transform', {
+                userId: player.userId,
+                playerId: player.playerId,
+                status: userResponse.status
+              });
+            }
+          } catch (error) {
+            Logger.error('Error fetching user details for player transform', {
+              userId: player.userId,
+              playerId: player.playerId,
+              error: error instanceof Error ? error.message : 'Unknown error'
+            });
+          }
+        }
+
+        return {
+          playerId: player.playerId || player.id,
+          userId: player.userId || null,
+          startTime: player.startTime || "20:00", // Default if not provided
+          endTime: player.endTime || "22:00", // Default if not provided
+          status: settlementStatus,
+          role: playerRole,
+          name: playerName,
+          phoneNumber: playerPhoneNumber
+        };
       }));
 
     } catch (error) {
@@ -588,6 +608,97 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
     const settlements = calculator.calculateSettlements(players, courts, costs);
     const totalCollected = settlements.reduce((sum, s) => sum + s.totalAmount, 0);
 
+    // Populate player details for each settlement result
+    const calculationResults = await Promise.all(settlements.map(async (settlement) => {
+      const player = players.find(p => p.playerId === settlement.playerId);
+      let playerDetails = { name: null, phoneNumber: null };
+
+      if (player) {
+        if (player.userId) {
+          // Player has userId - call auth API
+          try {
+            Logger.info('Fetching user details for settlement creation', {
+              userId: player.userId,
+              playerId: settlement.playerId,
+              playerName: player.name
+            });
+
+            const userResponse = await fetch(`http://localhost:3001/api/auth/user/${player.userId}`, {
+              headers: {
+                'Authorization': req.headers.authorization || ''
+              }
+            });
+
+            if (userResponse.ok) {
+              const userData = await userResponse.json() as any;
+              console.log('Auth API response for userId', player.userId, ':', JSON.stringify(userData, null, 2));
+
+              if (userData.user && userData.user.name) {
+                playerDetails = {
+                  name: userData.user.name,
+                  phoneNumber: userData.user.phoneNumber
+                };
+                Logger.info('Using auth API data', { userId: player.userId, name: userData.user.name });
+              } else {
+                // Fallback to player data from registration
+                playerDetails = {
+                  name: player.name,
+                  phoneNumber: player.phoneNumber
+                };
+                Logger.info('Auth API returned no name, using registration data', {
+                  userId: player.userId,
+                  fallbackName: player.name
+                });
+              }
+            } else {
+              Logger.error('Failed to fetch user details during settlement creation', {
+                userId: player.userId,
+                playerId: settlement.playerId,
+                status: userResponse.status
+              });
+              // Fallback to player data from registration
+              playerDetails = {
+                name: player.name,
+                phoneNumber: player.phoneNumber
+              };
+            }
+          } catch (error) {
+            Logger.error('Error fetching user details during settlement creation', {
+              userId: player.userId,
+              playerId: settlement.playerId,
+              error: error instanceof Error ? error.message : 'Unknown error'
+            });
+            // Fallback to player data from registration
+            playerDetails = {
+              name: player.name,
+              phoneNumber: player.phoneNumber
+            };
+          }
+        } else {
+          // Player doesn't have userId (guest) - use registration data
+          playerDetails = {
+            name: player.name,
+            phoneNumber: player.phoneNumber
+          };
+          Logger.info('Using guest data', {
+            playerId: settlement.playerId,
+            name: player.name,
+            phoneNumber: player.phoneNumber
+          });
+        }
+      }
+
+      return {
+        playerId: settlement.playerId,
+        courtFee: settlement.courtFee,
+        shuttlecockFee: settlement.shuttlecockFee,
+        penaltyFee: settlement.penaltyFee,
+        totalAmount: settlement.totalAmount,
+        breakdown: settlement.breakdown,
+        playerDetails
+      };
+    }));
+
     // Create settlement record in database
     const settlementId = `settlement_${Date.now()}_${uuidv4().split('-')[0]}`;
 
@@ -597,27 +708,19 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
       eventData: {
         players: players.map((player: any) => ({
           playerId: player.playerId,
+          userId: player.userId || undefined,
           startTime: player.startTime,
           endTime: player.endTime,
           status: player.status,
-          role: player.role || 'member', // Default to member if not specified
-          guestInfo: player.role === 'guest' ? {
-            name: player.name,
-            phoneNumber: player.phoneNumber
-          } : undefined
+          role: player.role || 'member',
+          name: player.name,
+          phoneNumber: player.phoneNumber
         })),
         courts,
         costs,
         currency
       },
-      calculationResults: settlements.map(settlement => ({
-        playerId: settlement.playerId,
-        courtFee: settlement.courtFee,
-        shuttlecockFee: settlement.shuttlecockFee,
-        penaltyFee: settlement.penaltyFee,
-        totalAmount: settlement.totalAmount,
-        breakdown: settlement.breakdown
-      })),
+      calculationResults,
       totalCollected: Math.round(totalCollected * 100) / 100,
       successfulCharges: 0,
       failedCharges: 0,
@@ -809,12 +912,9 @@ export const getAllSettlements = async (req: Request, res: Response) => {
       totalPages
     });
 
-    // Populate user details
-    const settlementsWithUsers = await populateUserDetails(settlements.map(s => s.toObject()), req.headers.authorization);
-
     // Transform settlements to remove _id from subdocuments
-    const transformedSettlements = settlementsWithUsers.map(settlement => {
-      const settlementObj = settlement;
+    const transformedSettlements = settlements.map(settlement => {
+      const settlementObj = settlement.toObject();
 
       // Remove _id from calculationResults and nested courtSessions
       if (settlementObj.calculationResults) {
@@ -885,11 +985,8 @@ export const getSettlementById = async (req: Request, res: Response) => {
       eventId: settlement.eventId
     });
 
-    // Populate user details for single settlement
-    const settlementWithUsers = await populateUserDetails([settlement.toObject()], req.headers.authorization);
-
     // Transform settlement to remove _id from subdocuments
-    const settlementObj = settlementWithUsers[0];
+    const settlementObj = settlement.toObject();
 
     // Remove _id from calculationResults and nested courtSessions
     if (settlementObj.calculationResults) {
