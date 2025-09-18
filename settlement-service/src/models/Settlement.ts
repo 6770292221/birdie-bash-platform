@@ -21,18 +21,7 @@ export enum TransactionType {
 export interface ISettlement extends Document {
   settlementId: string;
   eventId: string;
-  eventData?: {
-    players: Array<{
-      playerId: string;
-      startTime: string;
-      endTime: string;
-      status: 'played' | 'canceled' | 'waitlist';
-      role: 'member' | 'admin' | 'guest';
-      guestInfo?: {
-        name: string;
-        phoneNumber: string;
-      };
-    }>;
+  eventData: {
     courts: Array<{
       courtNumber: number;
       startTime: string;
@@ -48,10 +37,13 @@ export interface ISettlement extends Document {
   };
   calculationResults: Array<{
     playerId: string;
-    playerDetails?: {
-      name: string;
-      phoneNumber?: string;
-    };
+    userId?: string;
+    startTime: string;
+    endTime: string;
+    status: 'played' | 'canceled' | 'waitlist';
+    role: 'member' | 'admin' | 'guest';
+    name?: string;
+    phoneNumber?: string;
     courtFee: number;
     shuttlecockFee: number;
     penaltyFee: number;
@@ -108,16 +100,6 @@ const SettlementSchema: Schema = new Schema({
   settlementId: { type: String, required: true, unique: true },
   eventId: { type: String, required: true },
   eventData: {
-    players: [{
-      playerId: { type: String, required: true }, // Can be ObjectId for members or generated ID for guests
-      userId: { type: String }, // ObjectId reference to User collection, null for guests
-      startTime: { type: String, required: true },
-      endTime: { type: String, required: true },
-      status: { type: String, required: true, enum: ['played', 'canceled', 'waitlist'] },
-      role: { type: String, required: true, enum: ['member', 'admin', 'guest'] },
-      name: { type: String },
-      phoneNumber: { type: String }
-    }],
     courts: [{
       courtNumber: { type: Number, required: true },
       startTime: { type: String, required: true },
@@ -132,25 +114,31 @@ const SettlementSchema: Schema = new Schema({
     currency: { type: String, required: true, default: 'THB' }
   },
   calculationResults: [{
-    playerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    playerId: { type: String, required: true },
+    userId: { type: String },
+    startTime: { type: String, required: true },
+    endTime: { type: String, required: true },
+    status: { type: String, required: true, enum: ['played', 'canceled', 'waitlist'] },
+    role: { type: String, required: true, enum: ['member', 'admin', 'guest'] },
+    name: { type: String },
+    phoneNumber: { type: String },
+    // Settlement calculation results
     courtFee: { type: Number, required: true },
     shuttlecockFee: { type: Number, required: true },
     penaltyFee: { type: Number, required: true },
     totalAmount: { type: Number, required: true },
     paymentId: { type: String },
     paymentStatus: { type: String },
-    playerDetails: {
-      name: { type: String },
-      phoneNumber: { type: String }
-    },
     breakdown: {
       hoursPlayed: { type: Number, required: true },
       courtSessions: [{
         hour: { type: String, required: true },
         playersInSession: { type: Number, required: true },
-        costPerPlayer: { type: Number, required: true }
+        costPerPlayer: { type: Number, required: true },
+        _id: false
       }]
-    }
+    },
+    _id: false
   }],
   totalCollected: { type: Number, required: true },
   successfulCharges: { type: Number, default: 0 },
