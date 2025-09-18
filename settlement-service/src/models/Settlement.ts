@@ -110,14 +110,13 @@ const SettlementSchema: Schema = new Schema({
   eventData: {
     players: [{
       playerId: { type: String, required: true }, // Can be ObjectId for members or generated ID for guests
+      userId: { type: String }, // ObjectId reference to User collection, null for guests
       startTime: { type: String, required: true },
       endTime: { type: String, required: true },
       status: { type: String, required: true, enum: ['played', 'canceled', 'waitlist'] },
       role: { type: String, required: true, enum: ['member', 'admin', 'guest'] },
-      guestInfo: {
-        name: { type: String },
-        phoneNumber: { type: String }
-      }
+      name: { type: String },
+      phoneNumber: { type: String }
     }],
     courts: [{
       courtNumber: { type: Number, required: true },
@@ -140,6 +139,10 @@ const SettlementSchema: Schema = new Schema({
     totalAmount: { type: Number, required: true },
     paymentId: { type: String },
     paymentStatus: { type: String },
+    playerDetails: {
+      name: { type: String },
+      phoneNumber: { type: String }
+    },
     breakdown: {
       hoursPlayed: { type: Number, required: true },
       courtSessions: [{
