@@ -8,80 +8,6 @@ import { v4 as uuidv4 } from 'uuid';
 const paymentClient = new PaymentServiceClient();
 const calculator = new SettlementCalculator();
 
-
-export const issueCharges = async (req: Request, res: Response) => {
-  try {
-    Logger.info('Settlement charge request received', {
-      body: req.body,
-      timestamp: new Date().toISOString()
-    });
-
-    const {
-      event_id,
-      player_id,
-      amount,
-      currency = 'THB',
-      description,
-      payment_method_id,
-      metadata
-    } = req.body;
-
-    // Validate required fields
-    if (!player_id || !amount) {
-      return res.status(400).json({
-        code: 'INVALID_REQUEST',
-        message: 'Missing required fields: player_id and amount are required',
-        details: { required_fields: ['player_id', 'amount'] }
-      });
-    }
-
-    // Call gRPC Payment Service
-    Logger.grpc('Calling Payment Service - IssueCharges', { player_id, amount, currency });
-
-    const paymentResponse = await paymentClient.issueCharges({
-      event_id,
-      player_id,
-      amount,
-      currency,
-      description: description || `Settlement charge for player ${player_id}`,
-      payment_method_id,
-      metadata
-    });
-
-    Logger.success('Payment Service response received', {
-      payment_id: paymentResponse.id,
-      status: paymentResponse.status
-    });
-
-    // Return RESTful response
-    res.status(201).json({
-      success: true,
-      data: {
-        settlement_id: paymentResponse.id,
-        payment_id: paymentResponse.id,
-        status: paymentResponse.status,
-        amount: paymentResponse.amount,
-        currency: paymentResponse.currency,
-        client_secret: paymentResponse.client_secret,
-        payment_intent_id: paymentResponse.payment_intent_id,
-        created_at: paymentResponse.created_at,
-        updated_at: paymentResponse.updated_at
-      },
-      message: 'Settlement charge issued successfully'
-    });
-
-  } catch (error) {
-    Logger.error('Settlement charge failed', error);
-
-    res.status(500).json({
-      success: false,
-      code: 'SETTLEMENT_CHARGE_FAILED',
-      message: 'Failed to issue settlement charge',
-      details: { error: error instanceof Error ? error.message : 'Unknown error' }
-    });
-  }
-};
-
 export const confirmPayment = async (req: Request, res: Response) => {
   try {
     const { settlement_id } = req.params;
@@ -421,8 +347,6 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
           'Authorization': req.headers.authorization || ''
         }
       });
-      console.log(event_id)
-      console.log(playersResponse);
       if (!playersResponse.ok) {
         Logger.error('Failed to fetch event players', {
           event_id,
@@ -451,7 +375,6 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
         });
       }
 
-      console.log('player >>> ', players);
 
       // Transform players to settlement format
       players = await Promise.all(players.map(async (player: any) => {
@@ -461,7 +384,7 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
           settlementStatus = "played";
         } else if (player.status === "cancelled") {
           settlementStatus = "canceled";
-        } else if (player.status === "waitlisted") {
+        } else if (player.status === "waitlist") {
           settlementStatus = "waitlist";
         }
 
@@ -523,8 +446,8 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
         return {
           playerId: player.playerId || player.id,
           userId: player.userId || null,
-          startTime: player.startTime || "20:00", // Default if not provided
-          endTime: player.endTime || "22:00", // Default if not provided
+          startTime: player.startTime || null,
+          endTime: player.endTime || null,
           status: settlementStatus,
           role: playerRole,
           name: playerName,
@@ -608,96 +531,36 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
     const settlements = calculator.calculateSettlements(players, courts, costs);
     const totalCollected = settlements.reduce((sum, s) => sum + s.totalAmount, 0);
 
-    // Populate player details for each settlement result
-    const calculationResults = await Promise.all(settlements.map(async (settlement) => {
+    // Merge player data with settlement calculations
+    const mergedPlayers = settlements.map((settlement) => {
       const player = players.find(p => p.playerId === settlement.playerId);
-      let playerDetails = { name: null, phoneNumber: null };
 
-      if (player) {
-        if (player.userId) {
-          // Player has userId - call auth API
-          try {
-            Logger.info('Fetching user details for settlement creation', {
-              userId: player.userId,
-              playerId: settlement.playerId,
-              playerName: player.name
-            });
-
-            const userResponse = await fetch(`http://localhost:3001/api/auth/user/${player.userId}`, {
-              headers: {
-                'Authorization': req.headers.authorization || ''
-              }
-            });
-
-            if (userResponse.ok) {
-              const userData = await userResponse.json() as any;
-              console.log('Auth API response for userId', player.userId, ':', JSON.stringify(userData, null, 2));
-
-              if (userData.user && userData.user.name) {
-                playerDetails = {
-                  name: userData.user.name,
-                  phoneNumber: userData.user.phoneNumber
-                };
-                Logger.info('Using auth API data', { userId: player.userId, name: userData.user.name });
-              } else {
-                // Fallback to player data from registration
-                playerDetails = {
-                  name: player.name,
-                  phoneNumber: player.phoneNumber
-                };
-                Logger.info('Auth API returned no name, using registration data', {
-                  userId: player.userId,
-                  fallbackName: player.name
-                });
-              }
-            } else {
-              Logger.error('Failed to fetch user details during settlement creation', {
-                userId: player.userId,
-                playerId: settlement.playerId,
-                status: userResponse.status
-              });
-              // Fallback to player data from registration
-              playerDetails = {
-                name: player.name,
-                phoneNumber: player.phoneNumber
-              };
-            }
-          } catch (error) {
-            Logger.error('Error fetching user details during settlement creation', {
-              userId: player.userId,
-              playerId: settlement.playerId,
-              error: error instanceof Error ? error.message : 'Unknown error'
-            });
-            // Fallback to player data from registration
-            playerDetails = {
-              name: player.name,
-              phoneNumber: player.phoneNumber
-            };
-          }
-        } else {
-          // Player doesn't have userId (guest) - use registration data
-          playerDetails = {
-            name: player.name,
-            phoneNumber: player.phoneNumber
-          };
-          Logger.info('Using guest data', {
-            playerId: settlement.playerId,
-            name: player.name,
-            phoneNumber: player.phoneNumber
-          });
-        }
-      }
+      Logger.info('Merging player data with settlement calculation', {
+        playerId: settlement.playerId,
+        playerName: player?.name,
+        hasUserId: !!player?.userId
+      });
 
       return {
+        // Player info
         playerId: settlement.playerId,
+        userId: player?.userId || null,
+        startTime: player?.startTime || null,
+        endTime: player?.endTime || null,
+        status: player?.status || 'played',
+        role: player?.role || 'guest',
+        name: player?.name || null,
+        phoneNumber: player?.phoneNumber || null,
+        // Settlement calculation results
         courtFee: settlement.courtFee,
         shuttlecockFee: settlement.shuttlecockFee,
         penaltyFee: settlement.penaltyFee,
         totalAmount: settlement.totalAmount,
-        breakdown: settlement.breakdown,
-        playerDetails
+        paymentId: null,
+        paymentStatus: null,
+        breakdown: settlement.breakdown
       };
-    }));
+    });
 
     // Create settlement record in database
     const settlementId = `settlement_${Date.now()}_${uuidv4().split('-')[0]}`;
@@ -706,21 +569,11 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
       settlementId,
       eventId: event_id,
       eventData: {
-        players: players.map((player: any) => ({
-          playerId: player.playerId,
-          userId: player.userId || undefined,
-          startTime: player.startTime,
-          endTime: player.endTime,
-          status: player.status,
-          role: player.role || 'member',
-          name: player.name,
-          phoneNumber: player.phoneNumber
-        })),
         courts,
         costs,
         currency
       },
-      calculationResults,
+      calculationResults: mergedPlayers,
       totalCollected: Math.round(totalCollected * 100) / 100,
       successfulCharges: 0,
       failedCharges: 0,
@@ -741,6 +594,7 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
     for (const settlement of settlements) {
       try {
         // Only charge if there's an amount to collect
+        console.log('settlement >>>,', settlement);
         if (settlement.totalAmount > 0) {
           const chargeRequest = {
             player_id: settlement.playerId,
@@ -764,15 +618,16 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
             currency
           });
 
-          console.log(chargeRequest)
 
           const paymentResponse = await paymentClient.issueCharges(chargeRequest);
 
+          console.log('paymentResponse >>>', paymentResponse);
+
           // Update settlement record with payment info
-          const resultIndex = settlementRecord.calculationResults.findIndex(r => r.playerId === settlement.playerId);
-          if (resultIndex >= 0) {
-            settlementRecord.calculationResults[resultIndex].paymentId = paymentResponse.id;
-            settlementRecord.calculationResults[resultIndex].paymentStatus = paymentResponse.status;
+          const playerIndex = settlementRecord.calculationResults.findIndex((p: any) => p.playerId === settlement.playerId);
+          if (playerIndex >= 0) {
+            settlementRecord.calculationResults[playerIndex].paymentId = paymentResponse.id;
+            settlementRecord.calculationResults[playerIndex].paymentStatus = paymentResponse.status;
           }
 
           chargeResults.push({
@@ -832,7 +687,7 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
     // Update settlement record with final results
     settlementRecord.successfulCharges = successfulCharges;
     settlementRecord.failedCharges = failedCharges;
-    settlementRecord.status = failedCharges === 0 ? SettlementStatus.COMPLETED : SettlementStatus.PARTIALLY_REFUNDED;
+    settlementRecord.status = failedCharges === 0 ? SettlementStatus.COMPLETED : SettlementStatus.FAILED;
 
     // Save to database
     await settlementRecord.save();
@@ -850,7 +705,7 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
       data: {
         settlementId,
         event_id,
-        settlements: chargeResults,
+        calculationResults: settlementRecord.calculationResults,
         totalCollected: Math.round(totalCollected * 100) / 100,
         successfulCharges,
         failedCharges
@@ -907,25 +762,33 @@ export const getAllSettlements = async (req: Request, res: Response) => {
       totalPages
     });
 
-    // Transform settlements to remove _id from subdocuments
+    // Transform settlements to clean format
     const transformedSettlements = settlements.map(settlement => {
       const settlementObj = settlement.toObject();
 
-      // Remove _id from calculationResults and nested courtSessions
-      if (settlementObj.calculationResults) {
-        settlementObj.calculationResults = settlementObj.calculationResults.map((result: any) => {
-          const { _id, ...resultWithoutId } = result;
-          if (resultWithoutId.breakdown && resultWithoutId.breakdown.courtSessions) {
-            resultWithoutId.breakdown.courtSessions = resultWithoutId.breakdown.courtSessions.map((session: any) => {
-              const { _id, ...sessionWithoutId } = session;
-              return sessionWithoutId;
-            });
-          }
-          return resultWithoutId;
-        });
-      }
-
-      return settlementObj;
+      return {
+        settlementId: settlementObj.settlementId,
+        eventId: settlementObj.eventId,
+        calculationResults: settlementObj.calculationResults?.map((player: any) => ({
+          playerDetails: {
+            name: player.name,
+            phoneNumber: player.phoneNumber
+          },
+          breakdown: {
+            hoursPlayed: player.breakdown?.hoursPlayed,
+            courtSessions: player.breakdown?.courtSessions?.map((session: any) => ({
+              hour: session.hour,
+              playersInSession: session.playersInSession,
+              costPerPlayer: session.costPerPlayer
+            })) || []
+          },
+          playerId: player.playerId,
+          courtFee: player.courtFee,
+          shuttlecockFee: player.shuttlecockFee,
+          penaltyFee: player.penaltyFee,
+          totalAmount: player.totalAmount
+        })) || []
+      };
     });
 
     res.status(200).json({
@@ -987,25 +850,25 @@ export const getSettlementById = async (req: Request, res: Response) => {
     const cleanSettlement = {
       settlementId: settlementObj.settlementId,
       eventId: settlementObj.eventId,
-      calculationResults: settlementObj.calculationResults.map((result: any) => ({
+      calculationResults: settlementObj.calculationResults?.map((player: any) => ({
         playerDetails: {
-          name: result.playerDetails?.name,
-          phoneNumber: result.playerDetails?.phoneNumber
+          name: player.name,
+          phoneNumber: player.phoneNumber
         },
         breakdown: {
-          hoursPlayed: result.breakdown?.hoursPlayed,
-          courtSessions: result.breakdown?.courtSessions?.map((session: any) => ({
+          hoursPlayed: player.breakdown?.hoursPlayed,
+          courtSessions: player.breakdown?.courtSessions?.map((session: any) => ({
             hour: session.hour,
             playersInSession: session.playersInSession,
             costPerPlayer: session.costPerPlayer
           })) || []
         },
-        playerId: result.playerId,
-        courtFee: result.courtFee,
-        shuttlecockFee: result.shuttlecockFee,
-        penaltyFee: result.penaltyFee,
-        totalAmount: result.totalAmount
-      }))
+        playerId: player.playerId,
+        courtFee: player.courtFee,
+        shuttlecockFee: player.shuttlecockFee,
+        penaltyFee: player.penaltyFee,
+        totalAmount: player.totalAmount
+      })) || []
     };
 
     res.status(200).json({
