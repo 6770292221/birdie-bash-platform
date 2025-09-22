@@ -18,6 +18,9 @@ service PaymentService {
   
   // Get payments for a player
   rpc GetPlayerPayments(PlayerPaymentsRequest) returns (PlayerPaymentsResponse);
+  
+  // Get payments for an event
+  rpc GetEventPayments(EventPaymentsRequest) returns (EventPaymentsResponse);
 }
 
 // Request messages
@@ -53,6 +56,11 @@ message PlayerPaymentsRequest {
   string event_id = 3; // Optional filter
 }
 
+message EventPaymentsRequest {
+  string event_id = 1;
+  string status = 2; // Optional filter
+}
+
 // Response messages
 message PaymentResponse {
   string id = 1;
@@ -84,6 +92,10 @@ message PlayerPaymentsResponse {
   repeated PaymentSummary payments = 1;
 }
 
+message EventPaymentsResponse {
+  repeated EventPaymentSummary payments = 1;
+}
+
 message PaymentSummary {
   string payment_id = 1;
   PaymentStatus status = 2;
@@ -93,6 +105,12 @@ message PaymentSummary {
   string event_id = 6;
   int64 created_at = 7;
   int64 updated_at = 8;
+}
+
+message EventPaymentSummary {
+  string player_id = 1;
+  double amount = 2;
+  PaymentStatus status = 3;
 }
 
 message PaymentTransaction {

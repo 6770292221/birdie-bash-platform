@@ -1,0 +1,22 @@
+curl -X POST \
+  'http://localhost:3006/api/settlements/issue' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "event_id": "68c82da07a0d3fa259af3be1",
+    "currency": "THB",
+    "players": [
+        {"playerId": "68c8294e27fa0931df42433e", "startTime": "18:00","endTime": "22:00", "status": "played", "role": "member"},
+        {"playerId": "68c8295427fa0931df424341", "startTime": "18:00","endTime": "21:00", "status": "played", "role": "member"},
+        {"playerId": "68c8295727fa0931df424344", "startTime": "20:00","endTime": "22:00", "status": "played", "role": "member"},
+        {"playerId": "68c8295927fa0931df424347", "startTime": "20:00","endTime": "22:00", "status": "canceled", "role": "member"},
+        {"playerId": "68c8294e27fa0931df42433e", "startTime": "20:00","endTime": "22:00", "status": "played", "role": "guest", "name": "Mind", "phoneNumber": "0909877913"}
+    ],
+    "courts": [
+      {"courtNumber": 2, "startTime": "18:00", "endTime": "22:00", "hourlyRate": 200}
+    ],
+    "costs": {
+      "shuttlecockPrice": 25,
+      "shuttlecockCount": 4,
+      "penaltyFee": 10000
+    }
+  }'

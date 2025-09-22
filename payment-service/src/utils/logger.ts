@@ -14,9 +14,9 @@ export class Logger {
   static info(message: string, data?: any): void {
     const timestamp = this.formatTimestamp();
     const service = this.formatService();
-    const icon = chalk.blue('ℹ');
-    
-    console.log(`${timestamp} ${service} ${icon} ${chalk.blue(message)}`);
+    const icon = chalk.blue('ℹ︎');
+
+    console.log(`${timestamp} ${service} ${icon} ${chalk.whiteBright(message)}`);
     if (data) {
       console.log(chalk.gray(JSON.stringify(data, null, 2)));
     }

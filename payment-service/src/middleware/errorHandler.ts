@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from 'express';
-import mongoose from 'mongoose';
+import { PrismaClientKnownRequestError, PrismaClientValidationError } from '@prisma/client/runtime/library';
 
 interface ErrorDetails {
   [key: string]: any;
@@ -12,34 +12,40 @@ interface AppErrorLike extends Error {
 }
 
 export function errorHandler(err: AppErrorLike, req: Request, res: Response, _next: NextFunction) {
-  // Mongoose: invalid ObjectId
-  if (err instanceof mongoose.Error.CastError && err.kind === 'ObjectId') {
-    return res.status(400).json({
-      code: 'INVALID_ID',
-      message: `Invalid ID format for '${err.path}'`,
-      details: { field: err.path, value: err.value }
+  // Prisma: Invalid ID format (P2025 - Record not found, often due to invalid ID)
+  if (err instanceof PrismaClientKnownRequestError && err.code === 'P2025') {
+    return res.status(404).json({
+      code: 'RECORD_NOT_FOUND',
+      message: 'Record not found',
+      details: { field: 'id', reason: 'Invalid ID or record does not exist' }
     });
   }
 
-  // Mongoose validation errors
-  if (err instanceof mongoose.Error.ValidationError) {
-    // Pick first field error for concise response
-    const firstKey = Object.keys(err.errors)[0];
-    const ve: any = (firstKey && (err.errors as any)[firstKey]) || err;
+  // Prisma: Unique constraint violation (P2002)
+  if (err instanceof PrismaClientKnownRequestError && err.code === 'P2002') {
+    const target = (err.meta?.target as string[]) || ['field'];
+    return res.status(400).json({
+      code: 'DUPLICATE_ENTRY',
+      message: `Duplicate entry for ${target.join(', ')}`,
+      details: { fields: target }
+    });
+  }
 
-    // Try to infer constraints for common validators
-    const details: ErrorDetails = { field: firstKey };
-    if (ve?.kind === 'min' || ve?.properties?.min != null) {
-      details.min = ve?.properties?.min ?? ve?.min;
-    }
-    if (ve?.kind === 'enum' || ve?.properties?.enumValues) {
-      details.allowed = ve?.properties?.enumValues;
-    }
+  // Prisma: Foreign key constraint violation (P2003)
+  if (err instanceof PrismaClientKnownRequestError && err.code === 'P2003') {
+    return res.status(400).json({
+      code: 'FOREIGN_KEY_CONSTRAINT',
+      message: 'Foreign key constraint violation',
+      details: { field: err.meta?.field_name }
+    });
+  }
 
+  // Prisma: Validation errors
+  if (err instanceof PrismaClientValidationError) {
     return res.status(400).json({
       code: 'VALIDATION_ERROR',
-      message: ve?.message || 'Validation failed',
-      details,
+      message: 'Invalid data provided',
+      details: { reason: 'Data validation failed' }
     });
   }
 
