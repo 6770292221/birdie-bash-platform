@@ -3,7 +3,8 @@ import cors from 'cors';
 import eventsRoutes from './routes/matching';
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './swagger';
-
+import { connectMatchingDB } from './config/matchingDb';
+(async () => { await connectMatchingDB(); })().catch(console.error);
 const app = express();
 app.use(cors());
 app.use(express.json());

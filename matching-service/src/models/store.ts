@@ -1,4 +1,4 @@
-import { Event } from "./player";
+import { Event } from "./types";
 
 const db = new Map<string, Event>();
 
