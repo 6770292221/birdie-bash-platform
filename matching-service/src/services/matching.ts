@@ -1,9 +1,10 @@
-import { Court, Event, Game, Player, ParticipantRuntime } from "../models/types.js";
+// src/services/matching.ts
+import { Court, Event, Game, Player, ParticipantRuntime } from "../models/types";
 import { RuntimeState } from "../models/enums";
-import { GameLog, MatchRun } from "../models/matchingLog";
+import { GameLog } from "../models/matchingLog";
 import { Store } from "../models/store";
 
-// --- time helpers ---
+// ---------- time helpers ----------
 const toMs = (iso: string) => new Date(iso).getTime();
 const nowIso = () => new Date().toISOString();
 
@@ -26,7 +27,7 @@ function takeById<T extends { id: string }>(ids: string[], pool: T[]): T[] {
   return pool.filter((x) => set.has(x.id));
 }
 
-// --- runtime helpers ---
+// ---------- runtime helpers (state แยกจากข้อมูลลงทะเบียน) ----------
 function getRt(e: Event, playerId: string): ParticipantRuntime {
   let rt = e.runtimes[playerId];
   if (!rt) {
@@ -56,24 +57,67 @@ function initRuntimesForPlayers(players: Player[]): Record<string, ParticipantRu
   return runtimes;
 }
 
-// --- grouping (no-skill) ---
+// ---------- queue tools ----------
+function enqueueIfWaiting(e: Event, ps: Player[], at: string) {
+  for (const p of ps) {
+    const rt = getRt(e, p.id);
+    if (rt.state !== RuntimeState.Playing) {
+      rt.state = RuntimeState.Waiting;
+      if (!rt.waitingSince) rt.waitingSince = at;
+      if (!e.queue.includes(p.id)) e.queue.push(p.id);
+    }
+  }
+}
+
+function purgeQueue(e: Event, at: string) {
+  // unique + ready + not playing
+  const seen = new Set<string>();
+  e.queue = e.queue.filter((pid) => {
+    if (seen.has(pid)) return false;
+    seen.add(pid);
+    const p = e.players.find((x) => x.id === pid);
+    const rt = p ? getRt(e, pid) : undefined;
+    return !!p && !!rt && isAvailableAt(p, at) && rt.state !== RuntimeState.Playing;
+  });
+}
+
+function dequeueUpTo(e: Event, k: number, at: string): Player[] {
+  purgeQueue(e, at);
+  const picked: Player[] = [];
+  while (picked.length < k && e.queue.length) {
+    const pid = e.queue.shift()!;
+    const p = e.players.find((x) => x.id === pid)!;
+    const rt = getRt(e, pid);
+    if (isAvailableAt(p, at) && rt.state !== RuntimeState.Playing) picked.push(p);
+  }
+  return picked;
+}
+
+function removeFromQueue(e: Event, ids: string[]) {
+  const rm = new Set(ids);
+  e.queue = e.queue.filter((pid) => !rm.has(pid));
+}
+
+// ---------- grouping (no skill): anchors + fill available to 4 ----------
 function buildGroupNoSkill(
   anchors: Player[],
   pool: Player[],
   at: string,
   e: Event
 ): Player[] | null {
-  // เอาเฉพาะคนที่ "พร้อม ณ at" และยังไม่ได้ Playing
+  // 1) anchors unique
+  const base: Player[] = [];
+  const seen = new Set<string>();
+  for (const a of anchors) {
+    if (!seen.has(a.id)) {
+      base.push(a);
+      seen.add(a.id);
+    }
+  }
+  // 2) fill by available & not playing
   const candidates = pool.filter(
     (p) => isAvailableAt(p, at) && getRt(e, p.id).state !== RuntimeState.Playing
   );
-
-  // เตรียมฐานด้วย anchors (unique)
-  const base: Player[] = [];
-  const seen = new Set<string>();
-  for (const a of anchors) if (!seen.has(a.id)) { base.push(a); seen.add(a.id); }
-
-  // เติมแบบสุ่มจาก candidates ให้ครบ 4
   for (const c of randomShuffle(candidates)) {
     if (base.length >= 4) break;
     if (!seen.has(c.id)) {
@@ -81,7 +125,6 @@ function buildGroupNoSkill(
       seen.add(c.id);
     }
   }
-
   return base.length === 4 ? base : null;
 }
 
@@ -105,98 +148,18 @@ function markPlaying(e: Event, players: Player[], at: string) {
   }
 }
 
-function enqueueIfWaiting(e: Event, ps: Player[], at: string) {
-  for (const p of ps) {
-    const rt = getRt(e, p.id);
-    if (rt.state !== RuntimeState.Playing) {
-      rt.state = RuntimeState.Waiting;
-      if (!rt.waitingSince) rt.waitingSince = at;
-      if (!e.queue.includes(p.id)) e.queue.push(p.id);
-    }
-  }
-}
-
-function dequeueUpTo(e: Event, k: number, at: string): Player[] {
-  // ล้างคิวที่ไม่พร้อม/กำลังเล่น ออกก่อน
-  e.queue = e.queue.filter((pid) => {
-    const p = e.players.find((x) => x.id === pid)!;
-    const rt = getRt(e, pid);
-    return isAvailableAt(p, at) && rt.state !== RuntimeState.Playing;
-  });
-
-  const picked: Player[] = [];
-  while (picked.length < k && e.queue.length) {
-    const pid = e.queue.shift()!;
-    const p = e.players.find((x) => x.id === pid)!;
-    const rt = getRt(e, pid);
-    if (isAvailableAt(p, at) && rt.state !== RuntimeState.Playing) {
-      picked.push(p);
-    }
-  }
-  return picked;
-}
-
-function removeFromQueue(e: Event, ids: string[]) {
-  const rm = new Set(ids);
-  e.queue = e.queue.filter((pid) => !rm.has(pid));
-}
-
-function purgeQueue(e: Event, at: string) {
-  const seen = new Set<string>();
-  e.queue = e.queue.filter((pid) => {
-    if (seen.has(pid)) return false;
-    seen.add(pid);
-    const p = e.players.find((x) => x.id === pid);
-    const rt = p ? getRt(e, pid) : undefined;
-    return !!p && !!rt && isAvailableAt(p, at) && rt.state !== RuntimeState.Playing;
-  });
-}
-
-export const MatchingService = {
-  defaultCourts: 2,
-
-  createEvent(id: string, courts: number, players: Player[]): Event {
-    const e: Event = {
-      id,
-      courts: Array.from({ length: courts }, (_, i) => ({ id: `c${i + 1}`, currentGameId: null })),
-      createdAt: nowIso(),
-      queue: [],
-      games: [],
-      players,
-      runtimes: initRuntimesForPlayers(players), // <<< สำคัญ
-    };
-    Store.upsertEvent(e);
-    return e;
-  },
-
-  replacePlayers(eventId: string, players: Player[]): Event {
-    const e = Store.getEvent(eventId);
-    if (!e) throw new Error("Event not found");
-
-    // reset courts/games/queue
-    e.courts = e.courts.map((c) => ({ ...c, currentGameId: null }));
-    e.games = [];
-    e.queue = [];
-
-    // เซ็ตผู้เล่นใหม่ + สร้าง runtime ใหม่ทั้งหมด (ไม่แตะข้อมูล registration)
-    e.players = players.slice();
-    e.runtimes = initRuntimesForPlayers(players);
-
-    Store.upsertEvent(e);
-    return e;
-  },
-
-  // บันทึก log ต่อเกม
-  async logGameStart(
-    e: Event,
-    courtId: string,
-    game: Game,
-    anchors: Player[],
-    queueBefore: string[],
-    queueAfter: string[],
-    action: "seed" | "advance",
-    at: string
-  ) {
+// ---------- logging (Mongo) ----------
+async function logGameStart(
+  e: Event,
+  courtId: string,
+  game: Game,
+  anchors: Player[],
+  queueBefore: string[],
+  queueAfter: string[],
+  action: "seed" | "advance",
+  at: string
+) {
+  try {
     await GameLog.create({
       eventId: e.id,
       gameId: game.id,
@@ -210,7 +173,7 @@ export const MatchingService = {
         return {
           id: p.id,
           name: p.name,
-          registrationStatus: (p as any).registrationStatus, // ถ้ามี
+          registrationStatus: (p as any).registrationStatus ?? undefined,
           runtimeState: rt.state,
         };
       }),
@@ -219,47 +182,64 @@ export const MatchingService = {
       queueAfter,
       metrics: { playersCount: game.playerIds.length },
     });
+  } catch (err) {
+    console.error("[logGameStart] ERROR:", err);
+  }
+}
+
+// ---------- service ----------
+export const MatchingService = {
+  defaultCourts: 2,
+
+  createEvent(id: string, courts: number, players: Player[]): Event {
+    const e: Event = {
+      id,
+      courts: Array.from({ length: courts }, (_, i) => ({
+        id: `c${i + 1}`,
+        currentGameId: null,
+      })),
+      createdAt: nowIso(),
+      queue: [],
+      games: [],
+      players: players.slice(),          // ไม่แก้/ลบ players ระหว่างรัน
+      runtimes: initRuntimesForPlayers(players),
+    };
+    Store.upsertEvent(e);
+    return e;
   },
 
-  async logRun(
-    e: Event,
-    type: "seed" | "advance" | "advance-all",
-    at: string,
-    courtsAffected: string[],
-    queueBefore: string[],
-    gamesStarted: Array<{ gameId: string; courtId: string }>
-  ) {
-    await MatchRun.create({
-      eventId: e.id,
-      type,
-      at,
-      courtsAffected,
-      queueBefore,
-      queueAfter: [...e.queue],
-      gamesStarted,
-    });
-  },
-
-  async seedInitialGames(eventId: string, at: string) {
-    console.log(`Seeding initial games for event ${eventId} at ${at}`);
+  replacePlayers(eventId: string, players: Player[]): Event {
     const e = Store.getEvent(eventId);
     if (!e) throw new Error("Event not found");
 
-    // enqueue คนที่พร้อม ณ at
+    // reset all runtime/courts/games/queue
+    e.courts = e.courts.map((c) => ({ ...c, currentGameId: null }));
+    e.games = [];
+    e.queue = [];
+    e.players = players.slice();
+    e.runtimes = initRuntimesForPlayers(players);
+
+    Store.upsertEvent(e);
+    return e;
+  },
+
+  async seedInitialGames(eventId: string, at: string) {
+    const e = Store.getEvent(eventId);
+    if (!e) throw new Error("Event not found");
+
+    // enqueue available at 'at'
     const avail = e.players.filter((p) => isAvailableAt(p, at));
     enqueueIfWaiting(e, avail, at);
     purgeQueue(e, at);
 
-    const queueBeforeAll = [...e.queue];
-    const gamesStarted: Array<{ gameId: string; courtId: string }> = [];
-    const courtsAffected: string[] = [];
-
     for (const court of e.courts) {
       if (court.currentGameId) continue;
 
-      const anchors = dequeueUpTo(e, 2, at); // 2 คนที่รอนานสุด
+      const anchors = dequeueUpTo(e, 2, at);
       let group: Player[] | null = null;
+
       if (anchors.length) group = buildGroupNoSkill(anchors, e.players, at, e);
+
       if (!group) {
         const candidates = e.players.filter(
           (p) => isAvailableAt(p, at) && getRt(e, p.id).state !== RuntimeState.Playing
@@ -270,21 +250,18 @@ export const MatchingService = {
 
       if (group) {
         const queueBeforeCourt = [...e.queue];
-        removeFromQueue(e, group.map((p) => p.id)); // กันคิวซ้ำ
+        removeFromQueue(e, group.map((p) => p.id));
 
         const game = createGame(court, group, at);
         e.games.push(game);
         court.currentGameId = game.id;
         markPlaying(e, group, at);
 
-        await this.logGameStart(e, court.id, game, anchors, queueBeforeCourt, [...e.queue], "seed", at);
-        gamesStarted.push({ gameId: game.id, courtId: court.id });
-        courtsAffected.push(court.id);
+        await logGameStart(e, court.id, game, anchors, queueBeforeCourt, [...e.queue], "seed", at);
       }
     }
 
     Store.upsertEvent(e);
-    await this.logRun(e, "seed", at, courtsAffected, queueBeforeAll, gamesStarted);
     return e;
   },
 
@@ -294,28 +271,26 @@ export const MatchingService = {
     const court = e.courts.find((c) => c.id === courtId);
     if (!court) throw new Error("Court not found");
 
-    const queueBeforeAll = [...e.queue];
-
-    // end current game
+    // 1) end current game (if any)
     if (court.currentGameId) {
       const g = e.games.find((x) => x.id === court.currentGameId)!;
       g.endTime = at;
-      const players = takeById(g.playerIds, e.players);
-      for (const p of players) {
-        const rt = getRt(e, p.id);
-        rt.state = RuntimeState.Idle;
-      }
-      enqueueIfWaiting(e, players, at);
-      court.currentGameId = null;
 
-      // ล้างคิวที่ไม่สมเหตุผล
+      // return previous players to Idle runtime, then enqueue if still available
+      const prevPlayers = takeById(g.playerIds, e.players);
+      for (const p of prevPlayers) getRt(e, p.id).state = RuntimeState.Idle;
+
+      enqueueIfWaiting(e, prevPlayers, at);
+      court.currentGameId = null;
       purgeQueue(e, at);
     }
 
-    // refill: 2 คนที่รอนานสุดเป็น anchors
+    // 2) refill new game
     const anchors = dequeueUpTo(e, 2, at);
     let group: Player[] | null = null;
+
     if (anchors.length) group = buildGroupNoSkill(anchors, e.players, at, e);
+
     if (!group) {
       const candidates = e.players.filter(
         (p) => isAvailableAt(p, at) && getRt(e, p.id).state !== RuntimeState.Playing
@@ -333,18 +308,59 @@ export const MatchingService = {
       court.currentGameId = game.id;
       markPlaying(e, group, at);
 
-      await this.logGameStart(e, court.id, game, anchors, queueBeforeCourt, [...e.queue], "advance", at);
+      await logGameStart(e, court.id, game, anchors, queueBeforeCourt, [...e.queue], "advance", at);
     }
 
     Store.upsertEvent(e);
-    await this.logRun(
-      e,
-      "advance",
-      at,
-      [courtId],
-      queueBeforeAll,
-      court.currentGameId ? [{ gameId: court.currentGameId, courtId }] : []
-    );
+    return e;
+  },
+
+  async advanceAll(eventId: string, at: string) {
+    const e = Store.getEvent(eventId);
+    if (!e) throw new Error("Event not found");
+
+    // end all current games
+    for (const court of e.courts) {
+      if (!court.currentGameId) continue;
+      const g = e.games.find((x) => x.id === court.currentGameId)!;
+      g.endTime = at;
+
+      const prevPlayers = takeById(g.playerIds, e.players);
+      for (const p of prevPlayers) getRt(e, p.id).state = RuntimeState.Idle;
+
+      enqueueIfWaiting(e, prevPlayers, at);
+      court.currentGameId = null;
+    }
+    purgeQueue(e, at);
+
+    // refill all courts
+    for (const court of e.courts) {
+      const anchors = dequeueUpTo(e, 2, at);
+      let group: Player[] | null = null;
+
+      if (anchors.length) group = buildGroupNoSkill(anchors, e.players, at, e);
+      if (!group) {
+        const candidates = e.players.filter(
+          (p) => isAvailableAt(p, at) && getRt(e, p.id).state !== RuntimeState.Playing
+        );
+        const g = randomShuffle(candidates).slice(0, 4);
+        group = g.length === 4 ? g : null;
+      }
+
+      if (group) {
+        const queueBeforeCourt = [...e.queue];
+        removeFromQueue(e, group.map((p) => p.id));
+
+        const game = createGame(court, group, at);
+        e.games.push(game);
+        court.currentGameId = game.id;
+        markPlaying(e, group, at);
+
+        await logGameStart(e, court.id, game, anchors, queueBeforeCourt, [...e.queue], "advance", at);
+      }
+    }
+
+    Store.upsertEvent(e);
     return e;
   },
 
@@ -364,6 +380,7 @@ export const MatchingService = {
         })
         .filter(Boolean),
       players: e.players.map((p) => ({ ...p, runtime: getRt(e, p.id) })),
+      games: e.games,
     };
   },
 };
