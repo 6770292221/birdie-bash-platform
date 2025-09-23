@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # MongoDB for both auth and event services
   mongodb:

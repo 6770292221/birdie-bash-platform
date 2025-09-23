@@ -64,21 +64,28 @@ async function main() {
 
   const url = process.env.RABBIT_URL || 'amqp://localhost';
   const exchange = process.env.RABBIT_EXCHANGE || 'events';
-  const queue = process.env.RABBIT_BIND_QUEUE || 'events.capacity.worker';
+  const baseQueue = process.env.RABBIT_CAPACITY_QUEUE || 'events.capacity.worker';
+  const queueMode = (process.env.RABBIT_CAPACITY_QUEUE_MODE || 'single').toLowerCase(); // 'single' | 'ephemeral'
+  const queue = queueMode === 'ephemeral' ? `${baseQueue}.${process.pid}` : baseQueue;
   const bindKeys = (process.env.RABBIT_BIND_KEY || 'event.participant.joined,event.participant.cancelled')
     .split(',')
     .map((k) => k.trim())
     .filter(Boolean);
 
-  console.log('Capacity Worker - Connecting RabbitMQ', { url, exchange, queue, bindKeys });
+  console.log('Capacity Worker - Connecting RabbitMQ', { url, exchange, queue, bindKeys, queueMode });
   const conn = await amqp.connect(url);
   const ch = await conn.createChannel();
   await ch.assertExchange(exchange, 'topic', { durable: true });
-  await ch.assertQueue(queue, { durable: true });
+  if (queueMode === 'ephemeral') {
+    await ch.assertQueue(queue, { durable: false, autoDelete: true, exclusive: true });
+  } else {
+    await ch.assertQueue(queue, { durable: true, autoDelete: false, exclusive: false });
+  }
   for (const key of bindKeys) {
     await ch.bindQueue(queue, exchange, key);
   }
-  await ch.prefetch(10);
+  // Process messages sequentially to keep capacity updates consistent
+  await ch.prefetch(1);
 
   console.log('Capacity Worker - Consuming', { queue, bindKeys });
   ch.consume(queue, async (msg) => {
@@ -123,9 +130,15 @@ async function main() {
         }
       } else if (routingKey.endsWith('waitlist.promoted')) {
         console.log('🎉 Processing waitlist promotion', { eventId: data.eventId, playerId: data.playerId });
-        // Waitlist promotion: no capacity change needed since player was already counted
-        // The status change from waitlist to registered doesn't affect total capacity
-        console.log('✅ Waitlist promotion processed (no capacity change needed)', { eventId: data.eventId });
+        if (data?.eventId && data?.status === 'registered') {
+          await Event.findByIdAndUpdate(data.eventId, {
+            $inc: {
+              'capacity.currentParticipants': 1,
+              'capacity.availableSlots': -1,
+            },
+          }).catch(() => {});
+          console.log('✅ capacity updated (waitlist promoted)', { eventId: data.eventId });
+        }
       }
 
       ch.ack(msg);
