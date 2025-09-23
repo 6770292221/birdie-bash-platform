@@ -10,3 +10,9 @@ export enum PlayerState {
   Waiting = 'Waiting',   // in queue
   Playing = 'Playing'    // currently in a game
 }
+
+export enum RuntimeState {
+  Idle = 'Idle',      
+  Waiting = 'Waiting',
+  Playing = 'Playing'
+}

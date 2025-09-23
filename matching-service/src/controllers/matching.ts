@@ -3,40 +3,37 @@ import { MatchingService } from "../services/matching";
 import { Logger } from "../utils/logger";
 import { PlayerState } from "../models/types";
 
-// สร้าง ISO String +07:00 จาก YYYY-MM-DD + "HH:mm"
-function toBangkokISO(dateStr: string, hm: string) {
-  const [H, M] = hm.split(":").map(Number);
-  // ใช้ Date ในโซนเครื่อง แล้วปรับ offset เองให้ได้ +07:00 เป็นสตริง
-  const d = new Date(dateStr + "T00:00:00");
-  d.setHours(H, M, 0, 0);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  // บังคับเป็น "+07:00"
-  const y = d.getFullYear(),
-    m = pad(d.getMonth() + 1),
-    dd = pad(d.getDate());
-  const hh = pad(H),
-    mm = pad(M);
-  return `${y}-${m}-${dd}T${hh}:${mm}:00+07:00`;
+
+// เวลาใน API อาจเป็น "HH:mm" หรือ ISO; ผูกเข้ากับวัน (YYYY-MM-DD) ที่ส่งมาเป็น baseDate
+function toISOFromTime(baseDate: string, timePart: string) {
+  if (!timePart) throw new Error('Missing time');
+  if (timePart.includes('T')) return timePart; // เป็น ISO อยู่แล้ว
+  // NOTE: ถ้าต้องการโซนเวลาอื่น ปรับตรงนี้ได้ (+07:00 คือ Asia/Bangkok)
+  return `${baseDate}T${timePart}:00+07:00`;
 }
 
-function transformExternalPlayers(eventDate: string, externals: any[]) {
-  return externals
-    .filter(p => (p.status || '').toLowerCase() === 'registered') // ✅ กันลืม
-    .map((p, i) => {
-      const name = p.name || p.email || p.phoneNumber || `player_${i+1}`;
-      return {
-        id: p.userId || p.playerId || p.id || `ext_${i}`,
-        name,
-        email: p.email,
-        phoneNumber: p.phoneNumber,
-        availableStart: p.startTime ? toBangkokISO(eventDate, p.startTime) : toBangkokISO(eventDate, '18:00'),
-        availableEnd:   p.endTime   ? toBangkokISO(eventDate, p.endTime)   : toBangkokISO(eventDate, '22:00'),
-        gamesPlayed: 0,
-        lastPlayedAt: null,
-        state: PlayerState.Registered,
-        waitingSince: null
-      };
-    });
+
+function transformExternalPlayers(baseDate: string, externals: any[]) {
+  const regs = (externals || []).filter(
+    (x) => String(x.status || '').toLowerCase() === 'registered'
+  );
+
+  // โครง Player ภายในของเรา (ไม่มีการไปเปลี่ยน state ของ upstream)
+  return regs.map((r) => ({
+    id: r.userId || r.playerId,
+    name: r.name || '',
+    email: r.email || null,
+    phoneNumber: r.phoneNumber || null,
+    availableStart: toISOFromTime(baseDate, r.startTime),
+    availableEnd: toISOFromTime(baseDate, r.endTime),
+
+    // เก็บสถานะการลงทะเบียนจากต้นทางไว้ต่างหาก
+    registrationStatus: r.status,
+    gamesPlayed: 0,
+    lastPlayedAt: null,
+    state: PlayerState.Idle,     // ← ใช้ enum
+    waitingSince: null
+  }));
 }
 
 
@@ -48,10 +45,13 @@ export const MatchingsController = {
     try {
       Logger.info('Create matching event request', { id, courts });
 
-      // 1. ดึง players จาก external API
+      // 1) ดึง players จาก external API
       const target = url || `http://localhost:3005/api/registration/events/${encodeURIComponent(id)}/players`;
       const resp = await fetch(target, {
-        headers: { 'Content-Type': 'application/json', ...(req.headers.authorization ? { Authorization: String(req.headers.authorization) } : {}) }
+        headers: {
+          'Content-Type': 'application/json',
+          ...(req.headers.authorization ? { Authorization: String(req.headers.authorization) } : {})
+        }
       });
 
       if (!resp.ok) {
@@ -59,12 +59,18 @@ export const MatchingsController = {
         throw new Error(`Fetch players failed ${resp.status}: ${txt}`);
       }
 
-      const data = await resp.json() as any;
+      const data = (await resp.json()) as any;
       const externals: any[] = data.players ?? data?.data?.players ?? [];
-      const baseDate = eventDate || new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' }); // YYYY-MM-DD
+
+      // baseDate สำหรับประกอบเป็น ISO เช่น "2025-09-23"
+      const baseDate =
+        eventDate ||
+        new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' }); // YYYY-MM-DD
+
+      // 2) แปลงข้อมูลเป็น Player ภายในของเรา (กรอง registered)
       const transformed = transformExternalPlayers(baseDate, externals);
 
-      // 2. สร้าง event พร้อม players ที่ import มา
+      // 3) สร้าง event ด้วย players ที่ import มา
       const event = MatchingService.createEvent(id, Number(courts), transformed);
 
       return res.status(201).json({
@@ -86,6 +92,7 @@ export const MatchingsController = {
   // POST /api/matchings/seed
   seed: async (req: Request, res: Response) => {
     const { eventId, at = new Date().toISOString() } = req.body || {};
+    console.log(eventId, at);
     try {
       if (!eventId)
         return res
@@ -96,6 +103,7 @@ export const MatchingsController = {
             message: "eventId is required",
           });
       const event = await MatchingService.seedInitialGames(eventId, at);
+      console.log(event);
       return res
         .status(200)
         .json({ success: true, data: { event }, message: "Seeded" });

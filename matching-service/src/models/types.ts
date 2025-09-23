@@ -1,4 +1,5 @@
 import { register } from "module";
+import { RuntimeState } from './enums.js';
 
 export type ISODate = string;
 
@@ -18,6 +19,7 @@ export interface Player {
   lastPlayedAt?: ISODate | null;
   state: PlayerState;
   waitingSince?: ISODate | null;
+  registrationStatus: string; // 'registered' | 'waitlist' | 'canceled' | ...
   // ❌ ไม่มี skill แล้ว
 }
 
@@ -29,16 +31,26 @@ export interface Court {
 export interface Game {
   id: string;
   courtId: string;
-  playerIds: string[];   // size 4
+  playerIds: string[];
   startTime: ISODate;
   endTime?: ISODate | null;
+}
+
+export interface ParticipantRuntime {
+  playerId: string;
+  state: RuntimeState;         // Idle/Waiting/Playing (ของเราเอง)
+  gamesPlayed: number;
+  lastPlayedAt?: ISODate | null;
+  waitingSince?: ISODate | null;
 }
 
 export interface Event {
   id: string;
   courts: Court[];
   createdAt: ISODate;
-  queue: string[];       // playerIds (FIFO)
+  queue: string[];             // playerIds (FIFO)
   games: Game[];
-  players: Player[];
+  players: Player[];           // ข้อมูลจาก upstream
+  runtimes: Record<string, ParticipantRuntime>; // <<< runtime ต่อคน
 }
+
