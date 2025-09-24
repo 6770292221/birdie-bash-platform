@@ -31,30 +31,89 @@ services:
     networks:
       - birdie-network
 
-  # MySQL for payment service
-  mysql:
-    image: mysql:8.0
-    container_name: birdie-mysql
+
+  # Gateway API
+  gateway:
+    build: ./gateway
+    container_name: birdie-gateway
     restart: unless-stopped
     ports:
-      - "3306:3306"
+      - "3000:3000"
     environment:
-      MYSQL_ROOT_PASSWORD: root123
-      MYSQL_DATABASE: payment_db
-      MYSQL_USER: payment_user
-      MYSQL_PASSWORD: payment123
-    volumes:
-      - mysql_data:/var/lib/mysql
-      - ./docker/payment-init.sql:/docker-entrypoint-initdb.d/payment-init.sql:ro
+      - NODE_ENV=development
+      - PORT=3000
+      - AUTH_SERVICE_URL=http://auth-service:3001
+      - EVENT_SERVICE_URL=http://event-service:3003
+      - REGISTRATION_SERVICE_URL=http://registration-service:3005
+    depends_on:
+      - auth-service
+      - event-service
+      - registration-service
     networks:
       - birdie-network
+
+  # Auth Service
+  auth-service:
+    build: ./auth-service
+    container_name: birdie-auth-service
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=development
+      - PORT=3001
+      - USER_DB_URI=mongodb+srv://birdie_admin:AppUser%232025%21@birdie-bash-cluster.lwadyko.mongodb.net/user?retryWrites=true&w=majority&appName=birdie-bash-cluster
+    depends_on:
+      - mongodb
+    networks:
+      - birdie-network
+
+  # Event Service
+  event-service:
+    build: ./event-service
+    container_name: birdie-event-service
+    restart: unless-stopped
+    ports:
+      - "3003:3003"
+    environment:
+      - NODE_ENV=development
+      - PORT=3003
+      - EVENT_DB_URI=mongodb+srv://birdie_admin:AppUser%232025%21@birdie-bash-cluster.lwadyko.mongodb.net/event?retryWrites=true&w=majority&appName=birdie-bash-cluster
+      - RABBIT_URL=amqp://admin:password123@rabbitmq:5672
+      - RABBIT_EXCHANGE=events
+      - ENABLE_CAPACITY_WORKER=true
+    depends_on:
+      - mongodb
+      - rabbitmq
+    networks:
+      - birdie-network
+
+  # Registration Service
+  registration-service:
+    build: ./registration-service
+    container_name: birdie-registration-service
+    restart: unless-stopped
+    ports:
+      - "3005:3005"
+    environment:
+      - NODE_ENV=development
+      - PORT=3005
+      - REG_DB_URI=mongodb+srv://birdie_admin:AppUser%232025%21@birdie-bash-cluster.lwadyko.mongodb.net/registration?retryWrites=true&w=majority&appName=birdie-bash-cluster
+      - EVENT_SERVICE_URL=http://event-service:3003
+      - RABBIT_URL=amqp://admin:password123@rabbitmq:5672
+      - RABBIT_EXCHANGE=events
+      - ENABLE_WAITLIST_WORKER=true
+    depends_on:
+      - rabbitmq
+      - event-service
+    networks:
+      - birdie-network
+
 
 volumes:
   mongodb_data:
     driver: local
   rabbitmq_data:
-    driver: local
-  mysql_data:
     driver: local
 
 networks:
