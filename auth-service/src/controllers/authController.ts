@@ -118,3 +118,25 @@ export const getUserById = async (req: Request, res: Response, next: NextFunctio
     });
   } catch (error) { next(error as any); }
 };
+
+export const getProfile = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const claims = (req as any).user as { userId?: string } | undefined;
+    if (!claims?.userId) { res.status(401).json({ code: 'UNAUTHORIZED', message: 'Access token required' }); return; }
+
+    const user = await User.findById(claims.userId);
+    if (!user) { res.status(404).json({ code: 'USER_NOT_FOUND', message: 'User not found' }); return; }
+
+    res.status(200).json({
+      message: 'Profile retrieved successfully',
+      user: {
+        id: user._id as any,
+        email: user.email,
+        name: user.name,
+        skill: user.skill,
+        phoneNumber: user.phoneNumber,
+        role: user.role,
+      },
+    });
+  } catch (error) { next(error as any); }
+};

@@ -3,12 +3,12 @@ import { Calendar, MapPin, Users, Clock, Plus, LogOut, Shield, Menu, CreditCard,
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import LanguageSwitcher from '@/components/LanguageSwitcher';
 import AuthButtons from '@/components/AuthButtons';
 import { LanguageProvider, useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Link } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
+import { apiClient } from '@/utils/api';
 
 const IndexContent = () => {
   const { t } = useLanguage();
@@ -19,7 +19,25 @@ const IndexContent = () => {
   const [selectedPaymentDetail, setSelectedPaymentDetail] = useState<any>(null);
   const [showNotifications, setShowNotifications] = useState(false);
   const [eventsLoading, setEventsLoading] = useState(false);
+  const [events, setEvents] = useState<any[]>([]);
   const notificationRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const fetchEvents = async () => {
+      if (!user) return; // require auth
+      setEventsLoading(true);
+      const res = await apiClient.getEvents({ limit: 10, offset: 0 });
+      if (res.success) {
+        const data = (res.data as any);
+        setEvents(data.events || data);
+      } else {
+        toast({ title: 'ดึงรายการอีเวนต์ไม่สำเร็จ', description: res.error, variant: 'destructive' });
+      }
+      setEventsLoading(false);
+    };
+    fetchEvents();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   if (loading || eventsLoading) {
     return (
@@ -38,9 +56,7 @@ const IndexContent = () => {
         {/* Header */}
         <div className="mb-6">
           <div className="flex justify-between items-center mb-4">
-            <div className="flex items-center space-x-2">
-              <LanguageSwitcher />
-            </div>
+            <div className="flex items-center space-x-2"></div>
 
             <div className="text-center flex-1 px-4">
               <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900">
@@ -153,7 +169,12 @@ const IndexContent = () => {
                     <CardContent className="p-4 text-center">
                       <Shield className="h-8 w-8 text-purple-600 mx-auto mb-2" />
                       <p className="font-semibold text-purple-800">จัดการ</p>
-                      <p className="text-sm text-purple-600">จัดการอีเวนต์และผู้เล่น</p>
+                      <p className="text-sm text-purple-600 mb-3">จัดการอีเวนต์และผู้เล่น</p>
+                      <Link to="/events/new">
+                        <Button size="sm" className="bg-purple-600 hover:bg-purple-700">
+                          <Plus className="h-4 w-4 mr-1" /> สร้างอีเวนต์
+                        </Button>
+                      </Link>
                     </CardContent>
                   </Card>
                 )}
@@ -196,6 +217,34 @@ const IndexContent = () => {
             </CardContent>
           </Card>
         </div>
+
+        {/* Events List (requires login) */}
+        {user && (
+          <div className="mt-6">
+            <h3 className="text-xl font-semibold text-gray-900 mb-3">อีเวนต์ล่าสุด</h3>
+            {events.length === 0 ? (
+              <p className="text-gray-600">ยังไม่มีอีเวนต์</p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {events.map((ev: any) => (
+                  <Card key={ev.id} className="bg-white/80">
+                    <CardContent className="p-4">
+                      <p className="font-semibold text-gray-900">{ev.eventName}</p>
+                      <p className="text-sm text-gray-600">วันที่: {ev.eventDate}</p>
+                      <p className="text-sm text-gray-600">สถานที่: {ev.location}</p>
+                      <p className="text-sm text-gray-600">ที่นั่งว่าง: {ev?.capacity?.availableSlots ?? '-'}</p>
+                      <div className="mt-3">
+                        <Link to={`/events/${ev.id}`}>
+                          <Button size="sm" variant="outline">รายละเอียด</Button>
+                        </Link>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
 import express from 'express';
-import { register, login, verifyToken, getUserById } from './controllers/authController';
+import { register, login, verifyToken, getUserById, getProfile } from './controllers/authController';
 import { authenticateToken } from './middleware/auth';
 
 const router = express.Router();
@@ -133,6 +133,33 @@ router.post('/login', login);
  *               message: 'Invalid or expired token'
  */
 router.get('/verify', authenticateToken, verifyToken);
+
+/**
+ * @swagger
+ * /api/auth/profile:
+ *   get:
+ *     summary: Get current user profile
+ *     tags: [Authentication]
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Profile retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 user:
+ *                   $ref: '#/components/schemas/User'
+ *       401:
+ *         description: Access token required
+ *       403:
+ *         description: Invalid or expired token
+ */
+router.get('/profile', authenticateToken, getProfile);
 
 /**
  * @swagger

@@ -7,6 +7,7 @@ import { Plus, Minus, MapPin } from 'lucide-react';
 import { Court, Event } from '@/pages/Index';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 
 interface CreateEventFormProps {
   onSubmit: (eventData: Omit<Event, 'id' | 'players' | 'status' | 'createdBy'>) => void;
@@ -23,6 +24,7 @@ const CreateEventForm = ({ onSubmit, onCancel, editEvent, onUpdateEvent }: Creat
   const [eventDate, setEventDate] = useState(editEvent?.eventDate || '');
   const [venue, setVenue] = useState(editEvent?.venue || '');
   const [maxPlayers, setMaxPlayers] = useState(editEvent?.maxPlayers || 12);
+  const [waitlistEnabled, setWaitlistEnabled] = useState((editEvent as any)?.waitlistEnabled || false);
   const [shuttlecockPrice, setShuttlecockPrice] = useState(editEvent?.shuttlecockPrice || 20);
   const [courtHourlyRate, setCourtHourlyRate] = useState(editEvent?.courtHourlyRate || 150);
   const [courts, setCourts] = useState<Court[]>(
@@ -75,6 +77,7 @@ const CreateEventForm = ({ onSubmit, onCancel, editEvent, onUpdateEvent }: Creat
         eventDate,
         venue,
         maxPlayers,
+        waitlistEnabled,
         shuttlecockPrice,
         courtHourlyRate,
         courts,
@@ -86,10 +89,11 @@ const CreateEventForm = ({ onSubmit, onCancel, editEvent, onUpdateEvent }: Creat
         eventDate,
         venue,
         maxPlayers,
+        waitlistEnabled,
         shuttlecockPrice,
         courtHourlyRate,
         courts,
-      });
+      } as any);
     }
   };
 
@@ -246,6 +250,15 @@ const CreateEventForm = ({ onSubmit, onCancel, editEvent, onUpdateEvent }: Creat
                 className="border-blue-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200"
               />
             </div>
+          </div>
+
+          {/* Waitlist Toggle */}
+          <div className="mt-2">
+            <label className="inline-flex items-center space-x-2">
+              <Checkbox id="waitlistEnabled" checked={waitlistEnabled} onCheckedChange={(v: any) => setWaitlistEnabled(Boolean(v))} />
+              <span className="text-gray-700">เปิดรับ Waitlist (คิวสำรอง)</span>
+            </label>
+            <p className="text-xs text-gray-500 mt-1">ถ้าเปิด ระบบจะอนุญาตผู้เล่นเข้าคิวเมื่อที่นั่งเต็ม</p>
           </div>
 
           {/* Courts */}

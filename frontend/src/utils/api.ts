@@ -44,6 +44,30 @@ export interface AuthResponse {
   expiresIn: string;
 }
 
+// Registration types
+export interface GuestRegisterRequest {
+  name: string;
+  phoneNumber: string;
+  startTime?: string;
+  endTime?: string;
+}
+
+export interface MemberRegisterRequest {
+  startTime?: string;
+  endTime?: string;
+}
+
+export interface PlayerItem {
+  playerId: string;
+  userId?: string | null;
+  name: string;
+  email?: string;
+  phoneNumber?: string;
+  startTime?: string;
+  endTime?: string;
+  status?: string;
+}
+
 class ApiClient {
   private baseURL: string;
   private token: string | null = null;
@@ -138,7 +162,18 @@ class ApiClient {
   }
 
   async getCurrentUser(): Promise<ApiResponse<User>> {
-    return this.request<User>("/api/auth/me");
+    try {
+      const res = await this.http.get("/api/auth/verify");
+      return {
+        success: true,
+        data: res.data?.user as User,
+        message: res.data?.message,
+      };
+    } catch (err) {
+      const axErr = err as AxiosError<any>;
+      const message = (axErr.response?.data as any)?.message || axErr.message || "Network error";
+      return { success: false, error: message };
+    }
   }
 
   async refreshToken(): Promise<
@@ -149,15 +184,17 @@ class ApiClient {
 
   // Event endpoints
   async getEvents(params?: {
-    page?: number;
     limit?: number;
+    offset?: number;
     status?: string;
+    date?: string;
   }): Promise<ApiResponse<any>> {
     return this.request(`/api/events`, {
       params: {
-        page: params?.page,
         limit: params?.limit,
+        offset: params?.offset,
         status: params?.status,
+        date: params?.date,
       },
     });
   }
@@ -174,7 +211,7 @@ class ApiClient {
     eventId: string,
     eventData: any
   ): Promise<ApiResponse<any>> {
-    return this.request(`/api/events/${eventId}`, { method: "PUT", data: eventData });
+    return this.request(`/api/events/${eventId}`, { method: "PATCH", data: eventData });
   }
 
   async deleteEvent(eventId: string): Promise<ApiResponse<any>> {
@@ -182,6 +219,41 @@ class ApiClient {
   }
 
   // Registration endpoints
+  async addGuest(
+    eventId: string,
+    guest: GuestRegisterRequest
+  ): Promise<ApiResponse<any>> {
+    return this.request(`/api/registration/events/${eventId}/guests`, {
+      method: "POST",
+      data: guest,
+    });
+  }
+
+  async registerMember(
+    eventId: string,
+    data: MemberRegisterRequest
+  ): Promise<ApiResponse<any>> {
+    return this.request(`/api/registration/events/${eventId}/members`, {
+      method: "POST",
+      data,
+    });
+  }
+
+  async getPlayers(
+    eventId: string,
+    params?: { limit?: number; offset?: number; status?: string }
+  ): Promise<ApiResponse<{ players: PlayerItem[] }>> {
+    return this.request(`/api/registration/events/${eventId}/players`, {
+      params,
+    });
+  }
+
+  async cancelPlayer(eventId: string, playerId: string): Promise<ApiResponse<any>> {
+    return this.request(`/api/registration/events/${eventId}/players/${playerId}/cancel`, {
+      method: "POST",
+    });
+  }
+
   async registerForEvent(
     eventId: string,
     registrationData: any
