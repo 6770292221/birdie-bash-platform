@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BEM - Badminton</title>
+    <meta name="description" content="Manage your badminton group play sessions with ease" />
+    <meta name="author" content="BEM Team" />
+    
+    <!-- Favicon - Badminton Racket -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><defs><linearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'><stop offset='0%25' stop-color='%2306B6D4'/><stop offset='100%25' stop-color='%23059669'/></linearGradient></defs><ellipse cx='50' cy='25' rx='18' ry='22' fill='none' stroke='url(%23g)' stroke-width='3'/><rect x='47' y='45' width='6' height='40' fill='url(%23g)'/><ellipse cx='50' cy='87' rx='5' ry='3' fill='%23B45309'/><path d='M35 15h30M35 20h30M35 25h30M35 30h30M35 35h30' stroke='url(%23g)' stroke-width='1'/><path d='M41 12v26M50 12v26M59 12v26' stroke='url(%23g)' stroke-width='1'/><circle cx='50' cy='15' r='2' fill='%23EF4444'/></svg>" />
+    
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" integrity="sha512-Avb2QiuDEEvB4bZJYdft2mNjVShBftLdPG8FJ0V7irTLQ8Uo0qcPxh4Plq7G5tGm0rU+1SPhVotteLpBERwTkw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+
+    <meta property="og:title" content="Badminton Event Manager (BEM)" />
+    <meta property="og:description" content="Manage your badminton group play sessions with ease" />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@lovable_dev" />
+    <meta name="twitter:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+    
+    <!-- Google Maps Places API -->
+    <script async defer 
+      src="https://maps.googleapis.com/maps/api/js?key=AIzaSyB7OXmzfQYua_1LEhRdqsoYpNDJGcuJQww&libraries=places&callback=initMap">
+    </script>
+  </head>
+
+  <body>
+    <div id="root"></div>
+    <script>
+      // Initialize Google Maps callback
+      window.initMap = function() {
+        // Maps API is loaded and ready
+        window.googleMapsReady = true;
+        window.dispatchEvent(new Event('google-maps-loaded'));
+      };
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
