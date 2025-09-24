@@ -4,6 +4,7 @@ import { RegisterByUser, RegisterByGuest } from "../types/event";
 import http from "http";
 import https from "https";
 import messageQueueService from "../queue/publisher";
+import { EVENTS } from "../queue/events";
 
 interface ExtendedRequest extends Request {
   headers: Request["headers"] & {
@@ -251,7 +252,7 @@ export const cancelPlayerRegistration = async (
     // Here we only update player state and emit domain events.
 
     try {
-      await messageQueueService.publishEvent("participant.cancelled", {
+      await messageQueueService.publishEvent(EVENTS.PARTICIPANT_CANCELLED, {
         eventId,
         playerId: player.id,
         canceledBy: userId,
@@ -578,9 +579,9 @@ export const promoteWaitlist = async (
     waitlistPlayer.status = 'registered';
     await waitlistPlayer.save();
 
-    // Publish as participant.joined to update capacity properly
+    // Publish waitlist.promoted event
     try {
-      await messageQueueService.publishEvent('participant.joined', {
+      await messageQueueService.publishEvent(EVENTS.WAITLIST_PROMOTED, {
         eventId,
         playerId: waitlistPlayer.id,
         userId: waitlistPlayer.userId || undefined,
@@ -590,9 +591,9 @@ export const promoteWaitlist = async (
         promotedFromWaitlist: true,
         promotedAt: new Date().toISOString(),
       });
-      console.log('📤 Published participant.joined for promotion', { eventId, playerId: waitlistPlayer.id });
+      console.log('📤 Published waitlist.promoted event', { eventId, playerId: waitlistPlayer.id });
     } catch (error) {
-      console.error('Failed to publish participant.joined event:', error);
+      console.error('Failed to publish waitlist.promoted event:', error);
     }
 
     console.log('🎉 Waitlist player promoted', {

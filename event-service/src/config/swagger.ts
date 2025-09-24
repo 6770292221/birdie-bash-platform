@@ -8,7 +8,7 @@ const swaggerDefinition = {
     description: "Event management microservice for Birdie Bash Platform",
   },
   servers: [
-    { url: "http://localhost:3002", description: "Event Service (local)" },
+    { url: "http://localhost:3003", description: "Event Service (local)" },
   ],
   components: {
     securitySchemes: {

@@ -20,7 +20,7 @@ const swaggerDefinition = {
     {
       name: 'Event Proxy',
       description: 'Proxied routes to Event Service',
-      externalDocs: { description: 'Event Service API', url: 'http://localhost:3002/api-docs' }
+      externalDocs: { description: 'Event Service API', url: 'http://localhost:3003/api-docs' }
     }
   ],
   components: {
@@ -35,7 +35,7 @@ const swaggerDefinition = {
           message: { type: 'string' },
           details: { type: 'object', additionalProperties: true },
         },
-        example: { code: 'SERVICE_UNAVAILABLE', message: 'Service temporarily unavailable', service: 'http://localhost:3002' }
+        example: { code: 'SERVICE_UNAVAILABLE', message: 'Service temporarily unavailable', service: 'http://localhost:3003' }
       }
     }
   }

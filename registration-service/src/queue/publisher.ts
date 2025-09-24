@@ -1,6 +1,7 @@
 import amqp from 'amqplib';
 import dotenv from 'dotenv';
 import path from 'path';
+import { EventType, toRoutingKey, EVENTS } from './events';
 
 // Load .env for this service regardless of import order
 dotenv.config({ path: path.resolve(__dirname, '..', '..', '.env') });
@@ -12,7 +13,7 @@ class MessageQueueService {
   private readonly exchange: string;
   private readonly retryMs: number;
   private reconnectTimer: NodeJS.Timeout | null = null;
-  private pending: Array<{ type: string; data: any }>;
+  private pending: Array<{ type: EventType; data: any }>;
   private readonly autoBind: boolean;
   private readonly bindQueue: string;
   private readonly bindKey: string;
@@ -22,17 +23,17 @@ class MessageQueueService {
   private didAutoBindOnce: boolean = false;
 
   constructor() {
-    const isProd = (process.env.NODE_ENV || '').toLowerCase() === 'production';
     this.url = process.env.RABBIT_URL || 'amqp://localhost';
     this.exchange = process.env.RABBIT_EXCHANGE || 'events';
     this.retryMs = Number(process.env.RABBIT_RETRY_MS || 2000);
     this.pending = [];
-    this.autoBind = process.env.RABBIT_AUTOBIND === 'true' || (!isProd && (process.env.RABBIT_AUTOBIND ?? 'true') !== 'false');
+    this.autoBind = process.env.RABBIT_AUTOBIND === 'true';
     this.bindQueue = process.env.RABBIT_BIND_QUEUE || 'registrations.debug';
     this.bindKey = process.env.RABBIT_BIND_KEY || 'event.#';
-    this.logPayloads = process.env.RABBIT_LOG_PAYLOADS === 'true' || (!isProd && (process.env.RABBIT_LOG_PAYLOADS ?? 'true') !== 'false');
+    const isProd = (process.env.NODE_ENV || '').toLowerCase() === 'production';
+    this.logPayloads = process.env.RABBIT_LOG_PAYLOADS === 'true' || (!isProd && (process.env.RABBIT_LOG_PAYLOADS ?? 'false') === 'true');
     this.maxLogBytes = Number(process.env.RABBIT_MAX_LOG_BYTES || 2048);
-    this.autoBindOnReturn = process.env.RABBIT_AUTOBIND_ON_RETURN === 'true' || (!isProd && (process.env.RABBIT_AUTOBIND_ON_RETURN ?? 'true') !== 'false');
+    this.autoBindOnReturn = process.env.RABBIT_AUTOBIND_ON_RETURN === 'true';
   }
 
   private scheduleReconnect() {
@@ -110,7 +111,7 @@ class MessageQueueService {
     }
   }
 
-  async publishEvent(eventType: string, data: any): Promise<void> {
+  async publishEvent(eventType: EventType, data: any): Promise<void> {
     if (!this.channel) {
       this.pending.push({ type: eventType, data });
       console.warn('⚠️ RabbitMQ channel not available, queued message', { eventType });
@@ -119,6 +120,8 @@ class MessageQueueService {
     }
 
     try {
+      const messageId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      const correlationId = data?.eventId ? `${data.eventId}:${messageId}` : messageId;
       const message = {
         eventType,
         data,
@@ -126,7 +129,7 @@ class MessageQueueService {
         service: 'registration-service'
       };
 
-      const routingKey = `event.${eventType}`;
+      const routingKey = toRoutingKey(eventType);
 
       if (this.logPayloads) {
         const raw = JSON.stringify(message);
@@ -140,7 +143,16 @@ class MessageQueueService {
           this.exchange,
           routingKey,
           Buffer.from(JSON.stringify(message)),
-          { persistent: true, mandatory: true },
+          {
+            persistent: true,
+            mandatory: true,
+            contentType: 'application/json',
+            messageId,
+            correlationId,
+            timestamp: Date.now(),
+            appId: 'registration-service',
+            type: eventType,
+          },
           (err: any) => (err ? reject(err) : resolve())
         );
       });
@@ -163,7 +175,7 @@ class MessageQueueService {
     status: 'registered' | 'waitlist';
     userType?: 'member' | 'guest';
   }): Promise<void> {
-    const eventType = eventData.status === 'registered' ? 'participant.joined' : 'waiting.added';
+    const eventType: EventType = eventData.status === 'registered' ? EVENTS.PARTICIPANT_JOINED : EVENTS.WAITING_ADDED;
     await this.publishEvent(eventType, eventData);
   }
 
@@ -209,4 +221,3 @@ process.on('SIGTERM', async () => {
 });
 
 export default messageQueueService;
-
