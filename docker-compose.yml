@@ -21,8 +21,8 @@ services:
     container_name: birdie-rabbitmq
     restart: unless-stopped
     ports:
-      - "5672:5672"    # AMQP port
-      - "15672:15672"  # Management UI
+      - "5672:5672" # AMQP port
+      - "15672:15672" # Management UI
     environment:
       RABBITMQ_DEFAULT_USER: admin
       RABBITMQ_DEFAULT_PASS: password123
@@ -31,6 +31,23 @@ services:
     networks:
       - birdie-network
 
+  # MySQL for payment service
+  mysql:
+    image: mysql:8.0
+    container_name: birdie-mysql
+    restart: unless-stopped
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root123
+      MYSQL_DATABASE: payment_db
+      MYSQL_USER: payment_user
+      MYSQL_PASSWORD: payment123
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./docker/payment-init.sql:/docker-entrypoint-initdb.d/payment-init.sql:ro
+    networks:
+      - birdie-network
 
   # Gateway API
   gateway:
@@ -109,11 +126,12 @@ services:
     networks:
       - birdie-network
 
-
 volumes:
   mongodb_data:
     driver: local
   rabbitmq_data:
+    driver: local
+  mysql_data:
     driver: local
 
 networks:
