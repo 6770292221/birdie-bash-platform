@@ -159,7 +159,7 @@ const EventManagement = ({ event, onUpdateEvent, onClose }: EventManagementProps
       endTime: '22:00',
       registrationTime: new Date(),
       status: 'registered' as const,
-      userId: `mock-user-${Date.now()}`
+      userId: user?.id || `user-${Date.now()}`
     };
     setEditingPlayers([...editingPlayers, newPlayer]);
     toast({
@@ -311,24 +311,6 @@ const EventManagement = ({ event, onUpdateEvent, onClose }: EventManagementProps
       hourlyBreakdown: []
     }));
 
-    // Add some mock players with fines for demo
-    const mockPlayersWithFines = [
-      {
-        name: 'สมศรี ขาดนัด',
-        playerId: 'mock-fine-1',
-        startTime: '20:00',
-        endTime: '22:00',
-        courtFee: 0,
-        shuttlecockFee: 0,
-        fine: 100,
-        total: 100,
-        hourlyBreakdown: []
-      }
-    ];
-    
-    if (cancelledPlayersBreakdown.length === 0) {
-      cancelledPlayersBreakdown.push(...mockPlayersWithFines);
-    }
 
     // Combine both breakdowns
     const breakdown = [...registeredPlayersBreakdown, ...cancelledPlayersBreakdown];

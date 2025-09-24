@@ -1,10 +1,9 @@
 
-import React, { useState } from 'react';
-import { Calendar, MapPin, Users, Clock, Settings, UserX, Edit, Trash2, Plus, UserPlus } from 'lucide-react';
+import React from 'react';
+import { Calendar, MapPin, Users, Clock, Settings, UserX, Edit, Trash2, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Event } from '@/pages/Index';
 import { useLanguage } from '@/contexts/LanguageContext';
 
@@ -20,37 +19,10 @@ interface EventCardProps {
 
 const EventCard = ({ event, onSelectEvent, onCancelRegistration, onEditEvent, onDeleteEvent, onAddPlayer, showAdminFeatures = false }: EventCardProps) => {
   const { t } = useLanguage();
-  const [selectedPlayerToAdd, setSelectedPlayerToAdd] = useState<string>('');
-  
+
   const registeredPlayers = event.players.filter(p => p.status === 'registered');
   const waitlistPlayers = event.players.filter(p => p.status === 'waitlist');
   const cancelledPlayers = event.players.filter(p => p.status === 'cancelled');
-
-  // Mock player list - these are available players to add
-  const mockAvailablePlayers = [
-    'สมชาย ใจดี',
-    'สมหญิง รักเกม', 
-    'ธนากร เทพบุตร',
-    'มานี สมบูรณ์',
-    'วิชัย แกล้วกล้า',
-    'นิภา มีความสุข',
-    'ประชา ชาติไทย',
-    'สุนทร บุญมาก',
-    'รัตนา ทองคำ',
-    'กิติ สว่างใส',
-    'อรุณ เช้าใหม่',
-    'พิมพ์ ใสสะอาด'
-  ].filter(playerName => 
-    // Filter out players who are already registered or on waitlist
-    !event.players.some(p => p.name === playerName && (p.status === 'registered' || p.status === 'waitlist'))
-  );
-
-  const handleAddPlayer = () => {
-    if (selectedPlayerToAdd && onAddPlayer) {
-      onAddPlayer(event.id, selectedPlayerToAdd);
-      setSelectedPlayerToAdd('');
-    }
-  };
 
   return (
     <Card className="bg-white/90 backdrop-blur-sm hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 w-full border-0 shadow-lg">
@@ -140,35 +112,6 @@ const EventCard = ({ event, onSelectEvent, onCancelRegistration, onEditEvent, on
           </div>
         </div>
 
-        {/* Admin Add Player Section */}
-        {showAdminFeatures && onAddPlayer && mockAvailablePlayers.length > 0 && (
-          <div className="space-y-2">
-            <h4 className="font-medium text-blue-700 text-sm">เพิ่มผู้เล่น:</h4>
-            <div className="flex gap-2">
-              <Select value={selectedPlayerToAdd} onValueChange={setSelectedPlayerToAdd}>
-                <SelectTrigger className="flex-1">
-                  <SelectValue placeholder="เลือกผู้เล่น" />
-                </SelectTrigger>
-                <SelectContent className="bg-white border shadow-lg z-[60]">
-                  {mockAvailablePlayers.map(playerName => (
-                    <SelectItem key={playerName} value={playerName}>
-                      {playerName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button
-                onClick={handleAddPlayer}
-                disabled={!selectedPlayerToAdd}
-                variant="outline"
-                size="sm"
-                className="border-green-600 text-green-600 hover:bg-green-50 px-3"
-              >
-                <UserPlus className="w-4 h-4" />
-              </Button>
-            </div>
-          </div>
-        )}
 
         {/* Admin Management Buttons */}
         {showAdminFeatures && (

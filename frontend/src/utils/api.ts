@@ -1,6 +1,10 @@
-// API utility functions for gateway integration
+// API utility functions for gateway integration (axios version)
 
-const GATEWAY_URL = import.meta.env.VITE_GATEWAY_URL || 'http://localhost:3000';
+import axios, { AxiosError, AxiosInstance } from "axios";
+
+// Vite only exposes variables prefixed with VITE_
+const GATEWAY_URL =
+  (import.meta.env.VITE_GATEWAY_URL as string) || "http://localhost:3000";
 
 export interface ApiResponse<T = any> {
   success: boolean;
@@ -18,16 +22,18 @@ export interface RegisterRequest {
   name: string;
   email: string;
   password: string;
-  phoneNumber?: string;
+  phoneNumber: string;
+  skill: string;
+  role: string;
 }
 
 export interface User {
   id: string;
   email: string;
   name: string;
-  role: 'admin' | 'user';
+  role: "admin" | "user";
   phoneNumber?: string;
-  skillLevel?: 'P' | 'S' | 'BG' | 'N';
+  skillLevel?: "P" | "S" | "BG" | "N";
   profilePicture?: string;
   joinedDate?: string;
 }
@@ -41,85 +47,88 @@ export interface AuthResponse {
 class ApiClient {
   private baseURL: string;
   private token: string | null = null;
+  private http: AxiosInstance;
 
   constructor(baseURL: string = GATEWAY_URL) {
     this.baseURL = baseURL;
     // Load token from localStorage if available
-    this.token = localStorage.getItem('authToken');
+    this.token = localStorage.getItem("authToken");
+    this.http = axios.create({
+      baseURL: this.baseURL,
+      headers: {
+        "Content-Type": "application/json",
+      },
+      timeout: 10000,
+    });
+
+    // Attach token automatically
+    this.http.interceptors.request.use((config) => {
+      if (this.token) {
+        config.headers = config.headers || {};
+        (config.headers as any)["Authorization"] = `Bearer ${this.token}`;
+      }
+      return config;
+    });
   }
 
   setToken(token: string) {
     this.token = token;
-    localStorage.setItem('authToken', token);
+    localStorage.setItem("authToken", token);
   }
 
   clearToken() {
     this.token = null;
-    localStorage.removeItem('authToken');
+    localStorage.removeItem("authToken");
   }
 
   private async request<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: { method?: string; data?: any; params?: any; headers?: Record<string, string> } = {}
   ): Promise<ApiResponse<T>> {
-    const url = `${this.baseURL}${endpoint}`;
-
-    const headers: HeadersInit = {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    };
-
-    if (this.token) {
-      headers.Authorization = `Bearer ${this.token}`;
-    }
-
     try {
-      const response = await fetch(url, {
-        ...options,
-        headers,
+      const res = await this.http.request({
+        url: endpoint,
+        method: (options.method || "GET") as any,
+        data: options.data,
+        params: options.params,
+        headers: options.headers,
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        return {
-          success: false,
-          error: data.message || `HTTP ${response.status}: ${response.statusText}`,
-        };
-      }
-
+      const data = res.data;
       return {
         success: true,
-        data: data.data || data,
-        message: data.message,
+        data: data?.data ?? data,
+        message: data?.message,
       };
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Network error',
-      };
+    } catch (err) {
+      const axErr = err as AxiosError<any>;
+      const statusText = axErr.response?.status
+        ? `HTTP ${axErr.response.status}`
+        : "Network error";
+      const message = (axErr.response?.data as any)?.message || axErr.message || statusText;
+      return { success: false, error: message };
     }
   }
 
   // Auth endpoints
   async login(credentials: LoginRequest): Promise<ApiResponse<AuthResponse>> {
-    return this.request<AuthResponse>('/api/auth/login', {
-      method: 'POST',
-      body: JSON.stringify(credentials),
+    return this.request<AuthResponse>("/api/auth/login", {
+      method: "POST",
+      data: credentials,
     });
   }
 
-  async register(userData: RegisterRequest): Promise<ApiResponse<AuthResponse>> {
-    return this.request<AuthResponse>('/api/auth/register', {
-      method: 'POST',
-      body: JSON.stringify(userData),
+  async register(
+    userData: RegisterRequest
+  ): Promise<ApiResponse<AuthResponse>> {
+    return this.request<AuthResponse>("/api/auth/register", {
+      method: "POST",
+      data: userData,
     });
   }
 
   async logout(): Promise<ApiResponse> {
-    const response = await this.request('/api/auth/logout', {
-      method: 'POST',
-    });
+    const response = await this.request("/api/auth/logout", { method: "POST" });
 
     if (response.success) {
       this.clearToken();
@@ -129,13 +138,13 @@ class ApiClient {
   }
 
   async getCurrentUser(): Promise<ApiResponse<User>> {
-    return this.request<User>('/api/auth/me');
+    return this.request<User>("/api/auth/me");
   }
 
-  async refreshToken(): Promise<ApiResponse<{ token: string; expiresIn: string }>> {
-    return this.request('/api/auth/refresh', {
-      method: 'POST',
-    });
+  async refreshToken(): Promise<
+    ApiResponse<{ token: string; expiresIn: string }>
+  > {
+    return this.request("/api/auth/refresh", { method: "POST" });
   }
 
   // Event endpoints
@@ -144,13 +153,13 @@ class ApiClient {
     limit?: number;
     status?: string;
   }): Promise<ApiResponse<any>> {
-    const queryParams = new URLSearchParams();
-    if (params?.page) queryParams.append('page', params.page.toString());
-    if (params?.limit) queryParams.append('limit', params.limit.toString());
-    if (params?.status) queryParams.append('status', params.status);
-
-    const endpoint = `/api/events${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-    return this.request(endpoint);
+    return this.request(`/api/events`, {
+      params: {
+        page: params?.page,
+        limit: params?.limit,
+        status: params?.status,
+      },
+    });
   }
 
   async getEvent(eventId: string): Promise<ApiResponse<any>> {
@@ -158,37 +167,39 @@ class ApiClient {
   }
 
   async createEvent(eventData: any): Promise<ApiResponse<any>> {
-    return this.request('/api/events', {
-      method: 'POST',
-      body: JSON.stringify(eventData),
-    });
+    return this.request("/api/events", { method: "POST", data: eventData });
   }
 
-  async updateEvent(eventId: string, eventData: any): Promise<ApiResponse<any>> {
-    return this.request(`/api/events/${eventId}`, {
-      method: 'PUT',
-      body: JSON.stringify(eventData),
-    });
+  async updateEvent(
+    eventId: string,
+    eventData: any
+  ): Promise<ApiResponse<any>> {
+    return this.request(`/api/events/${eventId}`, { method: "PUT", data: eventData });
   }
 
   async deleteEvent(eventId: string): Promise<ApiResponse<any>> {
-    return this.request(`/api/events/${eventId}`, {
-      method: 'DELETE',
-    });
+    return this.request(`/api/events/${eventId}`, { method: "DELETE" });
   }
 
   // Registration endpoints
-  async registerForEvent(eventId: string, registrationData: any): Promise<ApiResponse<any>> {
+  async registerForEvent(
+    eventId: string,
+    registrationData: any
+  ): Promise<ApiResponse<any>> {
     return this.request(`/api/registration/events/${eventId}/register`, {
-      method: 'POST',
-      body: JSON.stringify(registrationData),
+      method: "POST",
+      data: registrationData,
     });
   }
 
-  async cancelEventRegistration(eventId: string, registrationId: string): Promise<ApiResponse<any>> {
-    return this.request(`/api/registration/events/${eventId}/registrations/${registrationId}/cancel`, {
-      method: 'PUT',
-    });
+  async cancelEventRegistration(
+    eventId: string,
+    registrationId: string
+  ): Promise<ApiResponse<any>> {
+    return this.request(
+      `/api/registration/events/${eventId}/registrations/${registrationId}/cancel`,
+      { method: "PUT" }
+    );
   }
 
   async getEventRegistrations(eventId: string): Promise<ApiResponse<any>> {
@@ -203,13 +214,13 @@ export const apiClient = new ApiClient();
 export const handleApiError = (error: string): string => {
   // Map common error messages to Thai
   const errorMap: Record<string, string> = {
-    'Invalid credentials': 'อีเมลหรือรหัสผ่านไม่ถูกต้อง',
-    'User already exists': 'มีผู้ใช้งานนี้ในระบบแล้ว',
-    'User not found': 'ไม่พบผู้ใช้งาน',
-    'Invalid token': 'โทเคนไม่ถูกต้อง',
-    'Token expired': 'โทเคนหมดอายุ',
-    'Network error': 'ข้อผิดพลาดเครือข่าย',
+    "Invalid credentials": "อีเมลหรือรหัสผ่านไม่ถูกต้อง",
+    "User already exists": "มีผู้ใช้งานนี้ในระบบแล้ว",
+    "User not found": "ไม่พบผู้ใช้งาน",
+    "Invalid token": "โทเคนไม่ถูกต้อง",
+    "Token expired": "โทเคนหมดอายุ",
+    "Network error": "ข้อผิดพลาดเครือข่าย",
   };
 
-  return errorMap[error] || error || 'เกิดข้อผิดพลาดไม่ทราบสาเหตุ';
+  return errorMap[error] || error || "เกิดข้อผิดพลาดไม่ทราบสาเหตุ";
 };

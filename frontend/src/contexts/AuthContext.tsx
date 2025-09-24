@@ -89,7 +89,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     email: string,
     password: string,
     name: string,
-    phoneNumber?: string
+    phoneNumber: string,
+    skill: string
   ): Promise<{ error?: string }> => {
     try {
       setLoading(true);
@@ -98,7 +99,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         email,
         password,
         name,
-        phoneNumber
+        phoneNumber,
+        skill,
+        role: 'user'
       });
 
       if (response.success && response.data) {

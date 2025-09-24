@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/components/ui/form';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useForm } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
@@ -15,7 +16,8 @@ interface RegisterFormData {
   email: string;
   password: string;
   confirmPassword: string;
-  phoneNumber?: string;
+  phoneNumber: string;
+  skill: string;
 }
 
 const RegisterForm = () => {
@@ -37,8 +39,16 @@ const RegisterForm = () => {
     
     setIsLoading(true);
     console.log('Register attempt:', data.email);
+    // Sanitize phone to be digits-only and max length 10
+    const sanitizedPhone = (data.phoneNumber || '').replace(/\D/g, '').slice(0, 10);
     
-    const { error } = await register(data.email, data.password, data.name, data.phoneNumber);
+    const { error } = await register(
+      data.email,
+      data.password,
+      data.name,
+      sanitizedPhone,
+      data.skill
+    );
     
     if (error) {
       toast({
@@ -49,7 +59,7 @@ const RegisterForm = () => {
     } else {
       toast({
         title: "สมัครสมาชิกสำเร็จ",
-        description: "กรุณาตรวจสอบอีเมลของคุณเพื่อยืนยันบัญชี",
+        description: "สามารถเข้าสู่ระบบได้ทันที",
       });
       navigate('/login');
     }
@@ -95,6 +105,40 @@ const RegisterForm = () => {
 
               <FormField
                 control={form.control}
+                name="skill"
+                rules={{
+                  required: 'กรุณาเลือกระดับความเชี่ยวชาญ'
+                }}
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>ระดับความเชี่ยวชาญ</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="เลือกระดับความเชี่ยวชาญ" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="BG">0 - มือเปาะแปะ (BG - Beginner)</SelectItem>
+                        <SelectItem value="BG">1 - มือหน้าบ้าน (BG - Beginner)</SelectItem>
+                        <SelectItem value="S">2 - มือ S- (เริ่มเข้าฟอร์มมาตรฐาน)</SelectItem>
+                        <SelectItem value="S">3 - มือ S (ฟอร์มมาตรฐาน)</SelectItem>
+                        <SelectItem value="N">4 - มือ N (ฟอร์มเท่นื่อขึ้น)</SelectItem>
+                        <SelectItem value="P">5 - มือ P- (ฟอร์มใกล้เคียงโค้ชทั่วไป)</SelectItem>
+                        <SelectItem value="P">6 - มือ P (ฟอร์มโค้ชทั่วไป)</SelectItem>
+                        <SelectItem value="P">7 - มือ P+ (ฟอร์มนักกีฬาอภิวัฒน์/จังหวัด)</SelectItem>
+                        <SelectItem value="C">8 - มือ C (ฟอร์มนักกีฬาเขต/เยาวชนทีมชาติ)</SelectItem>
+                        <SelectItem value="B">9 - มือ B (ฟอร์มนักกีฬาทีมชาติระดับประเทศ)</SelectItem>
+                        <SelectItem value="A">10 - มือ A (ฟอร์มนักกีฬาทีมชาติระดับนานาชาติ)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
                 name="email"
                 rules={{
                   required: 'กรุณากรอกอีเมล',
@@ -122,6 +166,7 @@ const RegisterForm = () => {
                 control={form.control}
                 name="phoneNumber"
                 rules={{
+                  required: 'กรุณากรอกหมายเลขโทรศัพท์',
                   pattern: {
                     value: /^[0-9]{10}$/,
                     message: 'หมายเลขโทรศัพท์ต้องเป็นตัวเลข 10 หลัก'
@@ -129,12 +174,22 @@ const RegisterForm = () => {
                 }}
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>หมายเลขโทรศัพท์ (ไม่บังคับ)</FormLabel>
+                    <FormLabel>หมายเลขโทรศัพท์</FormLabel>
                     <FormControl>
                       <Input
                         type="tel"
+                        inputMode="numeric"
                         placeholder="0812345678"
+                        maxLength={10}
                         {...field}
+                        value={field.value || ''}
+                        onChange={(e) => {
+                          const digitsOnly = e.target.value.replace(/\D/g, '').slice(0, 10);
+                          field.onChange(digitsOnly);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === ' ') e.preventDefault();
+                        }}
                       />
                     </FormControl>
                     <FormMessage />

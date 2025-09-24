@@ -45,7 +45,7 @@ const PlayerMatching: React.FC<PlayerMatchingProps> = ({ event, onUpdateEvent })
   const [playerPairs, setPlayerPairs] = useState<EnhancedPlayer[][]>([]);
   const [isMatching, setIsMatching] = useState(false);
 
-  // Add skill levels to players (mock data for demo)
+  // Add skill levels to players
   const enhancedPlayers: EnhancedPlayer[] = event.players
     .filter(p => p.status === 'registered')
     .map(player => ({

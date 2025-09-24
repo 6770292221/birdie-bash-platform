@@ -37,7 +37,7 @@ const PaymentManager: React.FC<PaymentManagerProps> = ({
   const { t } = useLanguage();
   const { toast } = useToast();
   
-  // Mock payment status - in real app this would come from database
+  // Payment status - this would come from database
   const [paymentStatuses, setPaymentStatuses] = useState<PaymentStatus[]>(
     costBreakdown.map(item => ({
       playerId: item.playerId,
@@ -226,7 +226,7 @@ const PaymentManager: React.FC<PaymentManagerProps> = ({
                 <div className="bg-gray-100 p-8 rounded-lg text-center">
                   <QrCode className="w-32 h-32 mx-auto text-gray-400 mb-4" />
                   <p className="text-sm text-gray-600">
-                    Mock QR Code for payment
+                    QR Code for payment
                   </p>
                   <p className="font-medium">
                     Amount: ฿{costBreakdown.find(c => c.playerId === showQRCode)?.total}
