@@ -28,6 +28,7 @@ const swaggerDefinition = {
         properties: {
           playerId: { type: 'string', description: 'Unique player registration ID' },
           userId: { type: 'string', nullable: true, description: 'User ID for member registrations (null for guests)' },
+          userType: { type: 'string', enum: ['member', 'guest'], description: 'Type of registration: member (logged-in user) or guest (admin-added)' },
           name: { type: 'string', nullable: true, description: 'Player name' },
           email: { type: 'string', nullable: true, description: 'Player email' },
           phoneNumber: { type: 'string', nullable: true, description: 'Player phone number' },

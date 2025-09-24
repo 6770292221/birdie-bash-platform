@@ -1,4 +1,23 @@
 services:
+  # Frontend React Application
+  frontend:
+    build: ./frontend
+    container_name: birdie-bash-platform
+    restart: unless-stopped
+    ports:
+      - "9001:9001"
+    environment:
+      - NODE_ENV=development
+      - VITE_GATEWAY_URL=http://localhost:3000
+      - VITE_API_BASE_URL=http://localhost:3000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - gateway
+    networks:
+      - birdie-network
+
   # MongoDB for both auth and event services
   mongodb:
     image: mongo:7.0
