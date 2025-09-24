@@ -21,19 +21,21 @@ class MessageQueueService {
   private readonly maxLogBytes: number;
   private readonly autoBindOnReturn: boolean;
   private didAutoBindOnce: boolean = false;
+  private readonly enableNotifyBind: boolean;
 
   constructor() {
     this.url = process.env.RABBIT_URL || 'amqp://localhost';
     this.exchange = process.env.RABBIT_EXCHANGE || 'events';
     this.retryMs = Number(process.env.RABBIT_RETRY_MS || 2000);
     this.pending = [];
-    const isProd = (process.env.NODE_ENV || '').toLowerCase() === 'production';
-    this.autoBind = process.env.RABBIT_AUTOBIND === 'true' || (!isProd && (process.env.RABBIT_AUTOBIND ?? 'true') !== 'false');
+    this.autoBind = process.env.RABBIT_AUTOBIND === 'true';
     this.bindQueue = process.env.RABBIT_BIND_QUEUE || 'events.debug';
     this.bindKey = process.env.RABBIT_BIND_KEY || 'event.#';
-    this.logPayloads = process.env.RABBIT_LOG_PAYLOADS === 'true' || (!isProd && (process.env.RABBIT_LOG_PAYLOADS ?? 'true') !== 'false');
+    const isProd = (process.env.NODE_ENV || '').toLowerCase() === 'production';
+    this.logPayloads = process.env.RABBIT_LOG_PAYLOADS === 'true' || (!isProd && (process.env.RABBIT_LOG_PAYLOADS ?? 'false') === 'true');
     this.maxLogBytes = Number(process.env.RABBIT_MAX_LOG_BYTES || 2048);
-    this.autoBindOnReturn = process.env.RABBIT_AUTOBIND_ON_RETURN === 'true' || (!isProd && (process.env.RABBIT_AUTOBIND_ON_RETURN ?? 'true') !== 'false');
+    this.autoBindOnReturn = process.env.RABBIT_AUTOBIND_ON_RETURN === 'true';
+    this.enableNotifyBind = (process.env.RABBIT_ENABLE_NOTIFY_BIND || '').toLowerCase() === 'true';
   }
 
   private scheduleReconnect() {
@@ -61,8 +63,8 @@ class MessageQueueService {
 
       if (this.channel) {
         await this.channel.assertExchange(this.exchange, 'topic', { durable: true });
-        // Always bind notification queue regardless of autoBind flag
-        {
+        // Optional: bind notification queue when enabled (debug/observability)
+        if (this.enableNotifyBind) {
           const notifyQueue = process.env.RABBIT_NOTIFY_QUEUE || 'events.notification';
           const notifyKeys = (process.env.RABBIT_NOTIFY_BIND_KEY || 'event.created')
             .split(',')

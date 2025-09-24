@@ -50,28 +50,42 @@ connectEventDB();
 
 // Start capacity consumer (for auto-promotion)
 const { spawn } = require('child_process');
-const capacityWorker = spawn('npx', ['ts-node', 'src/consumers/capacityConsumer.ts'], {
-  cwd: process.cwd(),
-  stdio: 'inherit',
-  env: process.env,
-});
-console.log('🔄 Capacity Consumer started');
+const enableCapacity = String(process.env.ENABLE_CAPACITY_WORKER || 'true').toLowerCase() !== 'false';
+let capacityWorker: any = null;
+if (enableCapacity) {
+  capacityWorker = spawn('npx', ['ts-node', 'src/consumers/capacityConsumer.ts'], {
+    cwd: process.cwd(),
+    stdio: 'inherit',
+    env: process.env,
+  });
+  console.log('🔄 Capacity Consumer started');
+}
 
 // Ensure worker is terminated with the server to avoid multiple consumers
 const stopWorker = () => {
-  try { capacityWorker.kill('SIGTERM'); } catch { /* noop */ }
+  try { if (capacityWorker) capacityWorker.kill('SIGTERM'); } catch { /* noop */ }
 };
 process.on('exit', stopWorker);
 process.on('SIGINT', () => { stopWorker(); process.exit(0); });
 process.on('SIGTERM', () => { stopWorker(); process.exit(0); });
 process.on('SIGHUP', () => { stopWorker(); process.exit(0); });
 
-const server = app.listen(BASE_PORT, () => {
-  console.log(`📅 Event Service running on port ${BASE_PORT}`);
-  console.log(`📘 Event API docs: http://localhost:${BASE_PORT}/api-docs`);
-});
+function startService(port: number, attempt = 0) {
+  const server = app.listen(port, () => {
+    console.log(`📅 Event Service running on port ${port}`);
+    console.log(`📘 Event API docs: http://localhost:${port}/api-docs`);
+  });
 
-server.on("error", (err: any) => {
-  console.error(`[Event] Failed to start on port ${BASE_PORT}:`, err);
-  process.exit(1);
-});
+  server.on('error', (err: any) => {
+    if (err && err.code === 'EADDRINUSE' && attempt < 10) {
+      const nextPort = port + 1;
+      console.warn(`[Event] Port ${port} in use. Retrying on ${nextPort} (attempt ${attempt + 1}/10)...`);
+      setTimeout(() => startService(nextPort, attempt + 1), 200);
+    } else {
+      console.error(`[Event] Failed to start on port ${port}:`, err);
+      process.exit(1);
+    }
+  });
+}
+
+startService(BASE_PORT);

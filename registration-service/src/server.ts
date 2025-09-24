@@ -70,3 +70,22 @@ function startService(port: number, attempt = 0) {
 }
 
 startService(BASE_PORT);
+
+// Spawn Waitlist Promoter consumer (domain-owned)
+const { spawn } = require('child_process');
+const enableWaitlist = String(process.env.ENABLE_WAITLIST_WORKER || 'true').toLowerCase() !== 'false';
+let waitlistWorker: any = null;
+if (enableWaitlist) {
+  waitlistWorker = spawn('npx', ['ts-node', 'src/consumers/waitlistPromoter.ts'], {
+    cwd: process.cwd(),
+    stdio: 'inherit',
+    env: process.env,
+  });
+  console.log('🔄 Waitlist Promoter started');
+}
+
+const stopWorker = () => { try { if (waitlistWorker) waitlistWorker.kill('SIGTERM'); } catch { /* noop */ } };
+process.on('exit', stopWorker);
+process.on('SIGINT', () => { stopWorker(); process.exit(0); });
+process.on('SIGTERM', () => { stopWorker(); process.exit(0); });
+process.on('SIGHUP', () => { stopWorker(); process.exit(0); });
