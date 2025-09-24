@@ -1,6 +1,5 @@
-import { Schema, Document } from 'mongoose';
+import { Schema, Document, model } from 'mongoose';
 import { ICourt } from '../types/event';
-import { eventDbConnection } from '../config/eventDatabase';
 
 export interface ICourtDocument extends Omit<ICourt, 'id'>, Document {}
 
@@ -40,4 +39,4 @@ const CourtSchema: Schema = new Schema(
 
 CourtSchema.index({ eventId: 1, courtNumber: 1 }, { unique: true });
 
-export default eventDbConnection.model<ICourtDocument>('Court', CourtSchema);
+export default model<ICourtDocument>('Court', CourtSchema);
