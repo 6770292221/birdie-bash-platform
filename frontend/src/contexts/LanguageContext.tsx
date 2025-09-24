@@ -11,8 +11,8 @@ interface LanguageContextType {
 
 const translations = {
   th: {
-    'app.title': 'Badminton Event Manager (BEM)',
-    'app.subtitle': 'จัดการการเล่นแบดมินตันกลุ่มได้อย่างง่ายดาย',
+    'app.title': 'Birdie Bash',
+    'app.subtitle': 'ระบบจัดการแบดมินตันครบวงจร: อีเวนต์ การลงทะเบียน และค่าใช้จ่าย',
     'events.upcoming': 'กำลังมา',
     'events.in_progress': 'กำลังเล่น',
     'events.calculating': 'รอคำนวณ',
@@ -80,8 +80,8 @@ const translations = {
     'payment.qr_code': 'QR Code สำหรับชำระเงิน'
   },
   en: {
-    'app.title': 'Badminton Event Manager (BEM)',
-    'app.subtitle': 'Manage your group play sessions with ease',
+    'app.title': 'Birdie Bash',
+    'app.subtitle': 'All-in-one badminton events, registration, and costs',
     'events.upcoming': 'Upcoming',
     'events.in_progress': 'In Progress',
     'events.calculating': 'Calculating',

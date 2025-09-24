@@ -66,6 +66,7 @@ export interface PlayerItem {
   startTime?: string;
   endTime?: string;
   status?: string;
+  userType?: 'member' | 'guest';
 }
 
 class ApiClient {
@@ -180,6 +181,11 @@ class ApiClient {
     ApiResponse<{ token: string; expiresIn: string }>
   > {
     return this.request("/api/auth/refresh", { method: "POST" });
+  }
+
+  // Auth user profile by ID (protected)
+  async getAuthUser(userId: string): Promise<ApiResponse<{ user: User }>> {
+    return this.request(`/api/auth/user/${userId}`);
   }
 
   // Event endpoints

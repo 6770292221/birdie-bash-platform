@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
-import { Calendar, MapPin, Users, Clock, Plus, LogOut, Shield, Menu, CreditCard, History, Activity, TrendingUp, X } from 'lucide-react';
+import { Calendar, MapPin, Users, Clock, Plus, LogOut, Shield, Menu, CreditCard, History, Activity, TrendingUp, X, Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import AuthButtons from '@/components/AuthButtons';
 import { LanguageProvider, useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import { apiClient } from '@/utils/api';
 
@@ -14,6 +14,7 @@ const IndexContent = () => {
   const { t } = useLanguage();
   const { user, logout, isAdmin, loading } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   // All hooks must be called before any conditional returns
   const [selectedPaymentDetail, setSelectedPaymentDetail] = useState<any>(null);
@@ -55,16 +56,22 @@ const IndexContent = () => {
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4">
         {/* Header */}
         <div className="mb-6">
-          <div className="flex justify-between items-center mb-4">
-            <div className="flex items-center space-x-2"></div>
+          {/* Header grid to truly center the title */}
+          <div className="grid grid-cols-3 items-center mb-4">
+            <div className="justify-self-start" />
 
-            <div className="text-center flex-1 px-4">
+            <div className="justify-self-center text-center px-4">
               <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900">
                 {t('app.title')}
               </h1>
             </div>
 
-            <div className="flex items-center space-x-2">
+            <div className="justify-self-end flex items-center space-x-2">
+              {user && (
+                <Button variant="ghost" size="sm" className="p-2">
+                  <Bell className="h-4 w-4" />
+                </Button>
+              )}
               {user ? (
                 <Button onClick={logout} variant="outline" size="sm" className="p-2 sm:px-3">
                   <LogOut className="h-4 w-4" />
@@ -127,7 +134,7 @@ const IndexContent = () => {
         <Card className="mb-6 bg-white/70 backdrop-blur-sm">
           <CardContent className="p-6 text-center">
             <h2 className="text-2xl font-bold text-gray-900 mb-4">
-              ยินดีต้อนรับสู่ Badminton Event Manager
+              ยินดีต้อนรับสู่ Birdie Bash
             </h2>
             <p className="text-gray-600 mb-4">
               ระบบจัดการแบดมินตันที่ครบครัน สำหรับการจัดการอีเวนต์ การลงทะเบียน และการคำนวณค่าใช้จ่าย
@@ -142,101 +149,113 @@ const IndexContent = () => {
                 </Link>
                 <Link to="/register">
                   <Button variant="outline">
-                    สมัครสมาชิก
+                    ลงทะเบียน
                   </Button>
                 </Link>
               </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
-                <Card className="bg-blue-50 border-blue-200">
-                  <CardContent className="p-4 text-center">
-                    <Calendar className="h-8 w-8 text-blue-600 mx-auto mb-2" />
-                    <p className="font-semibold text-blue-800">ดูอีเวนต์</p>
-                    <p className="text-sm text-blue-600">ดูอีเวนต์ที่กำลังจะมา</p>
-                  </CardContent>
-                </Card>
-
-                <Card className="bg-green-50 border-green-200">
-                  <CardContent className="p-4 text-center">
-                    <Users className="h-8 w-8 text-green-600 mx-auto mb-2" />
-                    <p className="font-semibold text-green-800">ลงทะเบียน</p>
-                    <p className="text-sm text-green-600">ลงทะเบียนเข้าร่วมอีเวนต์</p>
-                  </CardContent>
-                </Card>
-
-                {isAdmin && (
-                  <Card className="bg-purple-50 border-purple-200">
-                    <CardContent className="p-4 text-center">
-                      <Shield className="h-8 w-8 text-purple-600 mx-auto mb-2" />
-                      <p className="font-semibold text-purple-800">จัดการ</p>
-                      <p className="text-sm text-purple-600 mb-3">จัดการอีเวนต์และผู้เล่น</p>
-                      <Link to="/events/new">
-                        <Button size="sm" className="bg-purple-600 hover:bg-purple-700">
-                          <Plus className="h-4 w-4 mr-1" /> สร้างอีเวนต์
-                        </Button>
-                      </Link>
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
-            )}
+            ) : null}
           </CardContent>
         </Card>
 
-        {/* Features Section */}
+        {/* Features Section (interactive) */}
+        {user && isAdmin ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="bg-white/70 backdrop-blur-sm border-blue-200">
+          {/* เพิ่มอีเวนต์ใหม่ (first) */}
+          <Card
+            className="bg-white/70 backdrop-blur-sm border-purple-200 cursor-pointer hover:shadow-md transition"
+            onClick={() => {
+              if (!isAdmin) { toast({ title: 'ต้องเป็นผู้ดูแลระบบ', description: 'เข้าถึงได้เฉพาะแอดมิน', variant: 'destructive' }); return; }
+              navigate('/events/new');
+            }}
+            role="button"
+          >
             <CardContent className="p-4 text-center">
-              <Calendar className="h-8 w-8 text-blue-600 mx-auto mb-2" />
-              <p className="font-semibold text-gray-900">การจัดการอีเวนต์</p>
-              <p className="text-sm text-gray-600">สร้างและจัดการอีเวนต์แบดมินตัน</p>
+              <Plus className="h-8 w-8 text-purple-600 mx-auto mb-2" />
+              <p className="font-semibold text-gray-900">เพิ่มอีเวนต์ใหม่</p>
+              <p className="text-sm text-gray-600">สร้างอีเวนต์ใหม่</p>
             </CardContent>
           </Card>
 
-          <Card className="bg-white/70 backdrop-blur-sm border-green-200">
+          
+          <Card
+            className="bg-white/70 backdrop-blur-sm border-indigo-200 cursor-pointer hover:shadow-md transition"
+            onClick={() => navigate('/matching')}
+            role="button"
+          >
             <CardContent className="p-4 text-center">
-              <Users className="h-8 w-8 text-green-600 mx-auto mb-2" />
-              <p className="font-semibold text-gray-900">ระบบลงทะเบียน</p>
-              <p className="text-sm text-gray-600">ลงทะเบียนผู้เล่นและจัดการรายชื่อ</p>
+              <TrendingUp className="h-8 w-8 text-indigo-600 mx-auto mb-2" />
+              <p className="font-semibold text-gray-900">จับคู่ผู้เล่น</p>
+              <p className="text-sm text-gray-600">เลือกอีเวนต์จับคู่ผู้เล่น</p>
             </CardContent>
           </Card>
 
-          <Card className="bg-white/70 backdrop-blur-sm border-purple-200">
+          <Card
+            className="bg-white/70 backdrop-blur-sm border-purple-200 cursor-pointer hover:shadow-md transition"
+            onClick={() => navigate('/calculate')}
+            role="button"
+          >
             <CardContent className="p-4 text-center">
               <CreditCard className="h-8 w-8 text-purple-600 mx-auto mb-2" />
               <p className="font-semibold text-gray-900">คำนวณค่าใช้จ่าย</p>
-              <p className="text-sm text-gray-600">แบ่งค่าสนามและค่าลูกขนไก่อัตโนมัติ</p>
+              <p className="text-sm text-gray-600">เลือกอีเวนต์และคำนวณแบบ Mock</p>
             </CardContent>
           </Card>
 
-          <Card className="bg-white/70 backdrop-blur-sm border-orange-200">
+          {/* ประวัติ (last) */}
+          <Card
+            className="bg-white/70 backdrop-blur-sm border-gray-200 cursor-pointer hover:shadow-md transition"
+            onClick={() => toast({ title: 'เร็วๆ นี้', description: 'หน้าประวัติอีเวนต์กำลังพัฒนา' })}
+            role="button"
+          >
             <CardContent className="p-4 text-center">
-              <Activity className="h-8 w-8 text-orange-600 mx-auto mb-2" />
-              <p className="font-semibold text-gray-900">ติดตามสถิติ</p>
-              <p className="text-sm text-gray-600">ดูประวัติการเล่นและสถิติ</p>
+              <History className="h-8 w-8 text-gray-700 mx-auto mb-2" />
+              <p className="font-semibold text-gray-900">ประวัติ</p>
+              <p className="text-sm text-gray-600">ดูประวัติและอีเวนต์ที่ผ่านมา</p>
             </CardContent>
           </Card>
         </div>
+        ) : user ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Card className="bg-white/70 backdrop-blur-sm border-green-200 cursor-pointer hover:shadow-md transition" onClick={() => navigate('/payments')} role="button">
+              <CardContent className="p-4 text-center">
+                <CreditCard className="h-8 w-8 text-green-600 mx-auto mb-2" />
+                <p className="font-semibold text-gray-900">จ่ายเงิน</p>
+                <p className="text-sm text-gray-600">เลือกอีเวนต์เพื่อชำระเงิน</p>
+              </CardContent>
+            </Card>
+          </div>
+        ) : null}
 
         {/* Events List (requires login) */}
         {user && (
-          <div className="mt-6">
-            <h3 className="text-xl font-semibold text-gray-900 mb-3">อีเวนต์ล่าสุด</h3>
+          <div id="events-list" className="mt-8">
+            <h3 className="text-2xl font-bold text-gray-900 mb-4">อีเวนต์ล่าสุด</h3>
             {events.length === 0 ? (
               <p className="text-gray-600">ยังไม่มีอีเวนต์</p>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                 {events.map((ev: any) => (
-                  <Card key={ev.id} className="bg-white/80">
-                    <CardContent className="p-4">
-                      <p className="font-semibold text-gray-900">{ev.eventName}</p>
-                      <p className="text-sm text-gray-600">วันที่: {ev.eventDate}</p>
-                      <p className="text-sm text-gray-600">สถานที่: {ev.location}</p>
-                      <p className="text-sm text-gray-600">ที่นั่งว่าง: {ev?.capacity?.availableSlots ?? '-'}</p>
-                      <div className="mt-3">
+                  <Card
+                    key={ev.id}
+                    className="relative overflow-hidden border-0 shadow-lg bg-white/90 backdrop-blur-sm"
+                  >
+                    <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-blue-500 via-purple-500 to-teal-500" />
+                    <CardContent className="p-5">
+                      <div className="mb-2 flex items-center justify-between">
+                        <p className="font-semibold text-gray-900 text-lg truncate pr-2">{ev.eventName}</p>
+                      </div>
+                      <div className="space-y-1 text-sm text-gray-700">
+                        <p>วันที่: {ev.eventDate}</p>
+                        <p>สถานที่: {ev.location}</p>
+                        <p>
+                          ผู้เข้าร่วม: {ev?.capacity?.currentParticipants ?? '-'} / {ev?.capacity?.maxParticipants ?? '-'}
+                        </p>
+                      </div>
+                      <div className="mt-4 flex items-center gap-2">
                         <Link to={`/events/${ev.id}`}>
                           <Button size="sm" variant="outline">รายละเอียด</Button>
                         </Link>
+                        
                       </div>
                     </CardContent>
                   </Card>

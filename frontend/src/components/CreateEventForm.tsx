@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import TimePicker from '@/components/TimePicker';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Plus, Minus, MapPin } from 'lucide-react';
@@ -292,21 +293,17 @@ const CreateEventForm = ({ onSubmit, onCancel, editEvent, onUpdateEvent }: Creat
 
                   <div className="space-y-2">
                     <Label className="text-gray-600">{t('form.start_time')}</Label>
-                    <Input
-                      type="time"
+                    <TimePicker
                       value={court.startTime}
-                      onChange={(e) => updateCourt(index, 'startTime', e.target.value)}
-                      className="border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200"
+                      onChange={(v) => updateCourt(index, 'startTime', v)}
                     />
                   </div>
 
                   <div className="space-y-2">
                     <Label className="text-gray-600">{t('form.end_time')}</Label>
-                    <Input
-                      type="time"
+                    <TimePicker
                       value={court.endTime}
-                      onChange={(e) => updateCourt(index, 'endTime', e.target.value)}
-                      className="border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200"
+                      onChange={(v) => updateCourt(index, 'endTime', v)}
                     />
                   </div>
 

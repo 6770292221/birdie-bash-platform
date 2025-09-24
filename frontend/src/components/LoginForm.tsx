@@ -140,7 +140,7 @@ const LoginForm = () => {
             <p className="text-sm text-gray-600">
               ยังไม่มีบัญชี?{' '}
               <Link to="/register" className="text-blue-600 hover:text-blue-500 font-medium">
-                สมัครสมาชิก
+                ลงทะเบียน
               </Link>
             </p>
             <Link 

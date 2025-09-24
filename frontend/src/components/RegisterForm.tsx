@@ -52,13 +52,13 @@ const RegisterForm = () => {
     
     if (error) {
       toast({
-        title: "สมัครสมาชิกไม่สำเร็จ",
+        title: "ลงทะเบียนไม่สำเร็จ",
         description: error,
         variant: "destructive",
       });
     } else {
       toast({
-        title: "สมัครสมาชิกสำเร็จ",
+        title: "ลงทะเบียนสำเร็จ",
         description: "สามารถเข้าสู่ระบบได้ทันที",
       });
       navigate('/login');
@@ -72,7 +72,7 @@ const RegisterForm = () => {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-bold text-gray-900">
-            สมัครสมาชิก
+            ลงทะเบียน
           </CardTitle>
           <p className="text-gray-600">สร้างบัญชีใหม่เพื่อจองคอร์ทแบดมินตัน</p>
         </CardHeader>
@@ -274,7 +274,7 @@ const RegisterForm = () => {
                 className="w-full"
                 disabled={isLoading}
               >
-                {isLoading ? 'กำลังสมัครสมาชิก...' : 'สมัครสมาชิก'}
+                {isLoading ? 'กำลังลงทะเบียน...' : 'ลงทะเบียน'}
               </Button>
 
               <div className="text-center space-y-2">

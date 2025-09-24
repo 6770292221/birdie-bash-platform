@@ -16,7 +16,7 @@ const AuthButtons = () => {
       <Link to="/register">
         <Button size="sm">
           <UserPlus className="h-4 w-4 mr-2" />
-          สมัครสมาชิก
+          ลงทะเบียน
         </Button>
       </Link>
     </div>

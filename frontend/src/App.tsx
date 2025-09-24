@@ -11,6 +11,9 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import CreateEvent from "./pages/CreateEvent";
 import EventDetail from "./pages/EventDetail";
+import Matching from "./pages/Matching";
+import Payments from "./pages/Payments";
+import Calculate from "./pages/Calculate";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -29,6 +32,9 @@ const App = () => (
               <Route path="/register" element={<Register />} />
               <Route path="/events/new" element={<CreateEvent />} />
               <Route path="/events/:id" element={<EventDetail />} />
+              <Route path="/matching" element={<Matching />} />
+              <Route path="/payments" element={<Payments />} />
+              <Route path="/calculate" element={<Calculate />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>

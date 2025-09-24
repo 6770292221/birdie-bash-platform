@@ -3,9 +3,11 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { apiClient } from '@/utils/api';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { } from 'react-router-dom';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import TimePicker from '@/components/TimePicker';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -40,6 +42,8 @@ const EventDetail = () => {
   const [event, setEvent] = useState<EventApi | null>(null);
   const [editing, setEditing] = useState(false);
   const [players, setPlayers] = useState<any[]>([]);
+  const [memberNames, setMemberNames] = useState<Record<string, string>>({});
+  const [memberPhones, setMemberPhones] = useState<Record<string, string>>({});
   const [guestForm, setGuestForm] = useState({ name: '', phoneNumber: '', startTime: '20:00', endTime: '22:00' });
   const [memberTime, setMemberTime] = useState({ startTime: '19:00', endTime: '21:00' });
 
@@ -76,8 +80,28 @@ const EventDetail = () => {
       const key = p.playerId || p.id || p._id;
       if (key && !map.has(key)) map.set(key, p);
     });
-    setPlayers(Array.from(map.values()));
+    const list = Array.from(map.values());
+    setPlayers(list);
+    // Fetch missing member names
+    const missingIds = Array.from(
+      new Set(
+        list
+          .filter((p: any) => p.userType === 'member' && p.userId && !p.name && !memberNames[p.userId])
+          .map((p: any) => p.userId as string)
+      )
+    );
+    if (missingIds.length > 0) {
+      missingIds.forEach(async (uid) => {
+        const resp = await apiClient.getAuthUser(uid);
+        if (resp.success && (resp.data as any)?.user) {
+          const u = (resp.data as any).user;
+          if (u.name) setMemberNames((prev) => ({ ...prev, [uid]: u.name }));
+          if (u.phoneNumber) setMemberPhones((prev) => ({ ...prev, [uid]: u.phoneNumber }));
+        }
+      });
+    }
   };
+
 
   const handleUpdate = async (_eventId: string, updates: any) => {
     if (!id) return;
@@ -226,32 +250,28 @@ const EventDetail = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-green-50 py-6 px-4">
       <div className="max-w-3xl mx-auto space-y-4">
-        <Card className="bg-white/80">
-          <CardHeader>
-            <CardTitle className="text-xl">รายละเอียดอีเวนต์</CardTitle>
+        <Card className="bg-white/90 overflow-hidden border-0 shadow-lg">
+          <div className="h-1 bg-gradient-to-r from-blue-600 via-purple-600 to-teal-600" />
+          <CardHeader className="pb-2">
+            <CardTitle className="text-2xl font-bold text-gray-900">{event.eventName}</CardTitle>
+            <CardDescription>
+              <span className="text-gray-700">{event.location}</span>
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-2">
-              <div><b>ชื่อ:</b> {event.eventName}</div>
-              <div><b>วันที่:</b> {event.eventDate}</div>
-              <div><b>สถานที่:</b> {event.location}</div>
-              <div><b>จำนวนสูงสุด:</b> {event.capacity?.maxParticipants}</div>
-              <div><b>ที่ว่าง:</b> {event.capacity?.availableSlots ?? '-'}</div>
-              <div><b>ลูก:</b> {event.shuttlecockPrice}</div>
-              <div><b>ค่าสนาม/ชม.:</b> {event.courtHourlyRate}</div>
-              <div className="flex items-center gap-2 pt-1">
-                <span className="font-medium">Waitlist:</span>
-                {event.capacity?.waitlistEnabled ? (
-                  <Badge variant="default" className="bg-amber-100 text-amber-800 border border-amber-300">เปิด</Badge>
-                ) : (
-                  <Badge variant="outline" className="text-gray-700">ปิด</Badge>
-                )}
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-2 pt-2 text-sm text-gray-700">
-                <div><b>ชั่วโมงสนามรวม:</b> {totalCourtHours.toFixed(1)} ชม.</div>
-                <div><b>ประมาณค่าเช่าสนาม:</b> ฿{estimatedCourtCost.toFixed(0)}</div>
-                <div><b>ประมาณต่อคน:</b> {perPlayer !== undefined ? `฿${perPlayer}` : '-'}</div>
-              </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
+              <div className="bg-gray-50 rounded-md p-3 border border-gray-200"><b>วันที่</b><div>{event.eventDate}</div></div>
+              <div className="bg-gray-50 rounded-md p-3 border border-gray-200"><b>ผู้เข้าร่วม</b><div>{event.capacity?.currentParticipants ?? '-'} / {event.capacity?.maxParticipants ?? '-'}</div></div>
+              <div className="bg-gray-50 rounded-md p-3 border border-gray-200"><b>ค่าสนาม/ชม.</b><div>฿{event.courtHourlyRate}</div></div>
+              <div className="bg-gray-50 rounded-md p-3 border border-gray-200"><b>ค่าลูกขนไก่</b><div>฿{event.shuttlecockPrice}</div></div>
+            </div>
+            <div className="flex items-center gap-2 mt-3">
+              <Badge variant="outline" className="text-xs">ชั่วโมงสนามรวม {totalCourtHours.toFixed(1)} ชม.</Badge>
+              <Badge variant="outline" className="text-xs">ประมาณค่าเช่าสนาม ฿{estimatedCourtCost.toFixed(0)}</Badge>
+              <Badge variant="outline" className="text-xs">ประมาณต่อคน {perPlayer !== undefined ? `฿${perPlayer}` : '-'}</Badge>
+              <Badge className={event.capacity?.waitlistEnabled ? 'bg-amber-100 text-amber-800 border border-amber-300 text-xs' : 'text-xs'}>
+                {event.capacity?.waitlistEnabled ? 'เปิดสำรอง' : 'ปิดสำรอง'}
+              </Badge>
             </div>
             {isAdmin && (
               <div className="mt-4 flex gap-2">
@@ -347,10 +367,14 @@ const EventDetail = () => {
                       <div key={p.playerId || p.id || p._id} className="flex items-center justify-between border rounded px-3 py-2 mb-2">
                         <div>
                           <div className="font-medium flex items-center gap-2">
-                            {p.name}
-                            <Badge className="bg-green-100 text-green-800 border border-green-300">Registered</Badge>
+                            {p.name || (p.userId ? memberNames[p.userId] : '') || 'ไม่ระบุชื่อ'}
+                            {p.userType && (
+                              <Badge className={p.userType === 'member' ? 'bg-blue-100 text-blue-800 border border-blue-300' : 'bg-gray-100 text-gray-800 border border-gray-300'}>
+                                {p.userType === 'member' ? 'สมาชิก' : 'แขก'}
+                              </Badge>
+                            )}
                           </div>
-                          <div className="text-sm text-gray-600">{p.phoneNumber || p.email || ''}</div>
+                          <div className="text-sm text-gray-600">{p.phoneNumber || (p.userId ? memberPhones[p.userId] : '') || '-'}</div>
                           <div className="text-xs text-gray-500">{p.startTime || '-'} - {p.endTime || '-'}</div>
                         </div>
                         <div className="flex gap-2">
@@ -374,10 +398,14 @@ const EventDetail = () => {
                       <div key={p.playerId || p.id || p._id} className="flex items-center justify-between border rounded px-3 py-2 mb-2">
                         <div>
                           <div className="font-medium flex items-center gap-2">
-                            {p.name}
-                            <Badge className="bg-amber-100 text-amber-800 border border-amber-300">Waitlist</Badge>
+                            {p.name || (p.userId ? memberNames[p.userId] : '') || 'ไม่ระบุชื่อ'}
+                            {p.userType && (
+                              <Badge className={p.userType === 'member' ? 'bg-blue-100 text-blue-800 border border-blue-300' : 'bg-gray-100 text-gray-800 border border-gray-300'}>
+                                {p.userType === 'member' ? 'สมาชิก' : 'แขก'}
+                              </Badge>
+                            )}
                           </div>
-                          <div className="text-sm text-gray-600">{p.phoneNumber || p.email || ''}</div>
+                          <div className="text-sm text-gray-600">{p.phoneNumber || (p.userId ? memberPhones[p.userId] : '') || '-'}</div>
                           <div className="text-xs text-gray-500">{p.startTime || '-'} - {p.endTime || '-'}</div>
                         </div>
                         <div className="flex gap-2">
@@ -391,6 +419,8 @@ const EventDetail = () => {
             </CardContent>
           </Card>
         )}
+
+        
 
         {/* User self registration/cancel */}
         {user && !isAdmin && (
@@ -418,11 +448,11 @@ const EventDetail = () => {
                   <form onSubmit={registerAsMember} className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div>
                       <Label htmlFor="mstart">เวลาเริ่ม</Label>
-                      <Input id="mstart" type="time" value={memberTime.startTime} onChange={(e)=>setMemberTime({...memberTime,startTime:e.target.value})} />
+                      <TimePicker value={memberTime.startTime} onChange={(v)=>setMemberTime({...memberTime,startTime:v})} />
                     </div>
                     <div>
                       <Label htmlFor="mend">เวลาสิ้นสุด</Label>
-                      <Input id="mend" type="time" value={memberTime.endTime} onChange={(e)=>setMemberTime({...memberTime,endTime:e.target.value})} />
+                      <TimePicker value={memberTime.endTime} onChange={(v)=>setMemberTime({...memberTime,endTime:v})} />
                     </div>
                     <div className="flex items-end">
                       <Button type="submit" className="w-full">ลงทะเบียน</Button>
@@ -454,11 +484,15 @@ const EventDetail = () => {
                     players.filter((p:any)=>p.status==='registered').map((p:any)=>(
                       <div key={p.playerId || p.id || p._id} className="flex items-center justify-between border rounded px-3 py-2 mb-2">
                         <div>
-                          <div className="font-medium flex items-center gap-2">
-                            {p.name}
-                            <Badge className="bg-green-100 text-green-800 border border-green-300">Registered</Badge>
+                      <div className="font-medium flex items-center gap-2">
+                            {p.name || (p.userId ? memberNames[p.userId] : '') || 'ไม่ระบุชื่อ'}
+                            {p.userType && (
+                              <Badge className={p.userType === 'member' ? 'bg-blue-100 text-blue-800 border border-blue-300' : 'bg-gray-100 text-gray-800 border border-gray-300'}>
+                                {p.userType === 'member' ? 'สมาชิก' : 'แขก'}
+                              </Badge>
+                            )}
                           </div>
-                          <div className="text-sm text-gray-600">{p.phoneNumber || p.email || ''}</div>
+                          <div className="text-sm text-gray-600">{p.phoneNumber || (p.userId ? memberPhones[p.userId] : '') || '-'}</div>
                           <div className="text-xs text-gray-500">{p.startTime || '-'} - {p.endTime || '-'}</div>
                         </div>
                         {/* ซ่อนปุ่มยกเลิกในรายการของ user เพื่อให้เหลือปุ่มเดียวด้านบน */}
@@ -479,11 +513,15 @@ const EventDetail = () => {
                     players.filter((p:any)=>p.status==='waitlist').map((p:any)=>(
                       <div key={p.playerId || p.id || p._id} className="flex items-center justify-between border rounded px-3 py-2 mb-2">
                         <div>
-                          <div className="font-medium flex items-center gap-2">
-                            {p.name}
-                            <Badge className="bg-amber-100 text-amber-800 border border-amber-300">Waitlist</Badge>
+                      <div className="font-medium flex items-center gap-2">
+                            {p.name || (p.userId ? memberNames[p.userId] : '') || 'ไม่ระบุชื่อ'}
+                            {p.userType && (
+                              <Badge className={p.userType === 'member' ? 'bg-blue-100 text-blue-800 border border-blue-300' : 'bg-gray-100 text-gray-800 border border-gray-300'}>
+                                {p.userType === 'member' ? 'สมาชิก' : 'แขก'}
+                              </Badge>
+                            )}
                           </div>
-                          <div className="text-sm text-gray-600">{p.phoneNumber || p.email || ''}</div>
+                          <div className="text-sm text-gray-600">{p.phoneNumber || (p.userId ? memberPhones[p.userId] : '') || '-'}</div>
                           <div className="text-xs text-gray-500">{p.startTime || '-'} - {p.endTime || '-'}</div>
                         </div>
                         {/* ซ่อนปุ่มยกเลิกในรายการของ user เพื่อให้เหลือปุ่มเดียวด้านบน */}

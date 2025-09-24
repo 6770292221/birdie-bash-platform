@@ -41,7 +41,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const response = await apiClient.getCurrentUser();
 
         if (response.success && response.data) {
-          const userData = response.data as UserProfile;
+          const raw = response.data as any;
+          const userData: UserProfile = {
+            ...(raw as any),
+            skillLevel: (raw as any)?.skill as SkillLevel,
+          };
           setUser(userData);
           setSession({ user: userData });
         } else {
@@ -69,7 +73,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // Set token in API client
         apiClient.setToken(response.data.token);
 
-        const userData = response.data.user as UserProfile;
+        const raw = response.data.user as any;
+        const userData: UserProfile = {
+          ...(raw as any),
+          skillLevel: (raw as any)?.skill as SkillLevel,
+        };
         setUser(userData);
         setSession({ user: userData });
 
@@ -108,7 +116,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // Auto login after successful registration
         apiClient.setToken(response.data.token);
 
-        const userData = response.data.user as UserProfile;
+        const raw = response.data.user as any;
+        const userData: UserProfile = {
+          ...(raw as any),
+          skillLevel: (raw as any)?.skill as SkillLevel,
+        };
         setUser(userData);
         setSession({ user: userData });
 
@@ -118,7 +130,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
     } catch (error) {
       console.error('Registration error:', error);
-      return { error: 'เกิดข้อผิดพลาดในการสมัครสมาชิก' };
+      return { error: 'เกิดข้อผิดพลาดในการลงทะเบียน' };
     } finally {
       setLoading(false);
     }
