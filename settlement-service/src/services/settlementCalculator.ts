@@ -2,7 +2,7 @@ export interface PlayerSession {
   playerId: string;
   startTime: string; // "HH:mm"
   endTime: string;   // "HH:mm"
-  status: 'played' | 'canceled' | 'waitlist';
+  status: 'played' | 'canceled' | 'waitlist' | 'absent';
   role: 'member' | 'admin' | 'guest';
   name?: string;     // For guest players
   phoneNumber?: string; // For guest players
@@ -51,7 +51,7 @@ export class SettlementCalculator {
     // Filter out waitlist players - they don't need to be processed
     const processablePlayers = players.filter(p => p.status !== 'waitlist');
     const playedPlayers = processablePlayers.filter(p => p.status === 'played');
-    const canceledPlayers = processablePlayers.filter(p => p.status === 'canceled');
+    const absentPlayers = processablePlayers.filter(p => p.status === 'absent');
 
     // สร้าง time slots สำหรับคำนวณ (แบ่งเป็นชั่วโมง)
     const timeSlots = this.generateTimeSlots(courts);
@@ -69,10 +69,10 @@ export class SettlementCalculator {
         }
       };
 
-      if (player.status === 'canceled') {
-        // คนที่ยกเลิก - เก็บค่าปรับ
+      if (player.status === 'absent') {
+        // คนที่ไม่มา - เก็บค่าปรับ
         settlement.penaltyFee = costs.penaltyFee;
-      } else {
+      } else if (player.status === 'played') {
         // คนที่มาเล่น
         const playerHours = this.getPlayerHours(player.startTime, player.endTime);
         settlement.breakdown.hoursPlayed = playerHours.length;
@@ -94,6 +94,9 @@ export class SettlementCalculator {
         // คำนวณค่าลูกขนไก่ (แบ่งเฉพาะคนที่เล่น)
         const totalShuttlecockCost = costs.shuttlecockPrice * costs.shuttlecockCount;
         settlement.shuttlecockFee = totalShuttlecockCost / playedPlayers.length;
+      } else if (player.status === 'canceled') {
+        // คนที่ยกเลิก - ไม่เสียค่าใช้จ่ายใด ๆ (ไม่มี penalty fee)
+        // settlement fees remain 0
       }
 
       settlement.totalAmount = settlement.courtFee + settlement.shuttlecockFee + settlement.penaltyFee;
@@ -168,7 +171,7 @@ const players: PlayerSession[] = [
   { playerId: 'A', startTime: '20:00', endTime: '22:00', status: 'played' },
   { playerId: 'B', startTime: '20:00', endTime: '21:00', status: 'played' },
   { playerId: 'C', startTime: '21:00', endTime: '22:00', status: 'played' },
-  { playerId: 'D', startTime: '20:00', endTime: '22:00', status: 'canceled' }
+  { playerId: 'D', startTime: '20:00', endTime: '22:00', status: 'absent' }
 ];
 
 const courts: CourtSession[] = [

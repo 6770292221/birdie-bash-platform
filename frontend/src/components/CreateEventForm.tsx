@@ -28,6 +28,7 @@ const CreateEventForm = ({ onSubmit, onCancel, editEvent, onUpdateEvent }: Creat
   const [waitlistEnabled, setWaitlistEnabled] = useState((editEvent as any)?.waitlistEnabled || false);
   const [shuttlecockPrice, setShuttlecockPrice] = useState(editEvent?.shuttlecockPrice || 20);
   const [courtHourlyRate, setCourtHourlyRate] = useState(editEvent?.courtHourlyRate || 150);
+  const [absentPenaltyFee, setAbsentPenaltyFee] = useState((editEvent as any)?.absentPenaltyFee || 0);
   const [courts, setCourts] = useState<Court[]>(
     editEvent?.courts && editEvent.courts.length > 0 
       ? editEvent.courts 
@@ -81,6 +82,7 @@ const CreateEventForm = ({ onSubmit, onCancel, editEvent, onUpdateEvent }: Creat
         waitlistEnabled,
         shuttlecockPrice,
         courtHourlyRate,
+        absentPenaltyFee,
         courts,
       });
     } else {
@@ -93,6 +95,7 @@ const CreateEventForm = ({ onSubmit, onCancel, editEvent, onUpdateEvent }: Creat
         waitlistEnabled,
         shuttlecockPrice,
         courtHourlyRate,
+        absentPenaltyFee,
         courts,
       } as any);
     }
@@ -210,7 +213,7 @@ const CreateEventForm = ({ onSubmit, onCancel, editEvent, onUpdateEvent }: Creat
           </div>
 
           {/* Pricing and Capacity */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="space-y-2">
               <Label htmlFor="maxPlayers" className="text-gray-700 font-medium">{t('form.max_players')}</Label>
               <Input
@@ -248,6 +251,19 @@ const CreateEventForm = ({ onSubmit, onCancel, editEvent, onUpdateEvent }: Creat
                 min="0"
                 step="0.01"
                 required
+                className="border-blue-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="absentPenaltyFee" className="text-gray-700 font-medium">ค่าปรับไม่มา</Label>
+              <Input
+                id="absentPenaltyFee"
+                type="number"
+                value={absentPenaltyFee}
+                onChange={(e) => setAbsentPenaltyFee(Number(e.target.value))}
+                min="0"
+                step="0.01"
                 className="border-blue-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200"
               />
             </div>

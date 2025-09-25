@@ -40,7 +40,7 @@ export interface ISettlement extends Document {
     userId?: string;
     startTime: string;
     endTime: string;
-    status: 'played' | 'canceled' | 'waitlist';
+    status: 'played' | 'canceled' | 'waitlist' | 'absent';
     role: 'member' | 'admin' | 'guest';
     name?: string;
     phoneNumber?: string;
@@ -118,7 +118,7 @@ const SettlementSchema: Schema = new Schema({
     userId: { type: String },
     startTime: { type: String, required: true },
     endTime: { type: String, required: true },
-    status: { type: String, required: true, enum: ['played', 'canceled', 'waitlist'] },
+    status: { type: String, required: true, enum: ['played', 'canceled', 'waitlist', 'absent'] },
     role: { type: String, required: true, enum: ['member', 'admin', 'guest'] },
     name: { type: String },
     phoneNumber: { type: String },
