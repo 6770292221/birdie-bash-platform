@@ -62,26 +62,6 @@ const IndexContent = () => {
   };
 
   useEffect(() => {
-<<<<<<< HEAD
-    const fetchEvents = async () => {
-      if (!user) return; // require auth
-      setEventsLoading(true);
-      const res = await apiClient.getEvents({ limit: 10, offset: 0 });
-      if (res.success) {
-        const data = (res.data as any);
-        const allEvents = data.events || data;
-        // Split events into active and completed/canceled
-        const activeEvents = allEvents.filter((ev: any) => ev.status !== 'completed' && ev.status !== 'canceled');
-        const finishedEvents = allEvents.filter((ev: any) => ev.status === 'completed' || ev.status === 'canceled');
-        setEvents(activeEvents);
-        setCompletedEvents(finishedEvents);
-      } else {
-        toast({ title: 'ดึงรายการอีเวนต์ไม่สำเร็จ', description: res.error, variant: 'destructive' });
-      }
-      setEventsLoading(false);
-    };
-=======
->>>>>>> origin/frontend
     fetchEvents();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, searchFilters]);
@@ -284,8 +264,6 @@ const IndexContent = () => {
             <h3 className="text-2xl font-bold text-gray-900 mb-4">
               Active Events
             </h3>
-<<<<<<< HEAD
-=======
 
             {/* Search Filters */}
             <Card className="mb-6">
@@ -350,7 +328,6 @@ const IndexContent = () => {
                 </div>
               </CardContent>
             </Card>
->>>>>>> origin/frontend
             {events.length === 0 ? (
               <p className="text-gray-600">No active events</p>
             ) : (
@@ -376,11 +353,6 @@ const IndexContent = () => {
                       <h3 className="font-bold text-xl text-gray-900 mb-2 pr-20">
                         {ev.eventName}
                       </h3>
-<<<<<<< HEAD
-                      <div className="flex items-center text-gray-600 text-sm">
-                        <Calendar className="w-4 h-4 mr-2 text-blue-500" />
-                        <span className="font-medium">{ev.eventDate}</span>
-=======
                       <div className="flex items-center justify-between">
                         <div className="flex items-center text-gray-600 text-sm">
                           <Calendar className="w-4 h-4 mr-2 text-blue-500" />
@@ -400,7 +372,6 @@ const IndexContent = () => {
                             </span>
                           </div>
                         )}
->>>>>>> origin/frontend
                       </div>
                     </div>
 

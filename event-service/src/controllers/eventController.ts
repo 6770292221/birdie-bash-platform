@@ -950,10 +950,7 @@ export const deleteEvent = async (
         eventName: event.eventName,
         eventDate: event.eventDate,
         location: event.location,
-<<<<<<< HEAD
-=======
         venue: event.location,
->>>>>>> origin/frontend
         status: EventStatus.CANCELED,
       });
     } catch (e) {

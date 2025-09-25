@@ -5,10 +5,7 @@ import swaggerUi from "swagger-ui-express";
 import swaggerSpecs from "./config/swagger";
 import { connectEventDB } from "./config/eventDatabase";
 import eventRoutes from "./routes/eventRoutes";
-<<<<<<< HEAD
-=======
 import venueRoutes from "./routes/venueRoutes";
->>>>>>> origin/frontend
 import { startEventScheduler, stopEventScheduler } from "./schedulers/eventScheduler";
 
 dotenv.config();

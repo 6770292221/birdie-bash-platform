@@ -120,12 +120,6 @@ const EventCard = ({ event, onSelectEvent, onCancelRegistration, onEditEvent, on
         <CardTitle className="text-lg sm:text-xl font-bold text-gray-900 break-words pr-20">
           {event.eventName}
         </CardTitle>
-<<<<<<< HEAD
-        <CardDescription className="flex items-center text-gray-600 mt-2 text-sm">
-          <Calendar className="w-4 h-4 mr-2 text-blue-500 flex-shrink-0" />
-          <span className="break-words font-medium">{event.eventDate}</span>
-        </CardDescription>
-=======
         <div className="space-y-1">
           <CardDescription className="flex items-center text-gray-600 text-sm">
             <Calendar className="w-4 h-4 mr-2 text-blue-500 flex-shrink-0" />
@@ -140,7 +134,6 @@ const EventCard = ({ event, onSelectEvent, onCancelRegistration, onEditEvent, on
             </CardDescription>
           )}
         </div>
->>>>>>> origin/frontend
       </CardHeader>
       
       <CardContent className="p-6">
@@ -152,11 +145,7 @@ const EventCard = ({ event, onSelectEvent, onCancelRegistration, onEditEvent, on
             </div>
             <div className="flex-1">
               <p className="text-sm text-gray-500 mb-1">สถานที่</p>
-<<<<<<< HEAD
-              <p className="text-gray-900 font-medium break-words">{event.venue}</p>
-=======
               <p className="text-gray-900 font-medium break-words">{event.location}</p>
->>>>>>> origin/frontend
             </div>
           </div>
 
@@ -168,15 +157,11 @@ const EventCard = ({ event, onSelectEvent, onCancelRegistration, onEditEvent, on
             <div className="flex-1">
               <p className="text-sm text-gray-500 mb-1">เวลาแข่ง</p>
               <p className="text-gray-900 font-medium text-sm break-words">
-<<<<<<< HEAD
-                {event.courts.map(court => `Court ${court.courtNumber}: ${court.startTime}-${court.endTime}`).join(', ')}
-=======
                 {courts.map(court => {
                   const startLabel = formatTimeLabel(court.actualStartTime ?? court.startTime);
                   const endLabel = formatTimeLabel(court.actualEndTime ?? court.endTime);
                   return `Court ${court.courtNumber}: ${startLabel} - ${endLabel}`;
                 }).join(', ')}
->>>>>>> origin/frontend
               </p>
             </div>
           </div>
