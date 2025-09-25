@@ -8,6 +8,7 @@ import {
   EventStatusType,
 } from "../types/event";
 import messageQueueService from "../queue/publisher";
+import { getLatestCourtEndTimestamp } from "../utils/eventTime";
 
 interface ExtendedRequest extends Request {
   headers: Request["headers"] & {
@@ -284,7 +285,7 @@ export const createEvent = async (
    *           application/json:
    *             schema:
    *               $ref: '#/components/schemas/Error'
-   *       400:
+   *       409:
    *         description: Duplicate event (same name, date, location)
    *         content:
    *           application/json:
@@ -406,7 +407,7 @@ export const createEvent = async (
       return;
     }
     if (error?.code === 11000) {
-      res.status(400).json({
+      res.status(409).json({
         code: "EVENT_EXISTS",
         message: "An event with the same name and date already exists",
         details: error.keyValue,
@@ -691,7 +692,7 @@ export const getEvent = async (req: Request, res: Response): Promise<void> => {
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/Error'
- *       400:
+ *       409:
  *         description: Duplicate event (same name, date, location)
  *         content:
  *           application/json:
@@ -794,7 +795,7 @@ export const updateEvent = async (
       await updatedEvent.save();
     } catch (error: any) {
       if (error?.code === 11000) {
-        res.status(400).json({
+        res.status(409).json({
           code: "EVENT_EXISTS",
           message: "An event with the same name and date already exists",
           details: error.keyValue,
