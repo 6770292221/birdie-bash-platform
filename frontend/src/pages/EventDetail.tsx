@@ -158,6 +158,14 @@ const EventDetail = () => {
   const addGuest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!id || isAddingGuest) return;
+    if (!guestForm.startTime || !guestForm.endTime) {
+      toast({
+        title: '⏰ กรุณาเลือกเวลาเล่น',
+        description: 'จำเป็นต้องระบุเวลาเริ่มและเวลาสิ้นสุดก่อนเพิ่มผู้เล่นแขกเข้าระบบ',
+        variant: 'destructive',
+      });
+      return;
+    }
     try {
       setIsAddingGuest(true);
       setOverlayAction('guest');
@@ -215,8 +223,8 @@ const EventDetail = () => {
     if (!id) return;
     if (!memberTime.startTime || !memberTime.endTime) {
       toast({
-        title: 'กรุณาเลือกเวลา',
-        description: 'โปรดเลือกเวลาเริ่มและเวลาสิ้นสุดก่อนลงทะเบียน',
+        title: '⏰ กรุณาเลือกเวลาเล่น',
+        description: 'จำเป็นต้องระบุเวลาเริ่มและเวลาสิ้นสุดก่อนลงทะเบียนเข้าร่วมกิจกรรม',
         variant: 'destructive',
       });
       return;
