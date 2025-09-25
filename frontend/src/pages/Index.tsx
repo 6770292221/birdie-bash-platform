@@ -6,7 +6,6 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import AuthButtons from '@/components/AuthButtons';
 import NotificationDropdown from '@/components/NotificationDropdown';
 import { LanguageProvider, useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -134,40 +133,49 @@ const IndexContent = () => {
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4">
         {/* Header */}
         <div className="mb-6">
-          {/* Header grid to truly center the title */}
-          <div className="grid grid-cols-3 items-center mb-4">
-            <div className="justify-self-start">
-              <div className="flex items-center gap-2">
-                <Button
-                  onClick={() => setLanguage(language === 'th' ? 'en' : 'th')}
-                  variant="outline"
-                  size="sm"
-                  className="bg-white/80 backdrop-blur-sm border-gray-200 hover:bg-white shadow-md hover:shadow-lg transition-all duration-200 flex items-center gap-2"
-                >
-                  <span className="text-lg">{language === 'th' ? '🇹🇭' : '🇺🇸'}</span>
-                  <span className="font-medium text-sm">{language === 'th' ? 'ไทย' : 'EN'}</span>
-                </Button>
+          {user ? (
+            <div className="grid grid-cols-3 items-center mb-4">
+              <div className="justify-self-start">
+                <div className="flex items-center gap-2">
+                  <Button
+                    onClick={() => setLanguage(language === 'th' ? 'en' : 'th')}
+                    variant="outline"
+                    size="sm"
+                    className="bg-white/80 backdrop-blur-sm border-gray-200 hover:bg-white shadow-md hover:shadow-lg transition-all duration-200 flex items-center gap-2"
+                  >
+                    <span className="text-lg">{language === 'th' ? '🇹🇭' : '🇺🇸'}</span>
+                    <span className="font-medium text-sm">{language === 'th' ? 'ไทย' : 'EN'}</span>
+                  </Button>
+                </div>
               </div>
-            </div>
 
-            <div className="justify-self-center text-center px-4">
-              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900">
-                {t('app.title')}
-              </h1>
-            </div>
+              <div className="justify-self-center text-center px-4">
+                <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900">
+                  {t('app.title')}
+                </h1>
+              </div>
 
-            <div className="justify-self-end flex items-center space-x-2">
-              {user && <NotificationDropdown />}
-              {user ? (
+              <div className="justify-self-end flex items-center space-x-2">
+                <NotificationDropdown />
                 <Button onClick={logout} variant="outline" size="sm" className="p-2 sm:px-3">
                   <LogOut className="h-4 w-4" />
                   <span className="hidden sm:inline ml-2">{t('nav.logout')}</span>
                 </Button>
-              ) : (
-                <AuthButtons />
-              )}
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="flex justify-end mb-4">
+              <Button
+                onClick={() => setLanguage(language === 'th' ? 'en' : 'th')}
+                variant="outline"
+                size="sm"
+                className="bg-white/80 backdrop-blur-sm border-gray-200 hover:bg-white shadow-md hover:shadow-lg transition-all duration-200 flex items-center gap-2"
+              >
+                <span className="text-lg">{language === 'th' ? '🇹🇭' : '🇺🇸'}</span>
+                <span className="font-medium text-sm">{language === 'th' ? 'ไทย' : 'EN'}</span>
+              </Button>
+            </div>
+          )}
 
           {/* User Info */}
           {user && (
