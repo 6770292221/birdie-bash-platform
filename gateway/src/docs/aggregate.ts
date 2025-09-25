@@ -142,18 +142,31 @@ function buildGatewaySpec() {
   };
 }
 
-export function registerDocs(app: Express, authServiceUrl: string, eventServiceUrl: string, registrationServiceUrl?: string, settlementServiceUrl?: string) {
+export function registerDocs(
+  app: Express,
+  authServiceUrl: string,
+  eventServiceUrl: string,
+  registrationServiceUrl?: string,
+  settlementServiceUrl?: string
+) {
   app.get("/api-docs.json", async (req: Request, res: Response) => {
     const proto = (req.headers["x-forwarded-proto"] as string) || (req.protocol || "http");
     const host = req.headers.host || `localhost`;
     const baseUrl = `${proto}://${host}`;
     try {
-      const upstreams = [
-        { name: 'auth', url: `${authServiceUrl}/api-docs.json` },
-        { name: 'event', url: `${eventServiceUrl}/api-docs.json` },
-        ...(registrationServiceUrl ? [{ name: 'registration', url: `${registrationServiceUrl}/api-docs.json` }] : []),
-        {name: 'settlement', url: `${settlementServiceUrl}/api-docs.json`},
-      ];
+      const upstreams: Array<{ name: string; url: string }> = [];
+
+      const appendUpstream = (name: string, baseUrl?: string) => {
+        if (!baseUrl) return;
+        const url = `${baseUrl.replace(/\/$/, "")}/api-docs.json`;
+        if (upstreams.some((entry) => entry.url === url)) return;
+        upstreams.push({ name, url });
+      };
+
+      appendUpstream('auth', authServiceUrl);
+      appendUpstream('event', eventServiceUrl);
+      appendUpstream('registration', registrationServiceUrl);
+      appendUpstream('settlement', settlementServiceUrl);
 
       const results = await Promise.allSettled(upstreams.map(u => fetchJson(u.url)));
 

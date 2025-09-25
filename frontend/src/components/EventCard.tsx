@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Calendar, MapPin, Users, Clock, Settings, UserX, Edit, Trash2, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,12 +18,91 @@ interface EventCardProps {
   showAdminFeatures?: boolean;
 }
 
+type EventCourt = {
+  courtNumber?: number;
+  startTime?: string | null;
+  endTime?: string | null;
+  actualStartTime?: string | null;
+  actualEndTime?: string | null;
+};
+
+type ParsedTime = { label: string; value: number };
+
+const isEventCourt = (value: unknown): value is EventCourt => {
+  return typeof value === 'object' && value !== null;
+};
+
+const parseTimeValue = (value?: string | null): ParsedTime | null => {
+  if (!value) return null;
+
+  const [hoursStr, minutesStr = '00'] = String(value).split(':');
+  const hours = Number(hoursStr);
+  const minutes = Number(minutesStr);
+
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) {
+    return null;
+  }
+
+  const label = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+  return { label, value: hours * 60 + minutes };
+};
+
+const formatTimeLabel = (value?: string | null) => {
+  const parsed = parseTimeValue(value);
+  if (parsed) return parsed.label;
+  return value ?? '--';
+};
+
 const EventCard = ({ event, onSelectEvent, onCancelRegistration, onEditEvent, onDeleteEvent, onAddPlayer, showAdminFeatures = false }: EventCardProps) => {
   const { t } = useLanguage();
+
+  // Debug log
+  console.log('EventCard - event:', event);
+  console.log('EventCard - event.courts:', event.courts);
 
   const registeredPlayers = event.players.filter(p => p.status === 'registered');
   const waitlistPlayers = event.players.filter(p => p.status === 'waitlist');
   const cancelledPlayers = event.players.filter(p => p.status === 'cancelled');
+
+  const courts = useMemo<EventCourt[]>(() => {
+    if (!Array.isArray(event.courts)) {
+      return [];
+    }
+
+    return event.courts.filter(isEventCourt);
+  }, [event.courts]);
+
+  const timeRangeLabel = useMemo(() => {
+    if (courts.length === 0) {
+      return null;
+    }
+
+    const startTimes = courts
+      .map(court => parseTimeValue(court.startTime ?? court.actualStartTime))
+      .filter((entry): entry is ParsedTime => entry !== null);
+
+    const endTimes = courts
+      .map(court => parseTimeValue(court.endTime ?? court.actualEndTime))
+      .filter((entry): entry is ParsedTime => entry !== null);
+
+    if (startTimes.length === 0 || endTimes.length === 0) {
+      return null;
+    }
+
+    const earliestStart = startTimes.reduce((earliest, current) =>
+      current.value < earliest.value ? current : earliest
+    );
+
+    const latestEnd = endTimes.reduce((latest, current) =>
+      current.value > latest.value ? current : latest
+    );
+
+    if (earliestStart.value === latestEnd.value) {
+      return earliestStart.label;
+    }
+
+    return `${earliestStart.label} - ${latestEnd.label}`;
+  }, [courts]);
 
   return (
     <Card className="group relative overflow-hidden border border-gray-200 shadow-sm hover:shadow-xl bg-white transition-all duration-300 hover:-translate-y-1 w-full">
@@ -32,7 +111,7 @@ const EventCard = ({ event, onSelectEvent, onCancelRegistration, onEditEvent, on
         <Badge
           className={`rounded-none rounded-bl-lg px-3 py-1 font-medium text-xs shadow-md ${getEventStatusColor(event.status as EventStatusType)}`}
         >
-          {getEventStatusLabel(event.status as EventStatusType)}
+          {getEventStatusLabel(event.status as EventStatusType, t)}
         </Badge>
       </div>
 
@@ -41,10 +120,20 @@ const EventCard = ({ event, onSelectEvent, onCancelRegistration, onEditEvent, on
         <CardTitle className="text-lg sm:text-xl font-bold text-gray-900 break-words pr-20">
           {event.eventName}
         </CardTitle>
-        <CardDescription className="flex items-center text-gray-600 mt-2 text-sm">
-          <Calendar className="w-4 h-4 mr-2 text-blue-500 flex-shrink-0" />
-          <span className="break-words font-medium">{event.eventDate}</span>
-        </CardDescription>
+        <div className="space-y-1">
+          <CardDescription className="flex items-center text-gray-600 text-sm">
+            <Calendar className="w-4 h-4 mr-2 text-blue-500 flex-shrink-0" />
+            <span className="break-words font-medium">{event.eventDate}</span>
+          </CardDescription>
+          {timeRangeLabel && (
+            <CardDescription className="flex items-center text-gray-600 text-sm ml-6">
+              <Clock className="w-4 h-4 mr-2 text-orange-500 flex-shrink-0" />
+              <span className="break-words font-medium">
+                {timeRangeLabel}
+              </span>
+            </CardDescription>
+          )}
+        </div>
       </CardHeader>
       
       <CardContent className="p-6">
@@ -56,7 +145,7 @@ const EventCard = ({ event, onSelectEvent, onCancelRegistration, onEditEvent, on
             </div>
             <div className="flex-1">
               <p className="text-sm text-gray-500 mb-1">สถานที่</p>
-              <p className="text-gray-900 font-medium break-words">{event.venue}</p>
+              <p className="text-gray-900 font-medium break-words">{event.location}</p>
             </div>
           </div>
 
@@ -68,7 +157,11 @@ const EventCard = ({ event, onSelectEvent, onCancelRegistration, onEditEvent, on
             <div className="flex-1">
               <p className="text-sm text-gray-500 mb-1">เวลาแข่ง</p>
               <p className="text-gray-900 font-medium text-sm break-words">
-                {event.courts.map(court => `Court ${court.courtNumber}: ${court.startTime}-${court.endTime}`).join(', ')}
+                {courts.map(court => {
+                  const startLabel = formatTimeLabel(court.actualStartTime ?? court.startTime);
+                  const endLabel = formatTimeLabel(court.actualEndTime ?? court.endTime);
+                  return `Court ${court.courtNumber}: ${startLabel} - ${endLabel}`;
+                }).join(', ')}
               </p>
             </div>
           </div>

@@ -9,20 +9,40 @@ export enum EventStatus {
 
 export type EventStatusType = 'upcoming' | 'in_progress' | 'calculating' | 'awaiting_payment' | 'completed' | 'canceled';
 
-export const getEventStatusLabel = (status: EventStatusType): string => {
+export const getEventStatusLabel = (status: EventStatusType, t?: (key: string) => string): string => {
+  if (!t) {
+    // Fallback to Thai labels if no translation function provided
+    switch (status) {
+      case EventStatus.UPCOMING:
+        return 'กำลังจะมาถึง';
+      case EventStatus.IN_PROGRESS:
+        return 'กำลังดำเนินการ';
+      case EventStatus.CALCULATING:
+        return 'กำลังคำนวณ';
+      case EventStatus.AWAITING_PAYMENT:
+        return 'รอการชำระเงิน';
+      case EventStatus.COMPLETED:
+        return 'เสร็จสิ้น';
+      case EventStatus.CANCELED:
+        return 'ยกเลิก';
+      default:
+        return status;
+    }
+  }
+
   switch (status) {
     case EventStatus.UPCOMING:
-      return 'กำลังจะมาถึง';
+      return t('events.upcoming');
     case EventStatus.IN_PROGRESS:
-      return 'กำลังดำเนินการ';
+      return t('events.in_progress');
     case EventStatus.CALCULATING:
-      return 'กำลังคำนวณ';
+      return t('events.calculating');
     case EventStatus.AWAITING_PAYMENT:
-      return 'รอการชำระเงิน';
+      return t('events.awaiting_payment');
     case EventStatus.COMPLETED:
-      return 'เสร็จสิ้น';
+      return t('events.completed');
     case EventStatus.CANCELED:
-      return 'ยกเลิก';
+      return t('events.canceled');
     default:
       return status;
   }
