@@ -5,6 +5,10 @@ import swaggerUi from "swagger-ui-express";
 import swaggerSpecs from "./config/swagger";
 import { connectEventDB } from "./config/eventDatabase";
 import eventRoutes from "./routes/eventRoutes";
+<<<<<<< HEAD
+=======
+import venueRoutes from "./routes/venueRoutes";
+>>>>>>> origin/frontend
 import { startEventScheduler, stopEventScheduler } from "./schedulers/eventScheduler";
 
 dotenv.config();
@@ -45,6 +49,9 @@ app.use((req: any, res: Response, next: any) => {
 
 // Event endpoints (mounted router)
 app.use("/api/events", eventRoutes);
+
+// Venue endpoints (mounted router)
+app.use("/api/event/venues", venueRoutes);
 
 // Initialize DB connection (non-blocking)
 connectEventDB();

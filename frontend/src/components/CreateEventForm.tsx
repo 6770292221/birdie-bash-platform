@@ -1,14 +1,15 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import TimePicker from '@/components/TimePicker';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Plus, Minus, MapPin } from 'lucide-react';
+import { Plus, Minus, MapPin, Phone } from 'lucide-react';
 import { Court, Event } from '@/pages/Index';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
+import { apiClient } from '@/utils/api';
 
 interface CreateEventFormProps {
   onSubmit: (eventData: Omit<Event, 'id' | 'players' | 'status' | 'createdBy'>) => void;
@@ -20,6 +21,10 @@ interface CreateEventFormProps {
 const CreateEventForm = ({ onSubmit, onCancel, editEvent, onUpdateEvent }: CreateEventFormProps) => {
   const { t } = useLanguage();
   const isEditing = !!editEvent;
+
+  // Venue state
+  const [venues, setVenues] = useState<any[]>([]);
+  const [venuesLoading, setVenuesLoading] = useState(false);
   
   const [eventName, setEventName] = useState(editEvent?.eventName || '');
   const [eventDate, setEventDate] = useState(editEvent?.eventDate || '');
@@ -35,8 +40,31 @@ const CreateEventForm = ({ onSubmit, onCancel, editEvent, onUpdateEvent }: Creat
       : [{ courtNumber: 1, startTime: '20:00', endTime: '22:00' }]
   );
 
+  const selectedVenue = useMemo(() => {
+    if (!venue) return null;
+    return venues.find((item: any) => item.name === venue) || null;
+  }, [venue, venues]);
+
   // Get today's date in YYYY-MM-DD format for min date
   const today = new Date().toISOString().split('T')[0];
+
+  // Fetch venues on component mount
+  useEffect(() => {
+    fetchVenues();
+  }, []);
+
+  const fetchVenues = async () => {
+    setVenuesLoading(true);
+    try {
+      const response = await apiClient.getVenues({ limit: 50 });
+      if (response.success && response.data) {
+        setVenues(response.data.venues || []);
+      }
+    } catch (error) {
+      console.error('Error fetching venues:', error);
+    }
+    setVenuesLoading(false);
+  };
 
   const calculateTotalCourtsHours = () => {
     return courts.reduce((total, court) => {
@@ -146,68 +174,75 @@ const CreateEventForm = ({ onSubmit, onCancel, editEvent, onUpdateEvent }: Creat
 
           <div className="space-y-2">
             <Label htmlFor="venue" className="text-gray-700 font-medium">{t('form.venue')}</Label>
-            <Select value={venue} onValueChange={setVenue}>
-              <SelectTrigger className="border-blue-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200">
-                <div className="flex items-center">
-                  <MapPin className="w-4 h-4 mr-2 text-gray-500" />
-                  <SelectValue placeholder="เลือกสถานที่เล่นแบดมินตัน" />
-                </div>
+            <Select value={venue} onValueChange={setVenue} disabled={venuesLoading}>
+              <SelectTrigger className="border-blue-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 h-auto items-start py-3">
+                <SelectValue
+                  placeholder={venuesLoading ? "กำลังโหลดสถานที่..." : "เลือกสถานที่เล่นแบดมินตัน"}
+                  asChild
+                >
+                  {selectedVenue ? (
+                    <div className="flex w-full flex-col gap-2 text-left">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+                          <MapPin className="w-4 h-4" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-gray-900 leading-tight truncate">
+                            {selectedVenue.name}
+                          </p>
+                          {selectedVenue.address && (
+                            <p className="text-xs text-gray-500 leading-tight">
+                              {selectedVenue.address}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      {selectedVenue.phone && (
+                        <div className="flex items-center gap-2 text-xs text-gray-500">
+                          <Phone className="w-3 h-3 text-gray-400" />
+                          <span className="truncate">{selectedVenue.phone}</span>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 text-sm text-gray-500">
+                      <MapPin className="w-4 h-4 text-gray-400" />
+                      <span className="truncate">
+                        {venuesLoading ? "กำลังโหลดสถานที่..." : "เลือกสถานที่เล่นแบดมินตัน"}
+                      </span>
+                    </div>
+                  )}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="สนามกีฬาแห่งชาติ">
-                  <div className="flex items-center">
-                    <MapPin className="w-4 h-4 mr-2 text-blue-500" />
-                    <div>
-                      <p className="font-medium">สนามกีฬาแห่งชาติ</p>
-                      <p className="text-xs text-gray-500">ราเมศร์วร, ห้วยขวาง, กรุงเทพฯ</p>
+                {venues.length > 0 ? venues.map((venueItem: any, index: number) => {
+                  const colors = ['blue', 'green', 'purple', 'orange', 'red', 'indigo', 'yellow', 'pink', 'teal', 'cyan'];
+                  const color = colors[index % colors.length];
+                  return (
+                    <SelectItem key={venueItem.id} value={venueItem.name}>
+                      <div className="flex items-center space-x-3 py-2">
+                        <MapPin className={`w-4 h-4 text-${color}-500 flex-shrink-0`} />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-gray-900 truncate">{venueItem.name}</p>
+                          <p className="text-xs text-gray-500 truncate">{venueItem.address}</p>
+                          {venueItem.phone && (
+                            <div className="flex items-center mt-1">
+                              <Phone className="w-3 h-3 mr-1 text-gray-400" />
+                              <p className="text-xs text-gray-400">{venueItem.phone}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </SelectItem>
+                  );
+                }) : (
+                  <SelectItem value="no-venues" disabled>
+                    <div className="flex items-center">
+                      <MapPin className="w-4 h-4 mr-2 text-gray-400" />
+                      <span className="text-gray-500">ไม่พบสถานที่</span>
                     </div>
-                  </div>
-                </SelectItem>
-                <SelectItem value="สโมสรกีฬาบางแสน">
-                  <div className="flex items-center">
-                    <MapPin className="w-4 h-4 mr-2 text-green-500" />
-                    <div>
-                      <p className="font-medium">สโมสรกีฬาบางแสน</p>
-                      <p className="text-xs text-gray-500">บางแสน, ชลบุรี</p>
-                    </div>
-                  </div>
-                </SelectItem>
-                <SelectItem value="ศูนย์กีฬาลำพิมิ">
-                  <div className="flex items-center">
-                    <MapPin className="w-4 h-4 mr-2 text-purple-500" />
-                    <div>
-                      <p className="font-medium">ศูนย์กีฬาลำพิมิ</p>
-                      <p className="text-xs text-gray-500">นครพิงค์, นครสวรรค์</p>
-                    </div>
-                  </div>
-                </SelectItem>
-                <SelectItem value="สนามกีฬาธรรมศาสตร์">
-                  <div className="flex items-center">
-                    <MapPin className="w-4 h-4 mr-2 text-orange-500" />
-                    <div>
-                      <p className="font-medium">สนามกีฬาธรรมศาสตร์</p>
-                      <p className="text-xs text-gray-500">รังสิต, ปทุมธานี</p>
-                    </div>
-                  </div>
-                </SelectItem>
-                <SelectItem value="ศูนย์กีฬามหิดล">
-                  <div className="flex items-center">
-                    <MapPin className="w-4 h-4 mr-2 text-red-500" />
-                    <div>
-                      <p className="font-medium">ศูนย์กีฬามหิดล</p>
-                      <p className="text-xs text-gray-500">พุทธมณฑล, นครปฐม</p>
-                    </div>
-                  </div>
-                </SelectItem>
-                <SelectItem value="สนามแบดมินตัน The Mall บางกะปิ">
-                  <div className="flex items-center">
-                    <MapPin className="w-4 h-4 mr-2 text-indigo-500" />
-                    <div>
-                      <p className="font-medium">สนามแบดมินตัน The Mall บางกะปิ</p>
-                      <p className="text-xs text-gray-500">ลาดพร้าว, กรุงเทพฯ</p>
-                    </div>
-                  </div>
-                </SelectItem>
+                  </SelectItem>
+                )}
               </SelectContent>
             </Select>
           </div>

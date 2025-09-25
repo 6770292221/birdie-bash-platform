@@ -284,7 +284,7 @@ class ApiClient {
     return this.request(`/api/registration/events/${eventId}/registrations`);
   }
 
-  // Settlement endpoints
+    // Settlement endpoints
   async issueSettlement(eventId: string, data: {
     currency?: string;
     shuttlecockCount?: number;
@@ -299,6 +299,20 @@ class ApiClient {
         penaltyFee: data.penaltyFee || 0
       }
     });
+  }
+
+  // Venue endpoints
+  async getVenues(params?: {
+    name?: string;
+    rating?: number;
+    limit?: number;
+    offset?: number;
+  }): Promise<ApiResponse<any>> {
+    return this.request("/api/event/venues", { params });
+  }
+
+  async getVenue(venueId: string): Promise<ApiResponse<any>> {
+    return this.request(`/api/event/venues/${venueId}`);
   }
 }
 

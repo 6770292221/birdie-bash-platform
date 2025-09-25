@@ -1,8 +1,13 @@
-import express from "express";
+import express, { Request } from "express";
 import { createProxyMiddleware } from "http-proxy-middleware";
 import dotenv from "dotenv";
 import cors from "cors";
-import { attachUserFromJwt, requireAuth, requireAdmin, forwardUserHeaders } from "./middleware/auth";
+import {
+  attachUserFromJwt,
+  requireAuth,
+  requireAdmin,
+  forwardUserHeaders,
+} from "./middleware/auth";
 import { getRoutes } from "./routesConfig";
 import { registerDocs } from "./docs/aggregate";
 
@@ -12,7 +17,9 @@ const app = express();
 const BASE_PORT = Number(process.env.PORT) || 8080;
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
 if (!process.env.JWT_SECRET) {
-  console.warn("[Gateway] JWT_SECRET not set; using default development secret. Set gateway/.env");
+  console.warn(
+    "[Gateway] JWT_SECRET not set; using default development secret. Set gateway/.env"
+  );
 }
 
 // Microservice URLs
@@ -20,7 +27,8 @@ const AUTH_SERVICE_URL =
   process.env.AUTH_SERVICE_URL || "http://localhost:3001";
 const EVENT_SERVICE_URL =
   process.env.EVENT_SERVICE_URL || "http://localhost:3003";
-const SETTLEMENT_SERVICE_URL =  process.env.SETTLEMENT_SERVICE_URL || "http://localhost:3006";
+const SETTLEMENT_SERVICE_URL =
+  process.env.SETTLEMENT_SERVICE_URL || "http://localhost:3006";
 const REGISTRATION_SERVICE_URL =
   process.env.REGISTRATION_SERVICE_URL || "http://localhost:3005";
 
@@ -29,7 +37,13 @@ app.use(express.json());
 app.use(attachUserFromJwt(JWT_SECRET));
 
 // Docs aggregator (Swagger UI + merged JSON)
-registerDocs(app, AUTH_SERVICE_URL, EVENT_SERVICE_URL, REGISTRATION_SERVICE_URL, SETTLEMENT_SERVICE_URL);
+registerDocs(
+  app,
+  AUTH_SERVICE_URL,
+  EVENT_SERVICE_URL,
+  REGISTRATION_SERVICE_URL,
+  SETTLEMENT_SERVICE_URL
+);
 
 // Authentication middleware is now in ./middleware/auth
 
@@ -67,7 +81,12 @@ app.get("/health", (_req, res) => {
 });
 
 // Routes configuration
-const routes = getRoutes(AUTH_SERVICE_URL, EVENT_SERVICE_URL, SETTLEMENT_SERVICE_URL, REGISTRATION_SERVICE_URL );
+const routes = getRoutes(
+  AUTH_SERVICE_URL,
+  EVENT_SERVICE_URL,
+  SETTLEMENT_SERVICE_URL,
+  REGISTRATION_SERVICE_URL
+);
 
 // Setup proxies for each service
 routes.forEach((route) => {
@@ -76,8 +95,8 @@ routes.forEach((route) => {
     changeOrigin: true,
     timeout: 5000,
     proxyTimeout: 5000,
-    pathRewrite: {
-      [`^${route.path}`]: route.path, // Keep the path when forwarding
+    pathRewrite: (_path: string, req: Request) => {
+      return req.originalUrl || _path;
     },
     onProxyReq: (proxyReq: any, req: any, _res: any) => {
       console.log(
@@ -121,20 +140,20 @@ routes.forEach((route) => {
 
   // Create middleware stack based on route configuration
   const middlewares: any[] = [];
-  
+
   if (route.protected) {
     middlewares.push(requireAuth as any);
   }
-  
+
   if (route.adminRequired) {
     middlewares.push(requireAdmin as any);
   }
-  
+
   middlewares.push(createProxyMiddleware(proxyOptions));
 
   // Apply route with method filtering if specified
   if (route.methods && route.methods.length > 0) {
-    route.methods.forEach(method => {
+    route.methods.forEach((method) => {
       switch (method.toUpperCase()) {
         case "GET":
           app.get(route.path, ...middlewares);

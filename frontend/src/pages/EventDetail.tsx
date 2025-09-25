@@ -47,6 +47,7 @@ const EventDetail = () => {
   const [memberPhones, setMemberPhones] = useState<Record<string, string>>({});
   const [guestForm, setGuestForm] = useState({ name: '', phoneNumber: '', startTime: '20:00', endTime: '22:00' });
   const [memberTime, setMemberTime] = useState({ startTime: '19:00', endTime: '21:00' });
+  const [isRegisteringMember, setIsRegisteringMember] = useState(false);
 
   useEffect(() => {
     const fetchDetail = async () => {
@@ -198,15 +199,22 @@ const EventDetail = () => {
   const registerAsMember = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!id) return;
-    const res = await apiClient.registerMember(id, {
-      startTime: memberTime.startTime,
-      endTime: memberTime.endTime,
-    });
-    if (res.success) {
-      toast({ title: 'ลงทะเบียนสำเร็จ' });
-      await fetchPlayersFiltered();
-    } else {
-      toast({ title: 'ลงทะเบียนไม่สำเร็จ', description: res.error, variant: 'destructive' });
+    setIsRegisteringMember(true);
+    try {
+      const res = await apiClient.registerMember(id, {
+        startTime: memberTime.startTime,
+        endTime: memberTime.endTime,
+      });
+      if (res.success) {
+        toast({ title: 'ลงทะเบียนสำเร็จ' });
+        await fetchPlayersFiltered();
+      } else {
+        toast({ title: 'ลงทะเบียนไม่สำเร็จ', description: res.error, variant: 'destructive' });
+      }
+    } catch (err: any) {
+      toast({ title: 'ลงทะเบียนไม่สำเร็จ', description: err?.message || 'เกิดข้อผิดพลาด', variant: 'destructive' });
+    } finally {
+      setIsRegisteringMember(false);
     }
   };
 
@@ -257,10 +265,22 @@ const EventDetail = () => {
     ? Math.round(estimatedCourtCost / event.capacity.maxParticipants)
     : undefined;
 
+  const overlayTitle = cancelingPlayerId
+    ? 'กำลังยกเลิกการลงทะเบียน'
+    : 'กำลังลงทะเบียนผู้เล่น';
+  const overlaySubtitle = cancelingPlayerId
+    ? 'กรุณารอสักครู่...'
+    : 'กำลังบันทึกข้อมูลการลงทะเบียน';
+  const overlayFootnote = cancelingPlayerId
+    ? 'หน้าจะรีเฟรชอัตโนมัติในอีกไม่ช้า'
+    : 'ระบบจะอัปเดตรายชื่อให้อัตโนมัติทันทีที่เสร็จสิ้น';
+
+  const showOverlay = Boolean(cancelingPlayerId || isRegisteringMember);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-green-50 py-6 px-4 relative">
       {/* Beautiful loading overlay */}
-      {cancelingPlayerId && (
+      {showOverlay && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white/90 backdrop-blur-md rounded-2xl p-8 shadow-xl text-center max-w-sm mx-4 border border-white/20">
             <div className="flex justify-center mb-4">
@@ -272,12 +292,12 @@ const EventDetail = () => {
                 </div>
               </div>
             </div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">กำลังยกเลิกการลงทะเบียน</h3>
-            <p className="text-gray-600 text-sm mb-4">กรุณารอสักครู่...</p>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">{overlayTitle}</h3>
+            <p className="text-gray-600 text-sm mb-4">{overlaySubtitle}</p>
             <div className="w-full bg-gray-200/50 rounded-full h-2 overflow-hidden">
               <div className="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full animate-pulse" style={{ width: '100%' }}></div>
             </div>
-            <p className="text-xs text-gray-500 mt-3">หน้าจะรีเฟรชอัตโนมัติในอีกไม่ช้า</p>
+            <p className="text-xs text-gray-500 mt-3">{overlayFootnote}</p>
           </div>
         </div>
       )}
@@ -730,9 +750,22 @@ const EventDetail = () => {
                           <TimePicker value={memberTime.endTime} onChange={(v)=>setMemberTime({...memberTime,endTime:v})} />
                         </div>
                       </div>
-                      <Button type="submit" className="w-full bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-medium py-2">
-                        <UserPlus className="w-4 h-4 mr-2" />
-                        ลงทะเบียน
+                      <Button
+                        type="submit"
+                        className="w-full bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-medium py-2"
+                        disabled={isRegisteringMember}
+                      >
+                        {isRegisteringMember ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            กำลังลงทะเบียน...
+                          </>
+                        ) : (
+                          <>
+                            <UserPlus className="w-4 h-4 mr-2" />
+                            ลงทะเบียน
+                          </>
+                        )}
                       </Button>
                     </form>
                   </div>
