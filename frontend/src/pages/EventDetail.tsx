@@ -45,9 +45,9 @@ const EventDetail = () => {
   const [players, setPlayers] = useState<any[]>([]);
   const [memberNames, setMemberNames] = useState<Record<string, string>>({});
   const [memberPhones, setMemberPhones] = useState<Record<string, string>>({});
-  const [guestForm, setGuestForm] = useState({ name: '', phoneNumber: '', startTime: '20:00', endTime: '22:00' });
+  const [guestForm, setGuestForm] = useState({ name: '', phoneNumber: '', startTime: '', endTime: '' });
   const [isAddingGuest, setIsAddingGuest] = useState(false);
-  const [memberTime, setMemberTime] = useState({ startTime: '19:00', endTime: '21:00' });
+  const [memberTime, setMemberTime] = useState({ startTime: '', endTime: '' });
   const [isRegisteringMember, setIsRegisteringMember] = useState(false);
   const [overlayAction, setOverlayAction] = useState<'cancel' | 'register' | 'guest' | null>(null);
 
@@ -170,11 +170,11 @@ const EventDetail = () => {
       const res = await apiClient.addGuest(id, payload);
       if (res.success) {
         toast({ title: 'เพิ่มผู้เล่นสำเร็จ' });
-        setGuestForm({ name: '', phoneNumber: '', startTime: '20:00', endTime: '22:00' });
+        setGuestForm({ name: '', phoneNumber: '', startTime: '', endTime: '' });
         await fetchPlayersFiltered();
         setTimeout(() => {
           setIsAddingGuest(false);
-          setOverlayAction(null);
+          window.location.reload();
         }, 1200);
       } else {
         toast({ title: 'เพิ่มผู้เล่นไม่สำเร็จ', description: res.error, variant: 'destructive' });
@@ -213,6 +213,14 @@ const EventDetail = () => {
   const registerAsMember = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!id) return;
+    if (!memberTime.startTime || !memberTime.endTime) {
+      toast({
+        title: 'กรุณาเลือกเวลา',
+        description: 'โปรดเลือกเวลาเริ่มและเวลาสิ้นสุดก่อนลงทะเบียน',
+        variant: 'destructive',
+      });
+      return;
+    }
     setIsRegisteringMember(true);
     setOverlayAction('register');
     try {
@@ -225,7 +233,7 @@ const EventDetail = () => {
         await fetchPlayersFiltered();
         setTimeout(() => {
           setIsRegisteringMember(false);
-          setOverlayAction(null);
+          window.location.reload();
         }, 1200);
       } else {
         toast({ title: 'ลงทะเบียนไม่สำเร็จ', description: res.error, variant: 'destructive' });
