@@ -48,14 +48,16 @@ const swaggerDefinition = {
           createdBy: { type: "string", description: "User ID who created the event", readOnly: true },
           updatedBy: { type: "string", description: "User ID who last updated the event", readOnly: true },
           status: {
-            type: "object",
-            properties: {
-              state: {
-                type: "string",
-                enum: ["active", "canceled", "completed"],
-              },
-              isAcceptingRegistrations: { type: "boolean" },
-            },
+            type: "string",
+            enum: [
+              "upcoming",
+              "in_progress",
+              "calculating",
+              "awaiting_payment",
+              "completed",
+              "canceled"
+            ],
+            description: "Current event status",
           },
           capacity: {
             type: "object",
@@ -101,8 +103,15 @@ const swaggerDefinition = {
           location: { type: "string" },
           status: { 
             type: "string",
-            enum: ["active", "canceled", "completed"],
-            default: "active"
+            enum: [
+              "upcoming",
+              "in_progress",
+              "calculating",
+              "awaiting_payment",
+              "completed",
+              "canceled"
+            ],
+            default: "upcoming"
           },
           capacity: {
             type: "object",
@@ -158,7 +167,17 @@ const swaggerDefinition = {
         type: "object",
         properties: {
           id: { type: "string" },
-          status: { type: "string", enum: ["active", "canceled", "completed"] },
+          status: { 
+            type: "string", 
+            enum: [
+              "upcoming",
+              "in_progress",
+              "calculating",
+              "awaiting_payment",
+              "completed",
+              "canceled"
+            ] 
+          },
           maxParticipants: { type: "number" },
           currentParticipants: { type: "number" },
           availableSlots: { type: "number" },

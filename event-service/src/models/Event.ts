@@ -1,5 +1,5 @@
 import mongoose, { Schema, Document } from "mongoose";
-import { IEvent } from "../types/event";
+import { IEvent, EventStatus } from "../types/event";
 
 export interface IEventDocument extends Omit<IEvent, "id">, Document {}
 
@@ -27,10 +27,10 @@ const EventSchema: Schema = new Schema(
     eventName: { type: String, required: true, trim: true },
     eventDate: { type: String, required: true },
     location: { type: String, required: true, trim: true },
-    status: { 
-      type: String, 
-      enum: ["active", "canceled", "completed"], 
-      default: "active" 
+    status: {
+      type: String,
+      enum: Object.values(EventStatus),
+      default: EventStatus.UPCOMING
     },
     capacity: { type: CapacitySchema, required: true },
     shuttlecockPrice: { type: Number, required: true },
@@ -57,7 +57,7 @@ EventSchema.pre("save", function (next) {
   doc.capacity.availableSlots = available;
   // Respect explicitly provided waitlistEnabled; otherwise derive default
   if (typeof doc.capacity.waitlistEnabled !== 'boolean') {
-    doc.capacity.waitlistEnabled = doc.status === "active" && available <= 0;
+    doc.capacity.waitlistEnabled = (doc.status === EventStatus.UPCOMING || doc.status === EventStatus.IN_PROGRESS) && available <= 0;
   }
 
   next();
