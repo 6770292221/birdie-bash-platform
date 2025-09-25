@@ -1,8 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
-import User from '../models/User';
-import { generateToken } from '../utils/jwt';
-import { IUserCreate, IUserLogin } from '../types/user';
+import User from './models/User';
+import { generateToken } from './utils/jwt';
+import { IUserCreate, IUserLogin } from './types/user';
 
 export const register = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {

@@ -225,7 +225,7 @@ router.get('/:settlement_id', getSettlementById);
  *       Automatically fetches event details and participants, then calculates settlement amounts and issues charges via gRPC to Payment Service.
  *
  *       **Data Sources:**
- *       - Event details from Event Service (port 3002)
+ *       - Event details from Event Service (port 3003)
  *       - Players/participants from Registration Service (port 3005)
  *       - Court and cost information from event configuration
  *

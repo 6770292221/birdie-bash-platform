@@ -9,7 +9,7 @@ import eventRoutes from "./routes/eventRoutes";
 dotenv.config();
 
 const app = express();
-const BASE_PORT = Number(process.env.PORT) || 3002;
+const BASE_PORT = Number(process.env.PORT) || 3003;
 
 app.use(cors());
 app.use(express.json());

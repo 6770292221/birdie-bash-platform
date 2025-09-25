@@ -44,6 +44,7 @@ export function getRoutes(authUrl: string, eventUrl: string, settlementUrl: stri
       target: settlementUrl,
       protected: true,
       adminRequired: false,
+      methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
     },
   ];
 }

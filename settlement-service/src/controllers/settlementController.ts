@@ -32,7 +32,7 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
     let eventData: any;
     try {
       Logger.info('Fetching event details', { event_id });
-      const eventResponse = await fetch(`http://localhost:3002/api/events/${event_id}`, {
+      const eventResponse = await fetch(`http://localhost:3003/api/events/${event_id}`, {
         headers: {
           'Authorization': req.headers.authorization || ''
         }

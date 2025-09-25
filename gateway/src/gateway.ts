@@ -19,7 +19,7 @@ if (!process.env.JWT_SECRET) {
 const AUTH_SERVICE_URL =
   process.env.AUTH_SERVICE_URL || "http://localhost:3001";
 const EVENT_SERVICE_URL =
-  process.env.EVENT_SERVICE_URL || "http://localhost:3002";
+  process.env.EVENT_SERVICE_URL || "http://localhost:3003";
 const SETTLEMENT_SERVICE_URL =  process.env.SETTLEMENT_SERVICE_URL || "http://localhost:3006";
 const REGISTRATION_SERVICE_URL =
   process.env.REGISTRATION_SERVICE_URL || "http://localhost:3005";
