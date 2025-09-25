@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
-import { Calendar, MapPin, Users, Clock, Plus, LogOut, Shield, Menu, CreditCard, History, Activity, TrendingUp, X, Bell, CheckCircle, ChevronDown } from 'lucide-react';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { Calendar, MapPin, Users, Clock, Plus, LogOut, Shield, Menu, CreditCard, History, TrendingUp, X, Bell, ChevronDown, Loader2, Receipt } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -14,6 +14,17 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import { apiClient } from '@/utils/api';
 import { EventStatusType, getEventStatusLabel, getEventStatusColor } from '@/types/event';
+import { mockPaymentHistory } from '@/data/mockPaymentHistory';
+import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
+
+const statusColorMap: Record<EventStatusType, string> = {
+  upcoming: '#34d399',
+  in_progress: '#6366f1',
+  calculating: '#f59e0b',
+  awaiting_payment: '#fb923c',
+  completed: '#9ca3af',
+  canceled: '#f87171',
+};
 
 const IndexContent = () => {
   const { t } = useLanguage();
@@ -65,6 +76,47 @@ const IndexContent = () => {
     fetchEvents();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, searchFilters]);
+
+  const statusCounts = useMemo(() => {
+    const base: Record<EventStatusType, number> = {
+      upcoming: 0,
+      in_progress: 0,
+      calculating: 0,
+      awaiting_payment: 0,
+      completed: 0,
+      canceled: 0,
+    };
+
+    [...events, ...completedEvents].forEach((ev) => {
+      const rawStatus = (ev?.status || 'upcoming') as EventStatusType;
+      const statusKey = base[rawStatus] !== undefined ? rawStatus : 'upcoming';
+      base[statusKey] = (base[statusKey] ?? 0) + 1;
+    });
+
+    return base;
+  }, [events, completedEvents]);
+
+  const statusChartData = useMemo(
+    () =>
+      (Object.entries(statusCounts) as [EventStatusType, number][]) 
+        .map(([status, value]) => ({
+          status,
+          label: getEventStatusLabel(status),
+          value,
+          fill: statusColorMap[status],
+        }))
+        .filter((item) => item.value > 0),
+    [statusCounts]
+  );
+
+  const totalEventsCount = useMemo(
+    () => statusChartData.reduce((sum, item) => sum + item.value, 0),
+    [statusChartData]
+  );
+
+  const upcomingCount = statusCounts.upcoming ?? 0;
+  const completedCount = statusCounts.completed ?? 0;
+  const paymentHistoryCount = mockPaymentHistory.length;
 
   if (loading || eventsLoading) {
     return (
@@ -147,36 +199,116 @@ const IndexContent = () => {
             </div>
           )}
 
-          <p className="text-center text-lg sm:text-xl text-gray-600 mb-6">
-            {t('app.subtitle')}
-          </p>
         </div>
 
-        {/* Welcome Message */}
+        {/* Event Overview / Welcome */}
         <Card className="mb-6 bg-white/70 backdrop-blur-sm">
-          <CardContent className="p-6 text-center">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">
-              ยินดีต้อนรับสู่ Birdie Bash
-            </h2>
-            <p className="text-gray-600 mb-4">
-              ระบบจัดการแบดมินตันที่ครบครัน สำหรับการจัดการอีเวนต์ การลงทะเบียน และการคำนวณค่าใช้จ่าย
-            </p>
+          {user && isAdmin ? (
+            <>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-2xl font-bold text-gray-900">ภาพรวมอีเวนต์</CardTitle>
+                <CardDescription className="text-gray-600">
+                  ข้อมูลสรุปจากอีเวนต์ทั้งหมดในระบบ แยกตามสถานะการดำเนินงาน
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="pt-2">
+                {eventsLoading ? (
+                  <div className="flex flex-col items-center justify-center py-16 gap-3 text-gray-500">
+                    <Loader2 className="w-8 h-8 animate-spin" />
+                    <span>กำลังโหลดข้อมูลกราฟ...</span>
+                  </div>
+                ) : statusChartData.length > 0 ? (
+                  <div className="flex flex-col lg:flex-row lg:items-center lg:gap-8">
+                    <div className="relative h-80 w-full lg:w-2/3">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={statusChartData} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
+                          <defs>
+                            <linearGradient id="statusAreaGradient" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#6366f1" stopOpacity={0.9} />
+                              <stop offset="55%" stopColor="#8b5cf6" stopOpacity={0.55} />
+                              <stop offset="95%" stopColor="#38bdf8" stopOpacity={0.25} />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="5 5" stroke="rgba(148, 163, 184, 0.25)" />
+                          <XAxis dataKey="label" tick={{ fontSize: 12 }} interval={0} angle={-15} height={50} tickMargin={10} />
+                          <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
+                          <Tooltip
+                            formatter={(value: number, _name, props) => [`${value} อีเวนต์`, props?.payload?.label]}
+                            contentStyle={{ borderRadius: 12, border: '1px solid rgba(148,163,184,0.2)', boxShadow: '0 10px 30px rgba(15,23,42,0.08)' }}
+                          />
+                          <Area
+                            type="monotone"
+                            dataKey="value"
+                            stroke="#4f46e5"
+                            strokeWidth={4}
+                            fill="url(#statusAreaGradient)"
+                            activeDot={{ r: 7, strokeWidth: 3, stroke: '#fff' }}
+                          />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="flex-1 space-y-3 mt-6 lg:mt-0">
+                      {statusChartData.map((item) => (
+                        <div key={item.status} className="rounded-xl border border-slate-200/60 bg-slate-50/70 p-3 flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <span className="inline-flex h-8 w-8 items-center justify-center rounded-full" style={{ background: `${item.fill}22`, color: item.fill }}>
+                              ●
+                            </span>
+                            <div>
+                              <p className="font-medium text-gray-800">{item.label}</p>
+                              <p className="text-xs text-gray-500">คิดเป็น {totalEventsCount ? Math.round((item.value / totalEventsCount) * 100) : 0}% ของทั้งหมด</p>
+                            </div>
+                          </div>
+                          <span className="text-lg font-semibold text-gray-900">{item.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-16 text-gray-500">
+                    <p className="font-medium mb-1">ยังไม่มีข้อมูลอีเวนต์สำหรับสร้างกราฟ</p>
+                    <p className="text-sm text-gray-400">สร้างอีเวนต์แรกของคุณเพื่อดูสถิติสวย ๆ ที่นี่</p>
+                  </div>
+                )}
 
-            {!user ? (
-              <div className="flex gap-3 justify-center">
-                <Link to="/login">
-                  <Button className="bg-blue-600 hover:bg-blue-700">
-                    เข้าสู่ระบบ
-                  </Button>
-                </Link>
-                <Link to="/register">
-                  <Button variant="outline">
-                    ลงทะเบียน
-                  </Button>
-                </Link>
-              </div>
-            ) : null}
-          </CardContent>
+                <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="rounded-xl bg-blue-50/80 border border-blue-100 p-4">
+                    <p className="text-xs uppercase tracking-wide text-blue-600">อีเวนต์ทั้งหมด</p>
+                    <p className="text-2xl font-semibold text-blue-700">{totalEventsCount}</p>
+                  </div>
+                  <div className="rounded-xl bg-emerald-50/80 border border-emerald-100 p-4">
+                    <p className="text-xs uppercase tracking-wide text-emerald-600">กำลังจะมาถึง</p>
+                    <p className="text-2xl font-semibold text-emerald-700">{upcomingCount}</p>
+                  </div>
+                  <div className="rounded-xl bg-slate-50/80 border border-slate-200 p-4">
+                    <p className="text-xs uppercase tracking-wide text-slate-600">เสร็จสิ้นแล้ว</p>
+                    <p className="text-2xl font-semibold text-slate-700">{completedCount}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </>
+          ) : (
+            <CardContent className="p-6 text-center">
+              <h2 className="text-2xl font-bold text-gray-900">
+                {user ? 'ยินดีต้อนรับสู่ Birdie Bash' : 'ยินดีต้อนรับสู่ Birdie Bash'}
+              </h2>
+
+              {!user && (
+                <div className="flex gap-3 justify-center">
+                  <Link to="/login">
+                    <Button className="bg-blue-600 hover:bg-blue-700">
+                      เข้าสู่ระบบ
+                    </Button>
+                  </Link>
+                  <Link to="/register">
+                    <Button variant="outline">
+                      ลงทะเบียน
+                    </Button>
+                  </Link>
+                </div>
+              )}
+            </CardContent>
+          )}
         </Card>
 
         {/* Features Section (interactive) */}
@@ -239,12 +371,24 @@ const IndexContent = () => {
           </Card>
         </div>
         ) : user ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <Card className="bg-white/70 backdrop-blur-sm border-green-200 cursor-pointer hover:shadow-md transition" onClick={() => navigate('/payments')} role="button">
               <CardContent className="p-4 text-center">
                 <CreditCard className="h-8 w-8 text-green-600 mx-auto mb-2" />
                 <p className="font-semibold text-gray-900">จ่ายเงิน</p>
                 <p className="text-sm text-gray-600">เลือกอีเวนต์เพื่อชำระเงิน</p>
+              </CardContent>
+            </Card>
+
+            <Card
+              className="bg-white/70 backdrop-blur-sm border-amber-200 cursor-pointer hover:shadow-md transition"
+              onClick={() => navigate('/payments/history')}
+              role="button"
+            >
+              <CardContent className="p-4 text-center">
+                <Receipt className="h-8 w-8 text-amber-600 mx-auto mb-2" />
+                <p className="font-semibold text-gray-900">ประวัติการจ่ายเงิน</p>
+                <p className="text-sm text-gray-600">ดูการชำระล่าสุด ({paymentHistoryCount})</p>
               </CardContent>
             </Card>
 
@@ -439,178 +583,6 @@ const IndexContent = () => {
           </div>
         )}
 
-
-        {/* User Activity & History Section (Admin-style for users) */}
-        {user && !isAdmin && (
-          <div className="mt-8 space-y-6">
-            <h3 className="text-2xl font-bold text-gray-900 mb-4">กิจกรรมของคุณ</h3>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Recent Activity */}
-              <Card className="bg-white/80 backdrop-blur-sm">
-                <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center text-lg">
-                    <Activity className="w-5 h-5 mr-2 text-blue-600" />
-                    กิจกรรมล่าสุด
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    <div className="flex items-center p-3 bg-green-50 rounded-lg border border-green-200">
-                      <div className="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-gray-900">ลงทะเบียนเข้าร่วม</p>
-                        <p className="text-xs text-gray-600">Weekend Badminton Meetup</p>
-                        <p className="text-xs text-gray-500">2 ชั่วโมงที่แล้ว</p>
-                      </div>
-                      <Badge className="bg-green-100 text-green-800 border-green-300">สำเร็จ</Badge>
-                    </div>
-
-                    <div className="flex items-center p-3 bg-blue-50 rounded-lg border border-blue-200">
-                      <div className="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-gray-900">ชำระเงิน</p>
-                        <p className="text-xs text-gray-600">฿170.00 - Friday Night Session</p>
-                        <p className="text-xs text-gray-500">1 วันที่แล้ว</p>
-                      </div>
-                      <Badge className="bg-blue-100 text-blue-800 border-blue-300">ชำระแล้ว</Badge>
-                    </div>
-
-                    <div className="flex items-center p-3 bg-amber-50 rounded-lg border border-amber-200">
-                      <div className="w-2 h-2 bg-amber-500 rounded-full mr-3"></div>
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-gray-900">เข้าร่วมรายชื่อสำรอง</p>
-                        <p className="text-xs text-gray-600">Saturday Morning Practice</p>
-                        <p className="text-xs text-gray-500">3 วันที่แล้ว</p>
-                      </div>
-                      <Badge className="bg-amber-100 text-amber-800 border-amber-300">รอคิว</Badge>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 text-center">
-                    <Button variant="ghost" size="sm" className="text-blue-600 hover:text-blue-800" onClick={() => toast({ title: 'เร็วๆ นี้', description: 'ประวัติกิจกรรมแบบละเอียดกำลังพัฒนา' })}>
-                      ดูทั้งหมด
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Statistics */}
-              <Card className="bg-white/80 backdrop-blur-sm">
-                <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center text-lg">
-                    <TrendingUp className="w-5 h-5 mr-2 text-green-600" />
-                    สถิติของคุณ
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between p-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">อีเวนต์ที่เข้าร่วม</p>
-                        <p className="text-xs text-gray-600">ทั้งหมด</p>
-                      </div>
-                      <div className="text-2xl font-bold text-blue-600">12</div>
-                    </div>
-
-                    <div className="flex items-center justify-between p-3 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200">
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">ยอดชำระ</p>
-                        <p className="text-xs text-gray-600">เดือนนี้</p>
-                      </div>
-                      <div className="text-2xl font-bold text-green-600">฿1,240</div>
-                    </div>
-
-                    <div className="flex items-center justify-between p-3 bg-gradient-to-r from-purple-50 to-violet-50 rounded-lg border border-purple-200">
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">ชั่วโมงเล่น</p>
-                        <p className="text-xs text-gray-600">รวมทั้งหมด</p>
-                      </div>
-                      <div className="text-2xl font-bold text-purple-600">38</div>
-                    </div>
-
-                    <div className="flex items-center justify-between p-3 bg-gradient-to-r from-amber-50 to-orange-50 rounded-lg border border-amber-200">
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">อันดับ</p>
-                        <p className="text-xs text-gray-600">ผู้เล่นประจำ</p>
-                      </div>
-                      <div className="flex items-center">
-                        <div className="text-2xl font-bold text-amber-600">#{user.skillLevel === 'P' ? '3' : user.skillLevel === 'S' ? '7' : '12'}</div>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Payment History */}
-            <Card className="bg-white/80 backdrop-blur-sm">
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center text-lg">
-                  <CreditCard className="w-5 h-5 mr-2 text-purple-600" />
-                  ประวัติการชำระเงิน
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                        <CheckCircle className="w-5 h-5 text-green-600" />
-                      </div>
-                      <div>
-                        <p className="font-medium text-gray-900">Weekend Badminton Meetup</p>
-                        <p className="text-xs text-gray-500">24 ก.ย. 2025 • 20:00-21:00</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-bold text-gray-900">฿170.00</p>
-                      <Badge className="bg-green-100 text-green-800 border-green-300 text-xs">ชำระแล้ว</Badge>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                        <CheckCircle className="w-5 h-5 text-green-600" />
-                      </div>
-                      <div>
-                        <p className="font-medium text-gray-900">Friday Night Session</p>
-                        <p className="text-xs text-gray-500">23 ก.ย. 2025 • 19:00-21:00</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-bold text-gray-900">฿200.00</p>
-                      <Badge className="bg-green-100 text-green-800 border-green-300 text-xs">ชำระแล้ว</Badge>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between p-4 bg-amber-50 rounded-lg border border-amber-200">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center">
-                        <Clock className="w-5 h-5 text-amber-600" />
-                      </div>
-                      <div>
-                        <p className="font-medium text-gray-900">Saturday Morning Practice</p>
-                        <p className="text-xs text-gray-500">22 ก.ย. 2025 • 09:00-11:00</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-bold text-gray-900">฿150.00</p>
-                      <Badge className="bg-amber-100 text-amber-800 border-amber-300 text-xs">รอชำระ</Badge>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-4 text-center">
-                  <Button variant="ghost" size="sm" className="text-purple-600 hover:text-purple-800" onClick={() => navigate('/payments')}>
-                    ดูประวัติทั้งหมด
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
       </div>
     </div>
   );

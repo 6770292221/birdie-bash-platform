@@ -47,6 +47,12 @@ services:
       RABBITMQ_DEFAULT_PASS: password123
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD-SHELL", "rabbitmq-diagnostics -q ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     networks:
       - birdie-network
 
@@ -119,8 +125,10 @@ services:
       - RABBIT_EXCHANGE=events
       - ENABLE_CAPACITY_WORKER=true
     depends_on:
-      - mongodb
-      - rabbitmq
+      mongodb:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
     networks:
       - birdie-network
 
@@ -140,8 +148,10 @@ services:
       - RABBIT_EXCHANGE=events
       - ENABLE_WAITLIST_WORKER=true
     depends_on:
-      - rabbitmq
-      - event-service
+      rabbitmq:
+        condition: service_healthy
+      event-service:
+        condition: service_started
     networks:
       - birdie-network
 

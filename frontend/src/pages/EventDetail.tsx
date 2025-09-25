@@ -46,8 +46,10 @@ const EventDetail = () => {
   const [memberNames, setMemberNames] = useState<Record<string, string>>({});
   const [memberPhones, setMemberPhones] = useState<Record<string, string>>({});
   const [guestForm, setGuestForm] = useState({ name: '', phoneNumber: '', startTime: '20:00', endTime: '22:00' });
+  const [isAddingGuest, setIsAddingGuest] = useState(false);
   const [memberTime, setMemberTime] = useState({ startTime: '19:00', endTime: '21:00' });
   const [isRegisteringMember, setIsRegisteringMember] = useState(false);
+  const [overlayAction, setOverlayAction] = useState<'cancel' | 'register' | 'guest' | null>(null);
 
   useEffect(() => {
     const fetchDetail = async () => {
@@ -155,8 +157,10 @@ const EventDetail = () => {
 
   const addGuest = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!id) return;
+    if (!id || isAddingGuest) return;
     try {
+      setIsAddingGuest(true);
+      setOverlayAction('guest');
       const payload = {
         name: guestForm.name.trim(),
         phoneNumber: guestForm.phoneNumber.trim(),
@@ -168,11 +172,19 @@ const EventDetail = () => {
         toast({ title: 'เพิ่มผู้เล่นสำเร็จ' });
         setGuestForm({ name: '', phoneNumber: '', startTime: '20:00', endTime: '22:00' });
         await fetchPlayersFiltered();
+        setTimeout(() => {
+          setIsAddingGuest(false);
+          setOverlayAction(null);
+        }, 1200);
       } else {
         toast({ title: 'เพิ่มผู้เล่นไม่สำเร็จ', description: res.error, variant: 'destructive' });
+        setIsAddingGuest(false);
+        setOverlayAction(null);
       }
     } catch (err: any) {
       toast({ title: 'เพิ่มผู้เล่นไม่สำเร็จ', description: err?.message || 'เกิดข้อผิดพลาด', variant: 'destructive' });
+      setIsAddingGuest(false);
+      setOverlayAction(null);
     }
   };
 
@@ -181,6 +193,7 @@ const EventDetail = () => {
 
     // Show loading state for specific player
     setCancelingPlayerId(playerId);
+    setOverlayAction('cancel');
 
     const res = await apiClient.cancelPlayer(id, playerId);
     if (res.success) {
@@ -193,6 +206,7 @@ const EventDetail = () => {
     } else {
       toast({ title: 'ยกเลิกผู้เล่นไม่สำเร็จ', description: res.error, variant: 'destructive' });
       setCancelingPlayerId(null);
+      setOverlayAction(null);
     }
   };
 
@@ -200,6 +214,7 @@ const EventDetail = () => {
     e.preventDefault();
     if (!id) return;
     setIsRegisteringMember(true);
+    setOverlayAction('register');
     try {
       const res = await apiClient.registerMember(id, {
         startTime: memberTime.startTime,
@@ -208,13 +223,19 @@ const EventDetail = () => {
       if (res.success) {
         toast({ title: 'ลงทะเบียนสำเร็จ' });
         await fetchPlayersFiltered();
+        setTimeout(() => {
+          setIsRegisteringMember(false);
+          setOverlayAction(null);
+        }, 1200);
       } else {
         toast({ title: 'ลงทะเบียนไม่สำเร็จ', description: res.error, variant: 'destructive' });
+        setIsRegisteringMember(false);
+        setOverlayAction(null);
       }
     } catch (err: any) {
       toast({ title: 'ลงทะเบียนไม่สำเร็จ', description: err?.message || 'เกิดข้อผิดพลาด', variant: 'destructive' });
-    } finally {
       setIsRegisteringMember(false);
+      setOverlayAction(null);
     }
   };
 
@@ -265,17 +286,29 @@ const EventDetail = () => {
     ? Math.round(estimatedCourtCost / event.capacity.maxParticipants)
     : undefined;
 
-  const overlayTitle = cancelingPlayerId
+  const overlayTitle = overlayAction === 'cancel'
     ? 'กำลังยกเลิกการลงทะเบียน'
-    : 'กำลังลงทะเบียนผู้เล่น';
-  const overlaySubtitle = cancelingPlayerId
+    : overlayAction === 'register'
+      ? 'กำลังลงทะเบียนผู้เล่น'
+      : overlayAction === 'guest'
+        ? 'กำลังเพิ่มผู้เล่นแขก'
+        : '';
+  const overlaySubtitle = overlayAction === 'cancel'
     ? 'กรุณารอสักครู่...'
-    : 'กำลังบันทึกข้อมูลการลงทะเบียน';
-  const overlayFootnote = cancelingPlayerId
+    : overlayAction === 'register'
+      ? 'กำลังบันทึกข้อมูลการลงทะเบียน กรุณาอย่าปิดหน้าต่าง'
+      : overlayAction === 'guest'
+        ? 'กำลังบันทึกข้อมูลผู้เล่นแขก กรุณาอย่าปิดหน้าต่าง'
+        : '';
+  const overlayFootnote = overlayAction === 'cancel'
     ? 'หน้าจะรีเฟรชอัตโนมัติในอีกไม่ช้า'
-    : 'ระบบจะอัปเดตรายชื่อให้อัตโนมัติทันทีที่เสร็จสิ้น';
+    : overlayAction === 'register'
+      ? 'ระบบจะอัปเดตรายชื่อให้อัตโนมัติทันทีที่เสร็จสิ้น'
+      : overlayAction === 'guest'
+        ? 'รายชื่อผู้เล่นจะอัปเดตให้คุณทันทีเมื่อเสร็จสิ้น'
+        : '';
 
-  const showOverlay = Boolean(cancelingPlayerId || isRegisteringMember);
+  const showOverlay = overlayAction !== null;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-green-50 py-6 px-4 relative">
@@ -523,7 +556,11 @@ const EventDetail = () => {
                       />
                     </div>
                   </div>
-                  <Button type="submit" className="w-full bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 text-white font-medium py-2">
+                  <Button
+                    type="submit"
+                    className="w-full bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 text-white font-medium py-2"
+                    disabled={isAddingGuest}
+                  >
                     <UserPlus className="w-4 h-4 mr-2" />
                     เพิ่มผู้เล่นแขก
                   </Button>
