@@ -48,14 +48,16 @@ const swaggerDefinition = {
           createdBy: { type: "string", description: "User ID who created the event", readOnly: true },
           updatedBy: { type: "string", description: "User ID who last updated the event", readOnly: true },
           status: {
-            type: "object",
-            properties: {
-              state: {
-                type: "string",
-                enum: ["active", "canceled", "completed"],
-              },
-              isAcceptingRegistrations: { type: "boolean" },
-            },
+            type: "string",
+            enum: [
+              "upcoming",
+              "in_progress",
+              "calculating",
+              "awaiting_payment",
+              "completed",
+              "canceled"
+            ],
+            description: "Current event status",
           },
           capacity: {
             type: "object",
@@ -99,11 +101,6 @@ const swaggerDefinition = {
           eventName: { type: "string" },
           eventDate: { type: "string" },
           location: { type: "string" },
-          status: { 
-            type: "string",
-            enum: ["active", "canceled", "completed"],
-            default: "active"
-          },
           capacity: {
             type: "object",
             required: ["maxParticipants"],
@@ -120,7 +117,6 @@ const swaggerDefinition = {
           eventName: "Weekend Badminton Meetup",
           eventDate: "2025-09-21",
           location: "Bangkok Sports Complex",
-          status: "active",
           capacity: {
             maxParticipants: 20,
             waitlistEnabled: true
@@ -158,7 +154,17 @@ const swaggerDefinition = {
         type: "object",
         properties: {
           id: { type: "string" },
-          status: { type: "string", enum: ["active", "canceled", "completed"] },
+          status: { 
+            type: "string", 
+            enum: [
+              "upcoming",
+              "in_progress",
+              "calculating",
+              "awaiting_payment",
+              "completed",
+              "canceled"
+            ] 
+          },
           maxParticipants: { type: "number" },
           currentParticipants: { type: "number" },
           availableSlots: { type: "number" },

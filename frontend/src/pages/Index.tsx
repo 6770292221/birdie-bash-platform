@@ -10,6 +10,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Link, useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import { apiClient } from '@/utils/api';
+import { EventStatusType, getEventStatusLabel, getEventStatusColor } from '@/types/event';
 
 const IndexContent = () => {
   const { t } = useLanguage();
@@ -22,6 +23,7 @@ const IndexContent = () => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [eventsLoading, setEventsLoading] = useState(false);
   const [events, setEvents] = useState<any[]>([]);
+  const [completedEvents, setCompletedEvents] = useState<any[]>([]);
   const notificationRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -31,7 +33,12 @@ const IndexContent = () => {
       const res = await apiClient.getEvents({ limit: 10, offset: 0 });
       if (res.success) {
         const data = (res.data as any);
-        setEvents(data.events || data);
+        const allEvents = data.events || data;
+        // Split events into active and completed/canceled
+        const activeEvents = allEvents.filter((ev: any) => ev.status !== 'completed' && ev.status !== 'canceled');
+        const finishedEvents = allEvents.filter((ev: any) => ev.status === 'completed' || ev.status === 'canceled');
+        setEvents(activeEvents);
+        setCompletedEvents(finishedEvents);
       } else {
         toast({ title: 'ดึงรายการอีเวนต์ไม่สำเร็จ', description: res.error, variant: 'destructive' });
       }
@@ -201,13 +208,15 @@ const IndexContent = () => {
           {/* ประวัติ (last) */}
           <Card
             className="bg-white/70 backdrop-blur-sm border-gray-200 cursor-pointer hover:shadow-md transition"
-            onClick={() => toast({ title: 'เร็วๆ นี้', description: 'หน้าประวัติอีเวนต์กำลังพัฒนา' })}
+            onClick={() => navigate('/history')}
             role="button"
           >
             <CardContent className="p-4 text-center">
               <History className="h-8 w-8 text-gray-700 mx-auto mb-2" />
               <p className="font-semibold text-gray-900">ประวัติ</p>
-              <p className="text-sm text-gray-600">ดูประวัติและอีเวนต์ที่ผ่านมา</p>
+              <p className="text-sm text-gray-600">
+                ดูประวัติอีเวนต์ ({completedEvents.length})
+              </p>
             </CardContent>
           </Card>
         </div>
@@ -221,11 +230,11 @@ const IndexContent = () => {
               </CardContent>
             </Card>
 
-            <Card className="bg-white/70 backdrop-blur-sm border-purple-200 cursor-pointer hover:shadow-md transition" onClick={() => toast({ title: 'เร็วๆ นี้', description: 'หน้าประวัติกิจกรรมกำลังพัฒนา' })} role="button">
+            <Card className="bg-white/70 backdrop-blur-sm border-purple-200 cursor-pointer hover:shadow-md transition" onClick={() => navigate('/history')} role="button">
               <CardContent className="p-4 text-center">
                 <History className="h-8 w-8 text-purple-600 mx-auto mb-2" />
                 <p className="font-semibold text-gray-900">ประวัติกิจกรรม</p>
-                <p className="text-sm text-gray-600">ดูประวัติการเข้าร่วม</p>
+                <p className="text-sm text-gray-600">ดูประวัติอีเวนต์ ({completedEvents.length})</p>
               </CardContent>
             </Card>
           </div>
@@ -234,33 +243,95 @@ const IndexContent = () => {
         {/* Events List (requires login) */}
         {user && (
           <div id="events-list" className="mt-8">
-            <h3 className="text-2xl font-bold text-gray-900 mb-4">อีเวนต์ล่าสุด</h3>
+            <h3 className="text-2xl font-bold text-gray-900 mb-4">
+              Active Events
+            </h3>
             {events.length === 0 ? (
-              <p className="text-gray-600">ยังไม่มีอีเวนต์</p>
+              <p className="text-gray-600">No active events</p>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {events.map((ev: any) => (
                   <Card
                     key={ev.id}
-                    className="relative overflow-hidden border-0 shadow-lg bg-white/90 backdrop-blur-sm"
+                    className="group relative overflow-hidden border border-gray-200 shadow-sm hover:shadow-xl bg-white transition-all duration-300 hover:-translate-y-1"
                   >
-                    <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-blue-500 via-purple-500 to-teal-500" />
-                    <CardContent className="p-5">
-                      <div className="mb-2 flex items-center justify-between">
-                        <p className="font-semibold text-gray-900 text-lg truncate pr-2">{ev.eventName}</p>
+                    {/* Status Badge - Top Right */}
+                    {ev.status && (
+                      <div className="absolute top-0 right-0 z-10">
+                        <Badge
+                          className={`rounded-none rounded-bl-lg px-3 py-1 font-medium text-xs shadow-md ${getEventStatusColor(ev.status as EventStatusType)}`}
+                        >
+                          {getEventStatusLabel(ev.status as EventStatusType)}
+                        </Badge>
                       </div>
-                      <div className="space-y-1 text-sm text-gray-700">
-                        <p>วันที่: {ev.eventDate}</p>
-                        <p>สถานที่: {ev.location}</p>
-                        <p>
-                          ผู้เข้าร่วม: {ev?.capacity?.currentParticipants ?? '-'} / {ev?.capacity?.maxParticipants ?? '-'}
-                        </p>
-                      </div>
-                      <div className="mt-4 flex items-center gap-2">
-                        <Link to={`/events/${ev.id}`}>
-                          <Button size="sm" variant="outline">รายละเอียด</Button>
-                        </Link>
+                    )}
 
+                    {/* Header Section */}
+                    <div className="bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 px-6 py-4 border-b border-gray-100">
+                      <h3 className="font-bold text-xl text-gray-900 mb-2 pr-20">
+                        {ev.eventName}
+                      </h3>
+                      <div className="flex items-center text-gray-600 text-sm">
+                        <Calendar className="w-4 h-4 mr-2 text-blue-500" />
+                        <span className="font-medium">{ev.eventDate}</span>
+                      </div>
+                    </div>
+
+                    {/* Content Section */}
+                    <CardContent className="p-6">
+                      <div className="space-y-4">
+                        {/* Location */}
+                        <div className="flex items-start gap-3">
+                          <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                            <MapPin className="w-4 h-4 text-blue-600" />
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-sm text-gray-500 mb-1">สถานที่</p>
+                            <p className="text-gray-900 font-medium">{ev.location}</p>
+                          </div>
+                        </div>
+
+                        {/* Participants */}
+                        <div className="flex items-start gap-3">
+                          <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
+                            <Users className="w-4 h-4 text-green-600" />
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-sm text-gray-500 mb-1">ผู้เข้าร่วม</p>
+                            <div className="flex items-center gap-2">
+                              <p className="text-gray-900 font-medium">
+                                {ev?.capacity?.currentParticipants ?? 0} / {ev?.capacity?.maxParticipants ?? 0}
+                              </p>
+                              {ev?.capacity && (
+                                <div className="flex-1 bg-gray-200 rounded-full h-2 max-w-20">
+                                  <div
+                                    className="bg-gradient-to-r from-green-500 to-blue-500 h-2 rounded-full transition-all duration-300"
+                                    style={{
+                                      width: `${Math.min(100, (ev.capacity.currentParticipants / ev.capacity.maxParticipants) * 100)}%`
+                                    }}
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Action Button */}
+                        <div className="pt-2">
+                          <Link to={`/events/${ev.id}`} className="block">
+                            <Button
+                              className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white shadow-md hover:shadow-lg transition-all duration-200"
+                              size="sm"
+                            >
+                              <span className="flex items-center justify-center gap-2">
+                                รายละเอียด
+                                <svg className="w-4 h-4 group-hover:translate-x-1 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                                </svg>
+                              </span>
+                            </Button>
+                          </Link>
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
@@ -269,6 +340,7 @@ const IndexContent = () => {
             )}
           </div>
         )}
+
 
         {/* User Activity & History Section (Admin-style for users) */}
         {user && !isAdmin && (

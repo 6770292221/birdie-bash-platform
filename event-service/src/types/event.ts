@@ -1,4 +1,13 @@
-export type EventStatus = 'active' | 'canceled' | 'completed';
+export enum EventStatus {
+  UPCOMING = 'upcoming',           // กำลังจะมาถึง
+  IN_PROGRESS = 'in_progress',     // กำลังดำเนินการ
+  CALCULATING = 'calculating',     // กำลังคำนวณ
+  AWAITING_PAYMENT = 'awaiting_payment', // รอการชำระเงิน
+  COMPLETED = 'completed',         // เสร็จสิ้น
+  CANCELED = 'canceled'            // ยกเลิก
+}
+
+export type EventStatusType = 'upcoming' | 'in_progress' | 'calculating' | 'awaiting_payment' | 'completed' | 'canceled';
 export type PlayerStatus = 'registered' | 'waitlist' | 'canceled';
 
 export interface TimeInfo {
@@ -39,7 +48,7 @@ export interface IEvent {
   eventName: string;
   eventDate: string;
   location: string;
-  status: EventStatus;
+  status: EventStatusType;
   capacity: CapacityInfo;
   shuttlecockPrice: number;
   courtHourlyRate: number;
@@ -54,7 +63,6 @@ export interface IEventCreate {
   eventName: string;
   eventDate: string;
   location: string;
-  status?: EventStatus;
   capacity: Omit<CapacityInfo, 'availableSlots' | 'waitlistEnabled'> & {
     availableSlots?: number;
     waitlistEnabled?: boolean;
@@ -69,7 +77,7 @@ export interface IEventUpdate {
   eventDate?: string;
   location?: string;
   capacity?: Partial<CapacityInfo>;
-  status?: EventStatus;
+  status?: EventStatusType;
   shuttlecockPrice?: number;
   courtHourlyRate?: number;
   courts?: ICourtTime[];

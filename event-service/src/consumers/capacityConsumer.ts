@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import mongoose from 'mongoose';
 import Event from '../models/Event';
+import { EventStatus } from '../types/event';
 
 // Load env regardless of CWD
 dotenv.config({ path: path.resolve(__dirname, '..', '..', '.env') });
@@ -88,7 +89,7 @@ async function main() {
           const after = await Event.findById(data.eventId, 'status capacity.availableSlots capacity.waitlistEnabled').lean().catch(() => null) as any;
           const afterAvail = Number(after?.capacity?.availableSlots ?? 0);
           const waitlistEnabled = Boolean(after?.capacity?.waitlistEnabled);
-          const isActive = String(after?.status || 'active') === 'active';
+          const isActive = String(after?.status || EventStatus.UPCOMING) === EventStatus.UPCOMING || String(after?.status) === EventStatus.IN_PROGRESS;
           if (isActive && waitlistEnabled && beforeAvail <= 0 && afterAvail > 0) {
             const openedSlots = Math.max(1, Math.min(afterAvail, 1));
             const openedPayload = {
