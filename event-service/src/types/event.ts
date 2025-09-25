@@ -63,7 +63,6 @@ export interface IEventCreate {
   eventName: string;
   eventDate: string;
   location: string;
-  status?: EventStatusType;
   capacity: Omit<CapacityInfo, 'availableSlots' | 'waitlistEnabled'> & {
     availableSlots?: number;
     waitlistEnabled?: boolean;

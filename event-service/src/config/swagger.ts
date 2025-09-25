@@ -101,18 +101,6 @@ const swaggerDefinition = {
           eventName: { type: "string" },
           eventDate: { type: "string" },
           location: { type: "string" },
-          status: { 
-            type: "string",
-            enum: [
-              "upcoming",
-              "in_progress",
-              "calculating",
-              "awaiting_payment",
-              "completed",
-              "canceled"
-            ],
-            default: "upcoming"
-          },
           capacity: {
             type: "object",
             required: ["maxParticipants"],
@@ -129,7 +117,6 @@ const swaggerDefinition = {
           eventName: "Weekend Badminton Meetup",
           eventDate: "2025-09-21",
           location: "Bangkok Sports Complex",
-          status: "active",
           capacity: {
             maxParticipants: 20,
             waitlistEnabled: true
