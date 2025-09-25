@@ -9,6 +9,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface LoginFormData {
   email: string;
@@ -20,6 +21,7 @@ const LoginForm = () => {
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
   const { toast } = useToast();
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const form = useForm<LoginFormData>();
 
@@ -32,14 +34,14 @@ const LoginForm = () => {
     
     if (error) {
       toast({
-        title: "เข้าสู่ระบบไม่สำเร็จ",
+        title: t('login.failed'),
         description: error,
         variant: "destructive",
       });
     } else {
       toast({
-        title: "เข้าสู่ระบบสำเร็จ",
-        description: "ยินดีต้อนรับเข้าสู่ระบบจัดการแบดมินตัน",
+        title: t('login.success'),
+        description: t('login.success_desc'),
       });
       navigate('/');
     }
@@ -48,13 +50,19 @@ const LoginForm = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-      <Card className="w-full max-w-md mx-auto">
-        <CardHeader className="text-center space-y-4">
-          <CardTitle className="text-2xl font-bold text-gray-900">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-green-50 py-12 px-4 sm:px-6 lg:px-8 flex items-center justify-center">
+      <Card className="w-full max-w-md bg-white/80 backdrop-blur-md border-0 shadow-2xl overflow-hidden">
+        <div className="h-1 bg-gradient-to-r from-blue-600 via-purple-600 to-teal-600" />
+        <CardHeader className="text-center space-y-4 pb-6">
+          <CardTitle className="text-3xl font-bold text-gray-900 flex items-center justify-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center">
+              <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M3 3a1 1 0 011 1v12a1 1 0 11-2 0V4a1 1 0 011-1zm7.707 3.293a1 1 0 010 1.414L9.414 9H17a1 1 0 110 2H9.414l1.293 1.293a1 1 0 01-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0z" clipRule="evenodd" />
+              </svg>
+            </div>
             เข้าสู่ระบบ
           </CardTitle>
-          <p className="text-gray-600">เข้าสู่ระบบเพื่อจองคอร์ทแบดมินตัน</p>
+          <p className="text-gray-700 text-base">เข้าสู่ระบบเพื่อจัดการแบดมินตันของคุณ</p>
         </CardHeader>
         
         <CardContent className="space-y-6">
@@ -126,26 +134,36 @@ const LoginForm = () => {
                 )}
               />
 
-              <Button 
-                type="submit" 
-                className="w-full h-12 text-base font-medium"
+              <Button
+                type="submit"
+                className="w-full h-12 text-base font-bold bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white shadow-lg hover:shadow-xl transition-all duration-200"
                 disabled={isLoading}
               >
-                {isLoading ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบ'}
+                {isLoading ? (
+                  <>
+                    <svg className="w-5 h-5 mr-2 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    กำลังเข้าสู่ระบบ...
+                  </>
+                ) : (
+                  'เข้าสู่ระบบ'
+                )}
               </Button>
             </form>
           </Form>
 
-          <div className="text-center space-y-3">
-            <p className="text-sm text-gray-600">
+          <div className="text-center space-y-4">
+            <p className="text-sm text-gray-700">
               ยังไม่มีบัญชี?{' '}
-              <Link to="/register" className="text-blue-600 hover:text-blue-500 font-medium">
+              <Link to="/register" className="text-blue-600 hover:text-blue-700 font-bold transition-colors">
                 ลงทะเบียน
               </Link>
             </p>
-            <Link 
-              to="/" 
-              className="inline-block text-sm text-gray-600 hover:text-gray-500 py-2 px-4 rounded-lg border border-gray-200 hover:border-gray-300 transition-colors"
+            <Link
+              to="/"
+              className="inline-block text-sm text-gray-600 hover:text-gray-800 py-2 px-6 rounded-xl bg-gray-100/60 hover:bg-gray-200/70 border border-gray-200/50 transition-all duration-200 font-medium"
             >
               กลับหน้าหลัก
             </Link>

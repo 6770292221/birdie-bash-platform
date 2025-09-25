@@ -68,13 +68,19 @@ const RegisterForm = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold text-gray-900">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-green-50 py-12 px-4 sm:px-6 lg:px-8 flex items-center justify-center">
+      <Card className="w-full max-w-md bg-white/80 backdrop-blur-md border-0 shadow-2xl overflow-hidden">
+        <div className="h-1 bg-gradient-to-r from-blue-600 via-purple-600 to-teal-600" />
+        <CardHeader className="text-center pb-6">
+          <CardTitle className="text-3xl font-bold text-gray-900 flex items-center justify-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-r from-green-500 to-teal-500 flex items-center justify-center">
+              <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+              </svg>
+            </div>
             ลงทะเบียน
           </CardTitle>
-          <p className="text-gray-600">สร้างบัญชีใหม่เพื่อจองคอร์ทแบดมินตัน</p>
+          <p className="text-gray-700 text-base">สร้างบัญชีใหม่เพื่อเริ่มต้นการเล่นแบดมินตัน</p>
         </CardHeader>
         <CardContent>
           <Form {...form}>
@@ -269,22 +275,35 @@ const RegisterForm = () => {
                 )}
               />
 
-              <Button 
-                type="submit" 
-                className="w-full"
+              <Button
+                type="submit"
+                className="w-full h-12 text-base font-bold bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 text-white shadow-lg hover:shadow-xl transition-all duration-200"
                 disabled={isLoading}
               >
-                {isLoading ? 'กำลังลงทะเบียน...' : 'ลงทะเบียน'}
+                {isLoading ? (
+                  <>
+                    <svg className="w-5 h-5 mr-2 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    กำลังลงทะเบียน...
+                  </>
+                ) : (
+                  'ลงทะเบียน'
+                )}
               </Button>
 
-              <div className="text-center space-y-2">
-                <p className="text-sm text-gray-600">
+              <div className="text-center space-y-4">
+                <p className="text-sm text-gray-700">
                   มีบัญชีอยู่แล้ว?{' '}
-                  <Link to="/login" className="text-blue-600 hover:text-blue-500 font-medium">
+                  <Link to="/login" className="text-blue-600 hover:text-blue-700 font-bold transition-colors">
                     เข้าสู่ระบบ
                   </Link>
                 </p>
-                <Link to="/" className="text-sm text-gray-600 hover:text-gray-500">
+                <Link
+                  to="/"
+                  className="inline-block text-sm text-gray-600 hover:text-gray-800 py-2 px-6 rounded-xl bg-gray-100/60 hover:bg-gray-200/70 border border-gray-200/50 transition-all duration-200 font-medium"
+                >
                   กลับหน้าหลัก
                 </Link>
               </div>
