@@ -4,6 +4,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -44,11 +46,13 @@ const CalculatePage = () => {
   const [players, setPlayers] = useState<any[]>([]);
   const [breakdown, setBreakdown] = useState<CostBreakdownItem[]>([]);
   const [isCalculated, setIsCalculated] = useState<boolean>(false);
+  const [shuttlecockCount, setShuttlecockCount] = useState<string>('');
+  const [penaltyFee, setPenaltyFee] = useState<string>('');
 
   useEffect(() => {
     const fetch = async () => {
       if (!user || !isAdmin) return;
-      const res = await apiClient.getEvents({ limit: 50, offset: 0 });
+      const res = await apiClient.getEvents({ limit: 50, offset: 0, status: 'calculating' });
       if (res.success) {
         const list = (res.data as any).events || (res.data as any) || [];
         setEvents(list);
@@ -131,7 +135,22 @@ const CalculatePage = () => {
     return mockBreakdown;
   };
 
-  const calculate = () => {
+  // Validation function to check if inputs are valid
+  const isFormValid = useMemo(() => {
+    const shuttlecockNum = parseInt(shuttlecockCount);
+    const penaltyNum = parseFloat(penaltyFee);
+
+    return (
+      shuttlecockCount.trim() !== '' &&
+      penaltyFee.trim() !== '' &&
+      !isNaN(shuttlecockNum) &&
+      !isNaN(penaltyNum) &&
+      shuttlecockNum > 0 &&
+      penaltyNum >= 0
+    );
+  }, [shuttlecockCount, penaltyFee]);
+
+  const calculate = async () => {
     if (!eventDetail) {
       // Use mock data if no event selected (for development)
       const mockData = generateMockData();
@@ -145,73 +164,79 @@ const CalculatePage = () => {
       return;
     }
 
-    const registered = players.filter((p: any) => p.status === 'registered');
-    if (registered.length === 0) {
-      setBreakdown([]);
-      setIsCalculated(false);
-      return;
+    try {
+      console.log('🚀 Starting settlement calculation...');
+      console.log('Event ID:', selectedEventId);
+      console.log('Event Detail:', eventDetail);
+      console.log('Auth Token exists:', !!localStorage.getItem('authToken'));
+
+      if (!selectedEventId) {
+        throw new Error('กรุณาเลือกอีเวนต์ก่อน');
+      }
+
+      if (!eventDetail) {
+        throw new Error('ไม่พบข้อมูลอีเวนต์ กรุณารีเฟรชหน้า');
+      }
+
+      // Use apiClient settlement method
+      console.log('Calling settlement API...');
+      const response = await apiClient.issueSettlement(selectedEventId, {
+        currency: 'THB',
+        shuttlecockCount: parseInt(shuttlecockCount),
+        penaltyFee: parseFloat(penaltyFee)
+      });
+
+      console.log('Settlement API response:', response); // Debug log
+
+      if (!response.success) {
+        console.error('Settlement API failed:', response.error);
+
+        // Fallback to mock data if API fails
+        console.log('🔄 Falling back to mock data...');
+        const mockData = generateMockData();
+        setBreakdown(mockData);
+        setIsCalculated(true);
+        toast({
+          title: 'คำนวณสำเร็จ (โหมดทดสอบ)',
+          description: `ใช้ข้อมูลจำลอง เนื่องจาก Settlement API ไม่พร้อมใช้งาน`,
+          variant: 'default'
+        });
+        return;
+      }
+
+      if (response.success && response.data && (response.data as any).calculationResults) {
+        // Transform settlement API response to breakdown format
+        const transformedData: CostBreakdownItem[] = (response.data as any).calculationResults.map((item: any) => ({
+          playerId: item.playerId,
+          name: item.name || 'ไม่ระบุชื่อ',
+          userType: item.role === 'member' ? 'member' : 'guest',
+          startTime: item.startTime || '09:00',
+          endTime: item.endTime || '10:00',
+          playHours: item.breakdown?.hoursPlayed || 0,
+          courtFee: item.courtFee || 0,
+          shuttlecockFee: item.shuttlecockFee || 0,
+          fine: item.penaltyFee || 0,
+          total: item.totalAmount || 0,
+          isPaid: item.paymentStatus === 'completed' || false
+        }));
+
+        setBreakdown(transformedData);
+        setIsCalculated(true);
+        toast({
+          title: 'คำนวณสำเร็จ',
+          description: `คำนวณค่าใช้จ่ายสำหรับ ${transformedData.length} คน เรียบร้อยแล้ว`
+        });
+      } else {
+        throw new Error('Invalid response format from settlement API');
+      }
+    } catch (error) {
+      console.error('Settlement API error:', error);
+      toast({
+        title: 'เกิดข้อผิดพลาด',
+        description: error instanceof Error ? error.message : 'ไม่สามารถคำนวณค่าใช้จ่ายได้',
+        variant: 'destructive'
+      });
     }
-
-    const toMs = (t?: string) => {
-      if (!t) return NaN;
-      const d = new Date(`2000-01-01T${t}`);
-      return d.getTime();
-    };
-
-    const playerHours = registered.map((p: any) => {
-      const s = toMs(p.startTime);
-      const e = toMs(p.endTime);
-      const h = !Number.isNaN(s) && !Number.isNaN(e) && e > s ? (e - s) / 3600000 : 0;
-      return {
-        id: p.playerId,
-        name: p.name || 'ไม่ระบุชื่อ',
-        hours: h,
-        userType: p.userType || 'member',
-        startTime: p.startTime || '09:00',
-        endTime: p.endTime || '10:00'
-      };
-    });
-
-    const sumHours = playerHours.reduce((a, b) => a + b.hours, 0);
-    const courtHours = Array.isArray(eventDetail.courts) ? eventDetail.courts.reduce((acc: number, c: any) => {
-      const s = toMs(c.startTime);
-      const e = toMs(c.endTime);
-      const h = !Number.isNaN(s) && !Number.isNaN(e) && e > s ? (e - s) / 3600000 : 0;
-      return acc + h;
-    }, 0) : 0;
-
-    const totalCourtCost = (eventDetail.courtHourlyRate || 150) * courtHours;
-    const proportional = sumHours > 0;
-    const equalShare = totalCourtCost / registered.length;
-    const shuttlePerPlayer = Number(eventDetail.shuttlecockPrice || 50);
-
-    const data: CostBreakdownItem[] = playerHours.map(ph => {
-      const courtFee = proportional ? (ph.hours / sumHours) * totalCourtCost : equalShare;
-      const shuttlecockFee = shuttlePerPlayer;
-      const fine = Math.random() > 0.8 ? 20 : 0; // Random fine for demo
-      const total = courtFee + shuttlecockFee + fine;
-
-      return {
-        playerId: ph.id,
-        name: ph.name,
-        userType: ph.userType,
-        startTime: ph.startTime,
-        endTime: ph.endTime,
-        playHours: Math.round(ph.hours * 100) / 100,
-        courtFee: Math.round(courtFee * 100) / 100,
-        shuttlecockFee,
-        fine,
-        total: Math.round(total * 100) / 100,
-        isPaid: Math.random() > 0.5 // Random payment status for demo
-      };
-    });
-
-    setBreakdown(data);
-    setIsCalculated(true);
-    toast({
-      title: 'คำนวณสำเร็จ',
-      description: `คำนวณค่าใช้จ่ายสำหรับ ${data.length} คน เรียบร้อยแล้ว`
-    });
   };
 
   const handlePaymentToggle = (playerId: string, isPaid: boolean) => {
@@ -299,8 +324,9 @@ const CalculatePage = () => {
             <CardTitle className="text-xl">คำนวณค่าใช้จ่าย</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div className="md:col-span-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="event-select">เลือกอีเวนต์</Label>
                 <Select value={selectedEventId} onValueChange={setSelectedEventId}>
                   <SelectTrigger>
                     <SelectValue placeholder="เลือกอีเวนต์" />
@@ -312,9 +338,61 @@ const CalculatePage = () => {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex items-center">
-                <Button className="w-full bg-blue-600 hover:bg-blue-700" onClick={calculate}>คำนวณ</Button>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label htmlFor="shuttlecock-count">จำนวนลูกขนไก่ที่ใช้</Label>
+                  <Input
+                    id="shuttlecock-count"
+                    type="number"
+                    min="1"
+                    value={shuttlecockCount}
+                    onChange={(e) => setShuttlecockCount(e.target.value)}
+                    placeholder="เช่น 4"
+                    className={shuttlecockCount.trim() !== '' && (isNaN(parseInt(shuttlecockCount)) || parseInt(shuttlecockCount) <= 0) ? 'border-red-500' : ''}
+                  />
+                  {shuttlecockCount.trim() !== '' && (isNaN(parseInt(shuttlecockCount)) || parseInt(shuttlecockCount) <= 0) && (
+                    <p className="text-red-500 text-xs mt-1">กรุณาใส่จำนวนที่มากกว่า 0</p>
+                  )}
+                </div>
+
+                <div>
+                  <Label htmlFor="penalty-fee">ค่าปรับ (บาท)</Label>
+                  <div className="relative">
+                    <Input
+                      id="penalty-fee"
+                      type="text"
+                      value={penaltyFee}
+                      onChange={(e) => setPenaltyFee(e.target.value)}
+                      placeholder="เช่น 100 หรือเลือกจากรายการ"
+                      className={`${penaltyFee.trim() !== '' && (isNaN(parseFloat(penaltyFee)) || parseFloat(penaltyFee) < 0) ? 'border-red-500' : ''}`}
+                      list="penalty-options"
+                    />
+                    <datalist id="penalty-options">
+                      <option value="0">ไม่มีค่าปรับ</option>
+                      <option value="50">50 บาท</option>
+                      <option value="100">100 บาท</option>
+                      <option value="200">200 บาท</option>
+                      <option value="300">300 บาท</option>
+                      <option value="500">500 บาท</option>
+                    </datalist>
+                  </div>
+                  {penaltyFee.trim() !== '' && (isNaN(parseFloat(penaltyFee)) || parseFloat(penaltyFee) < 0) && (
+                    <p className="text-red-500 text-xs mt-1">กรุณาใส่ค่าที่มากกว่าหรือเท่ากับ 0</p>
+                  )}
+                </div>
               </div>
+            </div>
+
+            <div className="flex justify-center">
+              <Button
+                className={`w-full md:w-auto px-8 ${isFormValid ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-400 cursor-not-allowed'}`}
+                onClick={calculate}
+                disabled={!isFormValid}
+              >
+                <Calculator className="w-4 h-4 mr-2" />
+                คำนวณค่าใช้จ่าย
+              </Button>
             </div>
 
             {isCalculated && breakdown.length > 0 && (

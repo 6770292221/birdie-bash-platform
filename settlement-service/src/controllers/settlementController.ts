@@ -31,11 +31,30 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
     // Fetch event details
     let eventData: any;
     try {
-      Logger.info('Fetching event details', { event_id });
-      const eventResponse = await fetch(`http://localhost:3003/api/events/${event_id}`, {
+      const gatewayUrl = process.env.GATEWAY_URL || 'http://localhost:3000';
+      const fullUrl = `${gatewayUrl}/api/events/${event_id}`;
+      const authHeader = req.headers.authorization || '';
+
+      Logger.info('Fetching event details', {
+        event_id,
+        gatewayUrl,
+        fullUrl,
+        hasAuth: !!authHeader,
+        authHeaderLength: authHeader.length
+      });
+
+      const eventResponse = await fetch(fullUrl, {
         headers: {
-          'Authorization': req.headers.authorization || ''
+          'Authorization': authHeader,
+          'Content-Type': 'application/json'
         }
+      });
+
+      Logger.info('Event API response received', {
+        event_id,
+        status: eventResponse.status,
+        statusText: eventResponse.statusText,
+        headers: Object.fromEntries(eventResponse.headers.entries())
       });
 
       if (!eventResponse.ok) {
@@ -70,7 +89,9 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
     } catch (error) {
       Logger.error('Error fetching event details', {
         event_id,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        gatewayUrl: process.env.GATEWAY_URL || 'http://localhost:3000',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : 'No stack trace'
       });
       return res.status(500).json({
         success: false,
@@ -87,7 +108,8 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
     let players: any[];
     try {
       Logger.info('Fetching event players', { event_id });
-      const playersResponse = await fetch(`http://localhost:3005/api/registration/events/${event_id}/players`, {
+      const gatewayUrl = process.env.GATEWAY_URL || 'http://localhost:3000';
+      const playersResponse = await fetch(`${gatewayUrl}/api/registration/events/${event_id}/players`, {
         headers: {
           'Authorization': req.headers.authorization || ''
         }
@@ -148,7 +170,8 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
               playerId: player.playerId
             });
 
-            const userResponse = await fetch(`http://localhost:3001/api/auth/user/${player.userId}`, {
+            const gatewayUrl = process.env.GATEWAY_URL || 'http://localhost:3000';
+            const userResponse = await fetch(`${gatewayUrl}/api/auth/user/${player.userId}`, {
               headers: {
                 'Authorization': req.headers.authorization || ''
               }
@@ -244,7 +267,8 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
     if (createdBy) {
       try {
         Logger.info('Fetching event creator details', { createdBy });
-        const userResponse = await fetch(`http://localhost:3001/api/auth/user/${createdBy}`, {
+        const gatewayUrl = process.env.GATEWAY_URL || 'http://localhost:3000';
+        const userResponse = await fetch(`${gatewayUrl}/api/auth/user/${createdBy}`, {
           headers: {
             'Authorization': req.headers.authorization || ''
           }
@@ -444,6 +468,35 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
       successfulCharges,
       failedCharges
     });
+
+    // Update event status to completed after successful settlement
+    try {
+      const gatewayUrl = process.env.GATEWAY_URL || 'http://localhost:3000';
+      const updateEventResponse = await fetch(`${gatewayUrl}/api/events/${event_id}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': req.headers.authorization || '',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ status: 'completed' })
+      });
+
+      if (updateEventResponse.ok) {
+        Logger.success('Event status updated to completed', { event_id });
+      } else {
+        Logger.error('Failed to update event status', {
+          event_id,
+          status: updateEventResponse.status,
+          statusText: updateEventResponse.statusText
+        });
+      }
+    } catch (error) {
+      Logger.error('Error updating event status', {
+        event_id,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      // Don't fail the entire settlement process if event status update fails
+    }
 
     res.status(201).json({
       success: true,

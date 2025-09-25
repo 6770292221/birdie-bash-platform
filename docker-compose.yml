@@ -160,6 +160,7 @@ services:
       - PORT=3006
       - SETTLEMENT_DB_URI=mongodb+srv://birdie_admin:AppUser%232025%21@birdie-bash-cluster.lwadyko.mongodb.net/settlement?retryWrites=true&w=majority&appName=birdie-bash-cluster
       - GRPC_PORT=50051
+      - GATEWAY_URL=http://birdie-gateway:3000
     depends_on:
       - mongodb
     networks:

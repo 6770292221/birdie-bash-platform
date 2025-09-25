@@ -26,13 +26,19 @@ Duplicate `.env.example` to `.env` and fill in credentials. For dev email, creat
 ## 4) Run HTTP API (Swagger) & Worker
 
 Terminal A (API):
+<<<<<<< HEAD
 
+=======
+>>>>>>> origin/main
 ```bash
 npm run dev
 ```
 
 Terminal B (Worker):
+<<<<<<< HEAD
 
+=======
+>>>>>>> origin/main
 ```bash
 npm run worker
 ```
@@ -42,7 +48,10 @@ npm run worker
 Open Swagger UI: `http://localhost:8080/docs`
 
 ### Publish a test event
+<<<<<<< HEAD
 
+=======
+>>>>>>> origin/main
 ```bash
 curl -X POST http://localhost:8080/test/publish \
   -H 'Content-Type: application/json' \
@@ -60,7 +69,10 @@ curl -X POST http://localhost:8080/test/publish \
 The worker will consume the message and write a document in `NotificationLog` collection.
 
 ### Query RabbitMQ bindings (optional)
+<<<<<<< HEAD
 
+=======
+>>>>>>> origin/main
 Routing key used: `events.notification` on exchange `events`, queue `notification.events`.
 
 ## 6) Validate logs in MongoDB
@@ -70,7 +82,10 @@ docker exec -it $(docker ps -qf name=mongo) mongosh notification_db --eval 'db.n
 ```
 
 ## 7) Notes & Hardening
+<<<<<<< HEAD
 
+=======
+>>>>>>> origin/main
 - Add retry & dead-letter exchange for failed deliveries.
 - Per-channel rate limiting & backoff.
 - Schema validation (e.g., zod or Joi) before publishing/consuming.

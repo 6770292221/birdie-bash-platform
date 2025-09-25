@@ -283,6 +283,23 @@ class ApiClient {
   async getEventRegistrations(eventId: string): Promise<ApiResponse<any>> {
     return this.request(`/api/registration/events/${eventId}/registrations`);
   }
+
+  // Settlement endpoints
+  async issueSettlement(eventId: string, data: {
+    currency?: string;
+    shuttlecockCount?: number;
+    penaltyFee?: number;
+  }): Promise<ApiResponse<any>> {
+    return this.request(`/api/settlements/issue`, {
+      method: "POST",
+      data: {
+        event_id: eventId,
+        currency: data.currency || 'THB',
+        shuttlecockCount: data.shuttlecockCount || 4,
+        penaltyFee: data.penaltyFee || 0
+      }
+    });
+  }
 }
 
 // Create and export singleton instance

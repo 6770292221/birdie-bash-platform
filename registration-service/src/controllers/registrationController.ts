@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import Player from "../models/Player";
-import { RegisterByUser, RegisterByGuest } from "../types/event";
+import { RegisterByUser, RegisterByGuest, EventStatus } from "../types/event";
 import http from "http";
 import https from "https";
 import messageQueueService from "../queue/publisher";
@@ -107,6 +107,43 @@ async function fetchEventStatus(eventId: string): Promise<any | null> {
     });
     req.end();
   });
+}
+
+const ACCEPTING_EVENT_STATUSES: ReadonlySet<EventStatus> = new Set([
+  "upcoming",
+  "in_progress",
+]);
+
+function extractEventStatus(status: any): {
+  state?: EventStatus;
+  isAcceptingRegistrations?: boolean;
+} {
+  if (!status) return {};
+  if (typeof status === "string") {
+    return { state: status as EventStatus };
+  }
+  if (typeof status === "object") {
+    const state =
+      typeof (status as any).state === "string"
+        ? ((status as any).state as EventStatus)
+        : undefined;
+    const flag =
+      typeof (status as any).isAcceptingRegistrations === "boolean"
+        ? Boolean((status as any).isAcceptingRegistrations)
+        : undefined;
+    return { state, isAcceptingRegistrations: flag };
+  }
+  return {};
+}
+
+function isRegistrationOpenFromStatus(status: any): {
+  accepting: boolean;
+  state?: EventStatus;
+} {
+  const { state, isAcceptingRegistrations } = extractEventStatus(status);
+  const baseAccepting = state ? ACCEPTING_EVENT_STATUSES.has(state) : false;
+  const accepting = baseAccepting && (isAcceptingRegistrations ?? true);
+  return { accepting, state };
 }
 
 export const getPlayers = async (
@@ -300,18 +337,14 @@ export const registerMember = async (
       });
       return;
     }
-    const statusVal: any = (event as any).status;
-    const isActive =
-      typeof statusVal === "string"
-        ? statusVal === "active"
-        : statusVal?.state === "active";
-    if (!isActive) {
+    const registrationGate = isRegistrationOpenFromStatus(event.status);
+    if (!registrationGate.accepting) {
       res.status(400).json({
         code: "REGISTRATION_CLOSED",
         message: "Event is not accepting registrations",
         details: {
           eventId,
-          status: event.status,
+          status: registrationGate.state ?? event.status,
           isAcceptingRegistrations: false,
         },
       });
@@ -673,18 +706,14 @@ export const registerGuest = async (
       return;
     }
 
-    const statusVal: any = (event as any).status;
-    const isActive =
-      typeof statusVal === "string"
-        ? statusVal === "active"
-        : statusVal?.state === "active";
-    if (!isActive) {
+    const registrationGate = isRegistrationOpenFromStatus(event.status);
+    if (!registrationGate.accepting) {
       res.status(400).json({
         code: "REGISTRATION_CLOSED",
         message: "Event is not accepting registrations",
         details: {
           eventId,
-          status: event.status,
+          status: registrationGate.state ?? event.status,
           isAcceptingRegistrations: false,
         },
       });

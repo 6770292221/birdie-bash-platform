@@ -5,6 +5,7 @@ import swaggerUi from "swagger-ui-express";
 import swaggerSpecs from "./config/swagger";
 import { connectEventDB } from "./config/eventDatabase";
 import eventRoutes from "./routes/eventRoutes";
+import { startEventScheduler, stopEventScheduler } from "./schedulers/eventScheduler";
 
 dotenv.config();
 
@@ -52,6 +53,7 @@ connectEventDB();
 const { spawn } = require('child_process');
 const enableCapacity = String(process.env.ENABLE_CAPACITY_WORKER || 'true').toLowerCase() !== 'false';
 let capacityWorker: any = null;
+let lifecycleTimer: NodeJS.Timeout | null = null;
 if (enableCapacity) {
   capacityWorker = spawn('npx', ['ts-node', 'src/consumers/capacityConsumer.ts'], {
     cwd: process.cwd(),
@@ -61,9 +63,20 @@ if (enableCapacity) {
   console.log('🔄 Capacity Consumer started');
 }
 
+const lifecycleEnv =
+  process.env.ENABLE_EVENT_LIFECYCLE_SCHEDULER ?? process.env.ENABLE_SETTLEMENT_SCHEDULER;
+const enableEventLifecycleScheduler = String(lifecycleEnv ?? 'true')
+  .toLowerCase()
+  .trim() !== 'false';
+if (enableEventLifecycleScheduler) {
+  lifecycleTimer = startEventScheduler();
+  console.log('⏱️ Event lifecycle scheduler started');
+}
+
 // Ensure worker is terminated with the server to avoid multiple consumers
 const stopWorker = () => {
   try { if (capacityWorker) capacityWorker.kill('SIGTERM'); } catch { /* noop */ }
+  stopEventScheduler(lifecycleTimer);
 };
 process.on('exit', stopWorker);
 process.on('SIGINT', () => { stopWorker(); process.exit(0); });

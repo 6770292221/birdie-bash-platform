@@ -11,6 +11,7 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import CreateEvent from "./pages/CreateEvent";
 import EventDetail from "./pages/EventDetail";
+import History from "./pages/History";
 import Matching from "./pages/Matching";
 import Payments from "./pages/Payments";
 import Calculate from "./pages/Calculate";
@@ -32,6 +33,7 @@ const App = () => (
               <Route path="/register" element={<Register />} />
               <Route path="/events/new" element={<CreateEvent />} />
               <Route path="/events/:id" element={<EventDetail />} />
+              <Route path="/history" element={<History />} />
               <Route path="/matching" element={<Matching />} />
               <Route path="/payments" element={<Payments />} />
               <Route path="/calculate" element={<Calculate />} />
