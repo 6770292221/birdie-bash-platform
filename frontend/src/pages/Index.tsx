@@ -1,8 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
-import { Calendar, MapPin, Users, Clock, Plus, LogOut, Shield, Menu, CreditCard, History, Activity, TrendingUp, X, Bell, CheckCircle } from 'lucide-react';
+import { Calendar, MapPin, Users, Clock, Plus, LogOut, Shield, Menu, CreditCard, History, Activity, TrendingUp, X, Bell, CheckCircle, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import AuthButtons from '@/components/AuthButtons';
 import NotificationDropdown from '@/components/NotificationDropdown';
 import { LanguageProvider, useLanguage } from '@/contexts/LanguageContext';
@@ -26,27 +29,42 @@ const IndexContent = () => {
   const [completedEvents, setCompletedEvents] = useState<any[]>([]);
   const notificationRef = useRef<HTMLDivElement>(null);
 
+  // Search state
+  const [searchFilters, setSearchFilters] = useState({
+    eventName: '',
+    date: '',
+    status: ''
+  });
+
+  const fetchEvents = async () => {
+    if (!user) return; // require auth
+    setEventsLoading(true);
+
+    // Build query parameters
+    const params: any = { limit: 50, offset: 0 };
+    if (searchFilters.eventName) params.eventName = searchFilters.eventName;
+    if (searchFilters.date) params.date = searchFilters.date;
+    if (searchFilters.status) params.status = searchFilters.status;
+
+    const res = await apiClient.getEvents(params);
+    if (res.success) {
+      const data = (res.data as any);
+      const allEvents = data.events || data;
+      // Split events into active and completed/canceled
+      const activeEvents = allEvents.filter((ev: any) => ev.status !== 'completed' && ev.status !== 'canceled');
+      const finishedEvents = allEvents.filter((ev: any) => ev.status === 'completed' || ev.status === 'canceled');
+      setEvents(activeEvents);
+      setCompletedEvents(finishedEvents);
+    } else {
+      toast({ title: 'ดึงรายการอีเวนต์ไม่สำเร็จ', description: res.error, variant: 'destructive' });
+    }
+    setEventsLoading(false);
+  };
+
   useEffect(() => {
-    const fetchEvents = async () => {
-      if (!user) return; // require auth
-      setEventsLoading(true);
-      const res = await apiClient.getEvents({ limit: 10, offset: 0 });
-      if (res.success) {
-        const data = (res.data as any);
-        const allEvents = data.events || data;
-        // Split events into active and completed/canceled
-        const activeEvents = allEvents.filter((ev: any) => ev.status !== 'completed' && ev.status !== 'canceled');
-        const finishedEvents = allEvents.filter((ev: any) => ev.status === 'completed' || ev.status === 'canceled');
-        setEvents(activeEvents);
-        setCompletedEvents(finishedEvents);
-      } else {
-        toast({ title: 'ดึงรายการอีเวนต์ไม่สำเร็จ', description: res.error, variant: 'destructive' });
-      }
-      setEventsLoading(false);
-    };
     fetchEvents();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+  }, [user, searchFilters]);
 
   if (loading || eventsLoading) {
     return (
@@ -246,6 +264,70 @@ const IndexContent = () => {
             <h3 className="text-2xl font-bold text-gray-900 mb-4">
               Active Events
             </h3>
+
+            {/* Search Filters */}
+            <Card className="mb-6">
+              <CardContent className="p-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* Event Name Search */}
+                  <div className="space-y-2">
+                    <Label htmlFor="event-name">ชื่อกิจกรรม</Label>
+                    <Input
+                      id="event-name"
+                      type="text"
+                      placeholder="ค้นหาชื่อกิจกรรม..."
+                      value={searchFilters.eventName}
+                      onChange={(e) => setSearchFilters(prev => ({ ...prev, eventName: e.target.value }))}
+                    />
+                  </div>
+
+                  {/* Date Search */}
+                  <div className="space-y-2">
+                    <Label htmlFor="event-date">วันที่</Label>
+                    <Input
+                      id="event-date"
+                      type="date"
+                      value={searchFilters.date}
+                      onChange={(e) => setSearchFilters(prev => ({ ...prev, date: e.target.value }))}
+                    />
+                  </div>
+
+                  {/* Status Filter */}
+                  <div className="space-y-2">
+                    <Label htmlFor="event-status">สถานะ</Label>
+                    <Select
+                      value={searchFilters.status || "all"}
+                      onValueChange={(value) => setSearchFilters(prev => ({ ...prev, status: value === "all" ? "" : value }))}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="เลือกสถานะ" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">ทั้งหมด</SelectItem>
+                        <SelectItem value="upcoming">รอการชำระเงิน</SelectItem>
+                        <SelectItem value="in_progress">กำลังดำเนินการ</SelectItem>
+                        <SelectItem value="calculating">กำลังคำนวณ</SelectItem>
+                        <SelectItem value="awaiting_payment">รอการชำระเงิน</SelectItem>
+                        <SelectItem value="completed">เสร็จสิ้น</SelectItem>
+                        <SelectItem value="canceled">ยกเลิก</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* Clear Filters Button */}
+                <div className="mt-4 flex justify-end">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSearchFilters({ eventName: '', date: '', status: '' })}
+                  >
+                    <X className="w-4 h-4 mr-2" />
+                    ล้างตัวกรอง
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
             {events.length === 0 ? (
               <p className="text-gray-600">No active events</p>
             ) : (
@@ -271,9 +353,25 @@ const IndexContent = () => {
                       <h3 className="font-bold text-xl text-gray-900 mb-2 pr-20">
                         {ev.eventName}
                       </h3>
-                      <div className="flex items-center text-gray-600 text-sm">
-                        <Calendar className="w-4 h-4 mr-2 text-blue-500" />
-                        <span className="font-medium">{ev.eventDate}</span>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center text-gray-600 text-sm">
+                          <Calendar className="w-4 h-4 mr-2 text-blue-500" />
+                          <span className="font-medium">{ev.eventDate}</span>
+                        </div>
+                        {ev.courts && ev.courts.length > 0 && (
+                          <div className="flex items-center text-gray-600 text-sm">
+                            <Clock className="w-4 h-4 mr-2 text-blue-500" />
+                            <span className="font-medium">
+                              {(() => {
+                                const startTimes = ev.courts.map((court: any) => court.startTime);
+                                const endTimes = ev.courts.map((court: any) => court.endTime);
+                                const minStart = startTimes.reduce((min: string, time: string) => time < min ? time : min);
+                                const maxEnd = endTimes.reduce((max: string, time: string) => time > max ? time : max);
+                                return minStart === maxEnd ? minStart : `${minStart}-${maxEnd}`;
+                              })()}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
 

@@ -360,6 +360,7 @@ export const createEvent = async (
         eventName: event.eventName,
         eventDate: event.eventDate,
         location: event.location,
+        venue: event.location,
         createdBy: event.createdBy || userId,
       });
     } catch (e) {
@@ -380,6 +381,7 @@ export const createEvent = async (
         eventName: event.eventName,
         eventDate: event.eventDate,
         location: event.location,
+        venue: event.location,
         status: event.status,
         capacity: event.capacity,
         waitlistActive: waitlistActiveAfter,
@@ -447,6 +449,11 @@ export const createEvent = async (
  *           format: date
  *         description: Filter events by date (YYYY-MM-DD)
  *       - in: query
+ *         name: eventName
+ *         schema:
+ *           type: string
+ *         description: Search events by name (case-insensitive partial match)
+ *       - in: query
  *         name: limit
  *         schema:
  *           type: number
@@ -509,11 +516,12 @@ export const createEvent = async (
  */
 export const getEvents = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { status, date, limit = 10, offset = 0 } = req.query;
+    const { status, date, eventName, limit = 10, offset = 0 } = req.query;
 
     const filter: any = {};
     if (status) filter["status"] = status;
     if (date) filter.eventDate = date;
+    if (eventName) filter.eventName = { $regex: eventName, $options: 'i' };
 
     const events = await Event.find(filter)
       .sort({ eventDate: 1, createdAt: 1 })
@@ -528,6 +536,7 @@ export const getEvents = async (req: Request, res: Response): Promise<void> => {
         eventName: event.eventName,
         eventDate: event.eventDate,
         location: event.location,
+        venue: event.location,
         status: event.status,
         capacity: event.capacity,
         waitlistActive:
@@ -633,6 +642,7 @@ export const getEvent = async (req: Request, res: Response): Promise<void> => {
         eventName: event.eventName,
         eventDate: event.eventDate,
         location: event.location,
+        venue: event.location,
         status: event.status,
         capacity: event.capacity,
         waitlistActive,
@@ -813,6 +823,7 @@ export const updateEvent = async (
         eventName: updatedEvent!.eventName,
         eventDate: updatedEvent!.eventDate,
         location: updatedEvent!.location,
+        venue: updatedEvent!.location,
       });
     } catch (e) {
       console.error("Publish event.updated failed:", e);
@@ -825,6 +836,7 @@ export const updateEvent = async (
         eventName: updatedEvent!.eventName,
         eventDate: updatedEvent!.eventDate,
         location: updatedEvent!.location,
+        venue: updatedEvent!.location,
         status: updatedEvent!.status,
         capacity: updatedEvent!.capacity,
         shuttlecockPrice: updatedEvent!.shuttlecockPrice,
@@ -938,6 +950,7 @@ export const deleteEvent = async (
         eventName: event.eventName,
         eventDate: event.eventDate,
         location: event.location,
+        venue: event.location,
         status: EventStatus.CANCELED,
       });
     } catch (e) {

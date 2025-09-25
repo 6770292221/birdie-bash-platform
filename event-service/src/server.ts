@@ -5,12 +5,13 @@ import swaggerUi from "swagger-ui-express";
 import swaggerSpecs from "./config/swagger";
 import { connectEventDB } from "./config/eventDatabase";
 import eventRoutes from "./routes/eventRoutes";
+import venueRoutes from "./routes/venueRoutes";
 import { startEventScheduler, stopEventScheduler } from "./schedulers/eventScheduler";
 
 dotenv.config();
 
 const app = express();
-const BASE_PORT = Number(process.env.PORT) || 3002;
+const BASE_PORT = Number(process.env.PORT) || 3003;
 
 app.use(cors());
 app.use(express.json());
@@ -45,6 +46,9 @@ app.use((req: any, res: Response, next: any) => {
 
 // Event endpoints (mounted router)
 app.use("/api/events", eventRoutes);
+
+// Venue endpoints (mounted router)
+app.use("/api/event/venues", venueRoutes);
 
 // Initialize DB connection (non-blocking)
 connectEventDB();

@@ -283,6 +283,20 @@ class ApiClient {
   async getEventRegistrations(eventId: string): Promise<ApiResponse<any>> {
     return this.request(`/api/registration/events/${eventId}/registrations`);
   }
+
+  // Venue endpoints
+  async getVenues(params?: {
+    name?: string;
+    rating?: number;
+    limit?: number;
+    offset?: number;
+  }): Promise<ApiResponse<any>> {
+    return this.request("/api/event/venues", { params });
+  }
+
+  async getVenue(venueId: string): Promise<ApiResponse<any>> {
+    return this.request(`/api/event/venues/${venueId}`);
+  }
 }
 
 // Create and export singleton instance
