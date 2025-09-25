@@ -542,12 +542,9 @@ const EventDetail = () => {
                         <Timer className="w-3 h-3" />
                         เวลาเริ่มเล่น
                       </Label>
-                      <Input
-                        id="gstart"
+                      <TimePicker
                         value={guestForm.startTime}
-                        onChange={(e) => setGuestForm({ ...guestForm, startTime: e.target.value })}
-                        placeholder="18:30"
-                        className="bg-white/80 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                        onChange={(v) => setGuestForm({ ...guestForm, startTime: v })}
                       />
                     </div>
                     <div>
@@ -555,12 +552,9 @@ const EventDetail = () => {
                         <Timer className="w-3 h-3" />
                         เวลาสิ้นสุดเล่น
                       </Label>
-                      <Input
-                        id="gend"
+                      <TimePicker
                         value={guestForm.endTime}
-                        onChange={(e) => setGuestForm({ ...guestForm, endTime: e.target.value })}
-                        placeholder="20:00"
-                        className="bg-white/80 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                        onChange={(v) => setGuestForm({ ...guestForm, endTime: v })}
                       />
                     </div>
                   </div>

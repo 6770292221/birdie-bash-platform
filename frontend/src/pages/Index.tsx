@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { Calendar, MapPin, Users, Clock, Plus, LogOut, Shield, Menu, CreditCard, History, TrendingUp, X, Bell, ChevronDown, Loader2, Receipt } from 'lucide-react';
+import { Calendar, MapPin, Users, Clock, Plus, LogOut, Shield, Menu, CreditCard, History, TrendingUp, X, Bell, ChevronDown, Loader2, Receipt, Sparkles, Trophy, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -201,9 +201,128 @@ const IndexContent = () => {
 
         </div>
 
+        {/* Guest Hero Section */}
+        {!user && (
+          <div className="relative mb-8 overflow-hidden rounded-3xl border border-white/50 bg-gradient-to-br from-white/80 via-blue-50/70 to-emerald-50/70 shadow-xl">
+            <div className="pointer-events-none absolute -left-40 top-10 h-80 w-80 rounded-full bg-emerald-300/30 blur-3xl" />
+            <div className="pointer-events-none absolute -right-24 -bottom-24 h-96 w-96 rounded-full bg-indigo-300/30 blur-[140px]" />
+
+            <div className="relative grid gap-10 px-6 py-12 md:grid-cols-[1.05fr_0.95fr] md:px-12">
+              <div className="flex flex-col justify-center">
+                <span className="inline-flex items-center gap-2 self-start rounded-full border border-blue-200 bg-blue-50/80 px-4 py-1 text-xs font-semibold uppercase tracking-wider text-blue-700 shadow-sm">
+                  <Sparkles className="h-3.5 w-3.5 text-blue-500" />
+                  Birdie Bash Platform
+                </span>
+                <h2 className="mt-6 text-3xl font-extrabold leading-tight text-slate-900 sm:text-4xl lg:text-5xl">
+                  ยินดีต้อนรับสู่ Birdie Bash
+                </h2>
+                <p className="mt-4 max-w-xl text-base text-slate-600 sm:text-lg">
+                  แพลตฟอร์มจัดการอีเวนต์แบดมินตันครบวงจรสำหรับผู้จัดและผู้เล่น ดูแลการเปิดรับสมัคร การจัดการรายชื่อ และสรุปค่าใช้จ่ายได้ครบถ้วนในที่เดียว
+                </p>
+
+                <div className="mt-6 flex flex-wrap items-center gap-3">
+                  <Link to="/login">
+                    <Button size="lg" className="bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/30">
+                      เข้าสู่ระบบ
+                    </Button>
+                  </Link>
+                  <Link to="/register">
+                    <Button size="lg" variant="outline" className="border-blue-200 text-blue-600 hover:bg-blue-50">
+                      ลงทะเบียน
+                    </Button>
+                  </Link>
+                </div>
+
+                <div className="mt-8 grid grid-cols-1 gap-4 text-left sm:grid-cols-2">
+                  <div className="rounded-2xl bg-white/80 p-4 shadow-sm ring-1 ring-blue-100/70 backdrop-blur">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 text-white">
+                        <Calendar className="h-6 w-6" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-700">สร้าง & จัดการอีเวนต์</p>
+                        <p className="text-xs text-slate-500">ตั้งตาราง คอร์ท และจำนวนผู้เล่นได้ในไม่กี่ขั้นตอน</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="rounded-2xl bg-white/80 p-4 shadow-sm ring-1 ring-emerald-100/70 backdrop-blur">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-teal-500 text-white">
+                        <Users className="h-6 w-6" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-700">ลงทะเบียนง่าย</p>
+                        <p className="text-xs text-slate-500">ผู้เล่นลงชื่อ รอคิว และติดตามสถานะได้แบบเรียลไทม์</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="rounded-2xl bg-white/80 p-4 shadow-sm ring-1 ring-purple-100/70 backdrop-blur">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-pink-500 text-white">
+                        <Wallet className="h-6 w-6" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-700">จัดการค่าใช้จ่าย</p>
+                        <p className="text-xs text-slate-500">สรุปค่าสนาม ค่าลูก และสถานะการชำระอย่างเป็นระบบ</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="rounded-2xl bg-white/80 p-4 shadow-sm ring-1 ring-amber-100/70 backdrop-blur">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-amber-500 to-orange-500 text-white">
+                        <Trophy className="h-6 w-6" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-700">จับคู่เล่นอย่างยุติธรรม</p>
+                        <p className="text-xs text-slate-500">ระบบ Matching แบ่งระดับฝีมือ ให้ทุกเกมดวลกันอย่างสูสีและสนุก</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="relative flex items-center justify-center">
+                <div className="relative w-full max-w-sm overflow-hidden rounded-3xl bg-slate-900 text-white shadow-2xl ring-1 ring-white/10">
+                  <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-blue-400 via-teal-400 to-purple-400" />
+                  <div className="p-6">
+                    <div className="flex items-center justify-between text-xs uppercase tracking-[0.25em] text-emerald-200">
+                      <span>Birdie Bash</span>
+                      <span>Match Board</span>
+                    </div>
+                    <div className="mt-6 rounded-2xl bg-white/10 p-4">
+                      <div className="flex items-center justify-between text-sm text-slate-200">
+                        <span className="font-semibold">Friday Night Session</span>
+                        <span>20:00 - 22:00</span>
+                      </div>
+                      <div className="mt-3 grid grid-cols-2 gap-3 text-center">
+                        <div className="rounded-xl border border-white/10 bg-gradient-to-br from-emerald-500/20 to-blue-500/10 px-3 py-4">
+                          <p className="text-3xl font-bold">12</p>
+                          <p className="text-xs text-slate-200">ผู้เล่นที่ยืนยัน</p>
+                        </div>
+                        <div className="rounded-xl border border-white/10 bg-gradient-to-br from-purple-500/20 to-pink-500/10 px-3 py-4">
+                          <p className="text-3xl font-bold">4</p>
+                          <p className="text-xs text-slate-200">รายชื่อสำรอง</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-4">
+                      <p className="text-xs uppercase tracking-[0.25em] text-blue-200">Upcoming Highlight</p>
+                      <p className="mt-2 text-sm font-semibold text-white">Weekend Badminton Meetup</p>
+                      <div className="mt-3 flex items-center justify-between text-xs text-slate-200">
+                        <span>คอร์ท 3 • 18:30 น.</span>
+                        <span className="rounded-full bg-blue-500/20 px-3 py-1 text-[11px] font-semibold text-blue-100">เปิดรับสมัคร</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Event Overview / Welcome */}
-        <Card className="mb-6 bg-white/70 backdrop-blur-sm">
-          {user && isAdmin ? (
+        {(user && isAdmin) ? (
+          <Card className="mb-6 bg-white/70 backdrop-blur-sm">
             <>
               <CardHeader className="pb-2">
                 <CardTitle className="text-2xl font-bold text-gray-900">ภาพรวมอีเวนต์</CardTitle>
@@ -287,29 +406,8 @@ const IndexContent = () => {
                 </div>
               </CardContent>
             </>
-          ) : (
-            <CardContent className="p-6 text-center">
-              <h2 className="text-2xl font-bold text-gray-900">
-                {user ? 'ยินดีต้อนรับสู่ Birdie Bash' : 'ยินดีต้อนรับสู่ Birdie Bash'}
-              </h2>
-
-              {!user && (
-                <div className="flex gap-3 justify-center">
-                  <Link to="/login">
-                    <Button className="bg-blue-600 hover:bg-blue-700">
-                      เข้าสู่ระบบ
-                    </Button>
-                  </Link>
-                  <Link to="/register">
-                    <Button variant="outline">
-                      ลงทะเบียน
-                    </Button>
-                  </Link>
-                </div>
-              )}
-            </CardContent>
-          )}
-        </Card>
+          </Card>
+        ) : null}
 
         {/* Features Section (interactive) */}
         {user && isAdmin ? (
