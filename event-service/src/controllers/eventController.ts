@@ -1,6 +1,12 @@
 import { Request, Response } from "express";
 import Event from "../models/Event";
-import { IEventCreate, IEventUpdate, ICourtTime, EventStatus, EventStatusType } from "../types/event";
+import {
+  IEventCreate,
+  IEventUpdate,
+  ICourtTime,
+  EventStatus,
+  EventStatusType,
+} from "../types/event";
 import messageQueueService from "../queue/publisher";
 
 interface ExtendedRequest extends Request {
@@ -16,41 +22,57 @@ interface CourtValidationResult {
   errors: any;
 }
 
-function validateEventDate(eventDate: string): { isValid: boolean; error?: string } {
+function validateEventDate(eventDate: string): {
+  isValid: boolean;
+  error?: string;
+} {
   // ตรวจสอบรูปแบบวันที่ YYYY-MM-DD
   const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
   if (!dateRegex.test(eventDate)) {
     return {
       isValid: false,
-      error: `Invalid date format: ${eventDate}. Expected YYYY-MM-DD`
+      error: `Invalid date format: ${eventDate}. Expected YYYY-MM-DD`,
     };
   }
 
   // ตรวจสอบว่าวันที่ valid หรือไม่
-  const eventDateObj = new Date(eventDate + 'T00:00:00.000Z');
+  const eventDateObj = new Date(eventDate + "T00:00:00.000Z");
   if (isNaN(eventDateObj.getTime())) {
     return {
       isValid: false,
-      error: `Invalid date: ${eventDate}`
+      error: `Invalid date: ${eventDate}`,
     };
   }
 
   // ตรวจสอบว่าไม่ใช่วันที่ในอดีต (เทียบกับ UTC วันนี้)
   const today = new Date();
-  const todayUTC = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const eventDateLocal = new Date(eventDateObj.getFullYear(), eventDateObj.getMonth(), eventDateObj.getDate());
+  const todayUTC = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate()
+  );
+  const eventDateLocal = new Date(
+    eventDateObj.getFullYear(),
+    eventDateObj.getMonth(),
+    eventDateObj.getDate()
+  );
 
   if (eventDateLocal < todayUTC) {
     return {
       isValid: false,
-      error: `Event date cannot be in the past. Event date: ${eventDate}, Today: ${todayUTC.toISOString().split('T')[0]}`
+      error: `Event date cannot be in the past. Event date: ${eventDate}, Today: ${
+        todayUTC.toISOString().split("T")[0]
+      }`,
     };
   }
 
   return { isValid: true };
 }
 
-function validateEventDateTime(eventDate: string, courts: ICourtTime[]): { isValid: boolean; error?: string } {
+function validateEventDateTime(
+  eventDate: string,
+  courts: ICourtTime[]
+): { isValid: boolean; error?: string } {
   // ตรวจสอบวันที่ก่อน
   const dateValidation = validateEventDate(eventDate);
   if (!dateValidation.isValid) {
@@ -58,10 +80,18 @@ function validateEventDateTime(eventDate: string, courts: ICourtTime[]): { isVal
   }
 
   // ถ้าเป็นวันนี้ ตรวจสอบเวลาด้วย
-  const eventDateObj = new Date(eventDate + 'T00:00:00.000Z');
+  const eventDateObj = new Date(eventDate + "T00:00:00.000Z");
   const today = new Date();
-  const todayUTC = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const eventDateLocal = new Date(eventDateObj.getFullYear(), eventDateObj.getMonth(), eventDateObj.getDate());
+  const todayUTC = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate()
+  );
+  const eventDateLocal = new Date(
+    eventDateObj.getFullYear(),
+    eventDateObj.getMonth(),
+    eventDateObj.getDate()
+  );
 
   if (eventDateLocal.getTime() === todayUTC.getTime()) {
     // เป็นวันนี้ - ตรวจสอบเวลา
@@ -73,7 +103,11 @@ function validateEventDateTime(eventDate: string, courts: ICourtTime[]): { isVal
       if (startMinutes <= currentTimeMinutes) {
         return {
           isValid: false,
-          error: `Court ${court.courtNumber} start time (${court.startTime}) cannot be in the past. Current time: ${now.toTimeString().slice(0, 5)}`
+          error: `Court ${court.courtNumber} start time (${
+            court.startTime
+          }) cannot be in the past. Current time: ${now
+            .toTimeString()
+            .slice(0, 5)}`,
         };
       }
     }
@@ -84,23 +118,25 @@ function validateEventDateTime(eventDate: string, courts: ICourtTime[]): { isVal
 
 function validateCourts(courts: ICourtTime[]): CourtValidationResult {
   const errors: any = {};
-  
+
   // ตรวจสอบ courtNumber ซ้ำ
-  const courtNumbers = courts.map(c => c.courtNumber);
-  const duplicateNumbers = courtNumbers.filter((num, index) => courtNumbers.indexOf(num) !== index);
+  const courtNumbers = courts.map((c) => c.courtNumber);
+  const duplicateNumbers = courtNumbers.filter(
+    (num, index) => courtNumbers.indexOf(num) !== index
+  );
   if (duplicateNumbers.length > 0) {
     errors.duplicateCourtNumbers = duplicateNumbers;
   }
-  
+
   // ตรวจสอบแต่ละ court
   courts.forEach((court, index) => {
     const courtErrors: any = {};
-    
+
     // ตรวจสอบ courtNumber ต้องเป็นเลขบวก
     if (!court.courtNumber || court.courtNumber <= 0) {
       courtErrors.courtNumber = "Court number must be a positive integer";
     }
-    
+
     // ตรวจสอบรูปแบบเวลา (HH:MM)
     const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
     if (!timeRegex.test(court.startTime)) {
@@ -109,80 +145,84 @@ function validateCourts(courts: ICourtTime[]): CourtValidationResult {
     if (!timeRegex.test(court.endTime)) {
       courtErrors.endTime = `Invalid time format: ${court.endTime}. Expected HH:MM (24-hour format)`;
     }
-    
+
     // ตรวจสอบ startTime < endTime
     if (timeRegex.test(court.startTime) && timeRegex.test(court.endTime)) {
       const startMinutes = timeToMinutes(court.startTime);
       const endMinutes = timeToMinutes(court.endTime);
-      
+
       if (startMinutes >= endMinutes) {
         courtErrors.timeRange = `Start time (${court.startTime}) must be before end time (${court.endTime})`;
       }
-      
+
       // ตรวจสอบระยะเวลาขั้นต่ำ (30 นาที)
       if (endMinutes - startMinutes < 30) {
-        courtErrors.minimumDuration = `Court session must be at least 30 minutes. Current: ${endMinutes - startMinutes} minutes`;
+        courtErrors.minimumDuration = `Court session must be at least 30 minutes. Current: ${
+          endMinutes - startMinutes
+        } minutes`;
       }
-      
+
       // ตรวจสอบเวลาสมเหตุสมผล (6:00-24:00)
-      if (startMinutes < 360) { // ก่อน 6:00
+      if (startMinutes < 360) {
+        // ก่อน 6:00
         courtErrors.startTimeRealistic = `Start time too early: ${court.startTime}. Courts typically open after 6:00`;
       }
-      if (endMinutes > 1440) { // หลัง 24:00
+      if (endMinutes > 1440) {
+        // หลัง 24:00
         courtErrors.endTimeRealistic = `End time too late: ${court.endTime}. Courts typically close before 24:00`;
       }
     }
-    
+
     if (Object.keys(courtErrors).length > 0) {
       errors[`court_${index + 1}`] = courtErrors;
     }
   });
-  
+
   // ตรวจสอบการซ้อนทับของเวลาในสนามเดียวกัน
   const timeOverlaps = findTimeOverlaps(courts);
   if (timeOverlaps.length > 0) {
     errors.timeOverlaps = timeOverlaps;
   }
-  
+
   return {
     isValid: Object.keys(errors).length === 0,
-    errors: Object.keys(errors).length > 0 ? errors : undefined
+    errors: Object.keys(errors).length > 0 ? errors : undefined,
   };
 }
 
 function timeToMinutes(timeStr: string): number {
-  const [hours, minutes] = timeStr.split(':').map(Number);
+  const [hours, minutes] = timeStr.split(":").map(Number);
   return hours * 60 + minutes;
 }
 
 function findTimeOverlaps(courts: ICourtTime[]): any[] {
   const overlaps: any[] = [];
-  
+
   for (let i = 0; i < courts.length; i++) {
     for (let j = i + 1; j < courts.length; j++) {
       const court1 = courts[i];
       const court2 = courts[j];
-      
+
       // ถ้าเป็นสนามเดียวกัน ตรวจสอบการซ้อนทับ
       if (court1.courtNumber === court2.courtNumber) {
         const start1 = timeToMinutes(court1.startTime);
         const end1 = timeToMinutes(court1.endTime);
         const start2 = timeToMinutes(court2.startTime);
         const end2 = timeToMinutes(court2.endTime);
-        
+
         // ตรวจสอบการซ้อนทับ
-        if ((start1 < end2 && start2 < end1)) {
+        if (start1 < end2 && start2 < end1) {
           overlaps.push({
             court: court1.courtNumber,
             session1: `${court1.startTime}-${court1.endTime}`,
             session2: `${court2.startTime}-${court2.endTime}`,
-            message: `Court ${court1.courtNumber} has overlapping time slots`
+            message: `Court ${court1.courtNumber} has overlapping time slots`,
           });
         }
       }
     }
   }
-  
+
   return overlaps;
 }
 
@@ -244,7 +284,7 @@ export const createEvent = async (
    *           application/json:
    *             schema:
    *               $ref: '#/components/schemas/Error'
-   *       409:
+   *       400:
    *         description: Duplicate event (same name, date, location)
    *         content:
    *           application/json:
@@ -270,7 +310,7 @@ export const createEvent = async (
       res.status(400).json({
         code: "VALIDATION_ERROR",
         message: "Invalid event date",
-        details: { eventDate: dateValidation.error }
+        details: { eventDate: dateValidation.error },
       });
       return;
     }
@@ -278,12 +318,15 @@ export const createEvent = async (
     // Validate courts data
     if (eventData.courts && eventData.courts.length > 0) {
       // Validate date and time together
-      const dateTimeValidation = validateEventDateTime(eventData.eventDate, eventData.courts);
+      const dateTimeValidation = validateEventDateTime(
+        eventData.eventDate,
+        eventData.courts
+      );
       if (!dateTimeValidation.isValid) {
         res.status(400).json({
           code: "VALIDATION_ERROR",
           message: "Invalid event date/time",
-          details: { eventDateTime: dateTimeValidation.error }
+          details: { eventDateTime: dateTimeValidation.error },
         });
         return;
       }
@@ -293,14 +336,20 @@ export const createEvent = async (
         res.status(400).json({
           code: "VALIDATION_ERROR",
           message: "Invalid courts configuration",
-          details: courtValidation.errors
+          details: courtValidation.errors,
         });
         return;
       }
     }
 
-    const { status: _ignoredStatus, ...payload } = eventData as IEventCreate & { status?: EventStatusType };
-    const event = new Event({ ...payload, status: EventStatus.UPCOMING, createdBy: userId });
+    const { status: _ignoredStatus, ...payload } = eventData as IEventCreate & {
+      status?: EventStatusType;
+    };
+    const event = new Event({
+      ...payload,
+      status: EventStatus.UPCOMING,
+      createdBy: userId,
+    });
     await event.save();
 
     // Publish RabbitMQ message: event.created (routingKey: event.created)
@@ -317,7 +366,11 @@ export const createEvent = async (
     }
 
     const availableSlotsAfter = event.capacity.availableSlots;
-    const waitlistActiveAfter = (event.capacity.waitlistEnabled === true) && (event.status === EventStatus.UPCOMING || event.status === EventStatus.IN_PROGRESS) && (availableSlotsAfter <= 0);
+    const waitlistActiveAfter =
+      event.capacity.waitlistEnabled === true &&
+      (event.status === EventStatus.UPCOMING ||
+        event.status === EventStatus.IN_PROGRESS) &&
+      availableSlotsAfter <= 0;
 
     res.status(201).json({
       message: "Event created successfully",
@@ -355,8 +408,7 @@ export const createEvent = async (
     if (error?.code === 11000) {
       res.status(400).json({
         code: "EVENT_EXISTS",
-        message:
-          "An event with the same name and date already exists",
+        message: "An event with the same name and date already exists",
         details: error.keyValue,
       });
       return;
@@ -477,7 +529,11 @@ export const getEvents = async (req: Request, res: Response): Promise<void> => {
         location: event.location,
         status: event.status,
         capacity: event.capacity,
-        waitlistActive: (event.capacity.waitlistEnabled === true) && (event.status === EventStatus.UPCOMING || event.status === EventStatus.IN_PROGRESS) && ((event.capacity.availableSlots ?? 0) <= 0),
+        waitlistActive:
+          event.capacity.waitlistEnabled === true &&
+          (event.status === EventStatus.UPCOMING ||
+            event.status === EventStatus.IN_PROGRESS) &&
+          (event.capacity.availableSlots ?? 0) <= 0,
         shuttlecockPrice: event.shuttlecockPrice,
         courtHourlyRate: event.courtHourlyRate,
         courts: event.courts,
@@ -539,6 +595,12 @@ export const getEvents = async (req: Request, res: Response): Promise<void> => {
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/Error'
+ *       400:
+ *         description: Event cannot be canceled in its current status
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  *       500:
  *         description: Internal server error
  *         content:
@@ -558,7 +620,11 @@ export const getEvent = async (req: Request, res: Response): Promise<void> => {
     }
 
     const available = event.capacity.availableSlots;
-    const waitlistActive = (event.capacity.waitlistEnabled === true) && (event.status === EventStatus.UPCOMING || event.status === EventStatus.IN_PROGRESS) && (available <= 0);
+    const waitlistActive =
+      event.capacity.waitlistEnabled === true &&
+      (event.status === EventStatus.UPCOMING ||
+        event.status === EventStatus.IN_PROGRESS) &&
+      available <= 0;
 
     res.status(200).json({
       event: {
@@ -625,7 +691,7 @@ export const getEvent = async (req: Request, res: Response): Promise<void> => {
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/Error'
- *       409:
+ *       400:
  *         description: Duplicate event (same name, date, location)
  *         content:
  *           application/json:
@@ -655,7 +721,7 @@ export const updateEvent = async (
         res.status(400).json({
           code: "VALIDATION_ERROR",
           message: "Invalid event date",
-          details: { eventDate: dateValidation.error }
+          details: { eventDate: dateValidation.error },
         });
         return;
       }
@@ -665,14 +731,17 @@ export const updateEvent = async (
     if (updateData.courts && updateData.courts.length > 0) {
       // ใช้ eventDate ใหม่หรือเก่า
       const eventDateToUse = updateData.eventDate || event.eventDate;
-      
+
       // Validate date and time together
-      const dateTimeValidation = validateEventDateTime(eventDateToUse, updateData.courts);
+      const dateTimeValidation = validateEventDateTime(
+        eventDateToUse,
+        updateData.courts
+      );
       if (!dateTimeValidation.isValid) {
         res.status(400).json({
           code: "VALIDATION_ERROR",
           message: "Invalid event date/time",
-          details: { eventDateTime: dateTimeValidation.error }
+          details: { eventDateTime: dateTimeValidation.error },
         });
         return;
       }
@@ -682,20 +751,28 @@ export const updateEvent = async (
         res.status(400).json({
           code: "VALIDATION_ERROR",
           message: "Invalid courts configuration",
-          details: courtValidation.errors
+          details: courtValidation.errors,
         });
         return;
       }
     }
 
     // ถ้าแก้เฉพาะวันที่ (ไม่แก้ courts) ให้ตรวจสอบกับ courts เดิม
-    if (updateData.eventDate && (!updateData.courts || updateData.courts.length === 0) && event.courts && event.courts.length > 0) {
-      const dateTimeValidation = validateEventDateTime(updateData.eventDate, event.courts);
+    if (
+      updateData.eventDate &&
+      (!updateData.courts || updateData.courts.length === 0) &&
+      event.courts &&
+      event.courts.length > 0
+    ) {
+      const dateTimeValidation = validateEventDateTime(
+        updateData.eventDate,
+        event.courts
+      );
       if (!dateTimeValidation.isValid) {
         res.status(400).json({
           code: "VALIDATION_ERROR",
           message: "Invalid event date/time with existing courts",
-          details: { eventDateTime: dateTimeValidation.error }
+          details: { eventDateTime: dateTimeValidation.error },
         });
         return;
       }
@@ -712,15 +789,14 @@ export const updateEvent = async (
         res.status(404).json({ error: "Event not found" });
         return;
       }
-      
+
       Object.assign(updatedEvent, updateDataWithUser);
       await updatedEvent.save();
     } catch (error: any) {
       if (error?.code === 11000) {
         res.status(400).json({
           code: "EVENT_EXISTS",
-          message:
-            "An event with the same name and date already exists",
+          message: "An event with the same name and date already exists",
           details: error.keyValue,
         });
         return;
@@ -769,12 +845,13 @@ export const updateEvent = async (
  * @swagger
  * /api/events/{id}:
  *   delete:
- *     summary: Delete an event
+ *     summary: Cancel an event
  *     tags: [Events]
  *     security:
  *       - BearerAuth: []
  *     description: |
- *       Delete an event permanently. This action cannot be undone.
+ *       Mark an event as canceled instead of removing it from the database. The event will
+ *       no longer accept registrations, but historical data remains intact.
  *
  *       **Requirements:**
  *       - Valid JWT token with admin role
@@ -788,7 +865,7 @@ export const updateEvent = async (
  *         description: Event ID
  *     responses:
  *       200:
- *         description: Event deleted successfully
+ *         description: Event canceled successfully
  *         content:
  *           application/json:
  *             schema:
@@ -796,7 +873,7 @@ export const updateEvent = async (
  *               properties:
  *                 message:
  *                   type: string
- *                   example: Event deleted successfully
+ *                   example: Event canceled successfully
  *       401:
  *         description: Authentication required
  *         content:
@@ -837,9 +914,22 @@ export const deleteEvent = async (
       return;
     }
 
-    await Event.findByIdAndDelete(id);
+    if (event.status !== EventStatus.UPCOMING) {
+      res.status(400).json({
+        error: "EVENT_NOT_CANCELABLE",
+        message: "Only upcoming events can be canceled",
+        status: event.status,
+      });
+      return;
+    }
 
-    // Publish RabbitMQ message: event.deleted
+    event.status = EventStatus.CANCELED;
+    if (userId) {
+      (event as any).updatedBy = userId;
+    }
+    await event.save();
+
+    // Publish RabbitMQ message: event.deleted (logical delete)
     try {
       await messageQueueService.publishEvent("deleted", {
         eventId: id,
@@ -847,13 +937,14 @@ export const deleteEvent = async (
         eventName: event.eventName,
         eventDate: event.eventDate,
         location: event.location,
+        status: EventStatus.CANCELED,
       });
     } catch (e) {
       console.error("Publish event.deleted failed:", e);
     }
 
     res.status(200).json({
-      message: "Event deleted successfully",
+      message: "Event canceled successfully",
     });
   } catch (error) {
     console.error("Delete event error:", error);
@@ -923,8 +1014,15 @@ export const getEventStatus = async (
     }
 
     const availableSlots = event.capacity.availableSlots;
-    const isAcceptingRegistrations = (event.status === EventStatus.UPCOMING || event.status === EventStatus.IN_PROGRESS) && availableSlots > 0;
-    const waitlistActive = (event.capacity.waitlistEnabled === true) && (event.status === EventStatus.UPCOMING || event.status === EventStatus.IN_PROGRESS) && (availableSlots <= 0);
+    const isAcceptingRegistrations =
+      (event.status === EventStatus.UPCOMING ||
+        event.status === EventStatus.IN_PROGRESS) &&
+      availableSlots > 0;
+    const waitlistActive =
+      event.capacity.waitlistEnabled === true &&
+      (event.status === EventStatus.UPCOMING ||
+        event.status === EventStatus.IN_PROGRESS) &&
+      availableSlots <= 0;
 
     res.status(200).json({
       id: event.id,
