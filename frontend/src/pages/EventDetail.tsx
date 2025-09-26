@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/table';
 import CreateEventForm from '@/components/CreateEventForm';
 import LanguageToggle from '@/components/LanguageToggle';
-import { Loader2, Calendar, MapPin, Users, Clock, DollarSign, Settings, UserPlus, Edit3, Trash2, Phone, Timer } from 'lucide-react';
+import { Loader2, Calendar, MapPin, Users, Clock, DollarSign, Settings, UserPlus, Edit3, Trash2, Phone, Timer, ArrowLeft } from 'lucide-react';
 
 interface Court { courtNumber: number; startTime: string; endTime: string }
 interface EventApi {
@@ -411,6 +411,19 @@ const EventDetail = () => {
       {/* Language Toggle */}
       <div className="absolute top-4 right-4 z-10">
         <LanguageToggle />
+      </div>
+
+      {/* Back to Home Button */}
+      <div className="absolute top-4 left-4 z-10">
+        <Button
+          onClick={() => navigate('/')}
+          variant="outline"
+          size="sm"
+          className="bg-white/80 hover:bg-white border-gray-300 text-gray-700 hover:text-gray-900 shadow-lg backdrop-blur-sm"
+        >
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          {t('nav.back_home')}
+        </Button>
       </div>
       {/* Beautiful loading overlay */}
       {showOverlay && (
