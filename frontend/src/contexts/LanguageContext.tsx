@@ -253,7 +253,7 @@ const translations = {
     'event.no_registered_players': 'ไม่มีผู้เล่นที่ลงทะเบียน',
     'event.member': 'สมาชิक',
     'event.guest': 'แขก',
-    'event.cancel_registration': 'ยกเลิกการลงทะเบียน',
+    'event.cancel_registration': 'ยกเลิก',
     'event.waitlist': 'รายชื่อสำรอง',
     'event.no_waitlist': 'ไม่มีรายชื่อสำรอง',
     'event.register_to_join': 'ลงทะเบียนเข้าร่วมกิจกรรม',
@@ -268,7 +268,7 @@ const translations = {
     'event.select_custom_time': 'เลือกเวลาเอง',
     'event.auto_name_info': 'ระบบจะสุ่มชื่อให้อัตโนมัติ',
     'event.select_play_time_instruction': 'กรุณาเลือกเวลาที่ต้องการเล่น',
-    'event.registering': 'กำลังลงทะเบียน...',
+    'event.registering': 'กำลังลงทะเบียน กรุณารอ...',
     'event.register': 'ลงทะเบียน',
     'event.back_to_home': 'กลับหน้าหลัก',
 
@@ -311,6 +311,27 @@ const translations = {
 
     // Common
     'common.error': 'เกิดข้อผิดพลาด',
+    'common.loading': 'กำลังโหลด...',
+
+    // Loading messages
+    'loading.cancelling_registration': 'กำลังยกเลิกการลงทะเบียน',
+    'loading.please_wait': 'กรุณารอสักครู่',
+    'loading.page_will_refresh': 'หน้าเว็บจะรีเฟรชหลังเสร็จสิ้น',
+    'loading.registering_player': 'กำลังลงทะเบียนผู้เล่น',
+    'loading.saving_registration_data': 'กำลังบันทึกข้อมูลการลงทะเบียน',
+    'loading.list_will_update_automatically': 'รายชื่อจะอัปเดตอัตโนมัติ',
+    'loading.adding_guest_player': 'กำลังเพิ่มผู้เล่นแขก',
+    'loading.saving_guest_data': 'กำลังบันทึกข้อมูลแขก',
+    'loading.player_list_will_update': 'รายชื่อผู้เล่นจะอัปเดต',
+
+    // Error messages
+    'error.registration_failed': 'การลงทะเบียนไม่สำเร็จ',
+    'error.load_event_failed': 'โหลดข้อมูลอีเวนต์ไม่สำเร็จ',
+    'error.save_failed': 'บันทึกข้อมูลไม่สำเร็จ',
+    'error.delete_event_failed': 'ลบอีเวนต์ไม่สำเร็จ',
+    'error.add_player_failed': 'เพิ่มผู้เล่นไม่สำเร็จ',
+    'error.cancel_player_failed': 'ยกเลิกผู้เล่นไม่สำเร็จ',
+    'error.unknown': 'เกิดข้อผิดพลาดไม่ทราบสาเหตุ',
 
     // User registration status
     'user.already_registered': 'คุณลงทะเบียนแล้ว',
@@ -571,7 +592,7 @@ const translations = {
     'event.no_registered_players': 'No registered players',
     'event.member': 'Member',
     'event.guest': 'Guest',
-    'event.cancel_registration': 'Cancel Registration',
+    'event.cancel_registration': 'Cancel',
     'event.waitlist': 'Waitlist',
     'event.no_waitlist': 'No waitlist',
     'event.register_to_join': 'Register for Event',
@@ -586,7 +607,7 @@ const translations = {
     'event.select_custom_time': 'Select Custom Time',
     'event.auto_name_info': 'System will generate name automatically',
     'event.select_play_time_instruction': 'Please select your play time',
-    'event.registering': 'Registering...',
+    'event.registering': 'Registering, please wait...',
     'event.register': 'Register',
     'event.back_to_home': 'Back to Home',
 
@@ -629,6 +650,27 @@ const translations = {
 
     // Common
     'common.error': 'Error occurred',
+    'common.loading': 'Loading...',
+
+    // Loading messages
+    'loading.cancelling_registration': 'Cancelling Registration',
+    'loading.please_wait': 'Please wait',
+    'loading.page_will_refresh': 'Page will refresh when complete',
+    'loading.registering_player': 'Registering Player',
+    'loading.saving_registration_data': 'Saving Registration Data',
+    'loading.list_will_update_automatically': 'List will update automatically',
+    'loading.adding_guest_player': 'Adding Guest Player',
+    'loading.saving_guest_data': 'Saving Guest Data',
+    'loading.player_list_will_update': 'Player List Will Update',
+
+    // Error messages
+    'error.registration_failed': 'Registration Failed',
+    'error.load_event_failed': 'Failed to Load Event',
+    'error.save_failed': 'Save Failed',
+    'error.delete_event_failed': 'Failed to Delete Event',
+    'error.add_player_failed': 'Failed to Add Player',
+    'error.cancel_player_failed': 'Failed to Cancel Player',
+    'error.unknown': 'Unknown Error',
 
     // User registration status
     'user.already_registered': 'You are registered',

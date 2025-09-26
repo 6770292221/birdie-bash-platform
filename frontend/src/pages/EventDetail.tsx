@@ -212,23 +212,39 @@ const EventDetail = () => {
         endTime: guestForm.endTime,
       };
       const res = await apiClient.addGuest(id, payload);
-      if (res.success) {
-        toast({ title: t('success.player_added') });
-        setGuestForm({ name: '', phoneNumber: '', startTime: '', endTime: '' });
-        await fetchPlayersFiltered();
-        setTimeout(() => {
+
+      // Add 3-second delay before completing the operation
+      setTimeout(() => {
+        if (res.success) {
+          toast({ title: t('success.player_added') });
+          setGuestForm({ name: '', phoneNumber: '', startTime: '', endTime: '' });
           setIsAddingGuest(false);
-          window.location.reload();
-        }, 1200);
-      } else {
-        toast({ title: t('error.add_player_failed'), description: res.error, variant: 'destructive' });
+          setOverlayAction(null);
+          // Refresh page after successful operation
+          setTimeout(() => {
+            window.location.reload();
+          }, 500);
+        } else {
+          toast({ title: t('error.add_player_failed'), description: res.error, variant: 'destructive' });
+          setIsAddingGuest(false);
+          setOverlayAction(null);
+          // Refresh page after error with longer delay
+          setTimeout(() => {
+            window.location.reload();
+          }, 1500);
+        }
+      }, 2000);
+    } catch (err: any) {
+      // Add 2-second delay before handling error
+      setTimeout(() => {
+        toast({ title: t('error.add_player_failed'), description: err?.message || t('error.unknown'), variant: 'destructive' });
         setIsAddingGuest(false);
         setOverlayAction(null);
-      }
-    } catch (err: any) {
-      toast({ title: t('error.add_player_failed'), description: err?.message || t('error.unknown'), variant: 'destructive' });
-      setIsAddingGuest(false);
-      setOverlayAction(null);
+        // Refresh page after error with longer delay
+        setTimeout(() => {
+          window.location.reload();
+        }, 1500);
+      }, 2000);
     }
   };
 
@@ -240,17 +256,27 @@ const EventDetail = () => {
     setOverlayAction('cancel');
 
     const res = await apiClient.cancelPlayer(id, playerId);
+
+    // Add 3-second delay for loading effect
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
     if (res.success) {
       toast({ title: t('success.player_cancelled') });
-
-      // Wait 2 seconds then refresh the page
+      await fetchPlayersFiltered();
+      setCancelingPlayerId(null);
+      setOverlayAction(null);
+      // Refresh page after completion with small delay
       setTimeout(() => {
         window.location.reload();
-      }, 2000);
+      }, 500);
     } else {
       toast({ title: t('error.cancel_player_failed'), description: res.error, variant: 'destructive' });
       setCancelingPlayerId(null);
       setOverlayAction(null);
+      // Refresh page even on error to reset state
+      setTimeout(() => {
+        window.location.reload();
+      }, 1500);
     }
   };
 
@@ -272,22 +298,36 @@ const EventDetail = () => {
         startTime: memberTime.startTime,
         endTime: memberTime.endTime,
       });
+
+      // Add 3-second delay for loading effect
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
       if (res.success) {
         toast({ title: t('success.registered') });
         await fetchPlayersFiltered();
+        setIsRegisteringMember(false);
+        setOverlayAction(null);
+        // Refresh page after completion with small delay
         setTimeout(() => {
-          setIsRegisteringMember(false);
           window.location.reload();
-        }, 1200);
+        }, 500);
       } else {
         toast({ title: t('error.registration_failed'), description: res.error, variant: 'destructive' });
         setIsRegisteringMember(false);
         setOverlayAction(null);
+        // Refresh page even on error to reset state
+        setTimeout(() => {
+          window.location.reload();
+        }, 1500);
       }
     } catch (err: any) {
       toast({ title: t('error.registration_failed'), description: err?.message || t('error.unknown'), variant: 'destructive' });
       setIsRegisteringMember(false);
       setOverlayAction(null);
+      // Refresh page even on error to reset state
+      setTimeout(() => {
+        window.location.reload();
+      }, 1500);
     }
   };
 

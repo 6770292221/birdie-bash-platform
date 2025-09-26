@@ -134,8 +134,8 @@ class ApiClient {
       const responseData = axErr.response?.data as any;
       let errorMessage = responseData?.message || axErr.message || statusText;
 
-      // If there are details, show them instead of the generic message
-      if (responseData?.details) {
+      // Only use details if there's no message
+      if (!responseData?.message && responseData?.details) {
         if (typeof responseData.details === 'string') {
           errorMessage = responseData.details;
         } else if (typeof responseData.details === 'object') {

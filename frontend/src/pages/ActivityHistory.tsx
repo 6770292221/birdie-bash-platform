@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Calendar, MapPin, Users, ArrowLeft, Activity } from 'lucide-react';
+import { Calendar, MapPin, ArrowLeft, Activity } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -69,9 +69,10 @@ const ActivityHistory = () => {
           });
         }
       } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
         toast({
           title: t('common.error'),
-          description: t('history.fetch_error'),
+          description: errorMessage || t('history.fetch_error'),
           variant: 'destructive'
         });
       }
