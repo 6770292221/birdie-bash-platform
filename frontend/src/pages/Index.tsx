@@ -38,6 +38,7 @@ const IndexContent = () => {
   const [eventsLoading, setEventsLoading] = useState(false);
   const [events, setEvents] = useState<any[]>([]);
   const [completedEvents, setCompletedEvents] = useState<any[]>([]);
+  const [userRegistrations, setUserRegistrations] = useState<any[]>([]);
   const notificationRef = useRef<HTMLDivElement>(null);
 
   // Search state
@@ -51,23 +52,42 @@ const IndexContent = () => {
     if (!user) return; // require auth
     setEventsLoading(true);
 
-    // Build query parameters
-    const params: any = { limit: 50, offset: 0 };
-    if (searchFilters.eventName) params.eventName = searchFilters.eventName;
-    if (searchFilters.date) params.date = searchFilters.date;
-    if (searchFilters.status) params.status = searchFilters.status;
+    if (isAdmin) {
+      // Admin: Get all events
+      const params: any = { limit: 50, offset: 0 };
+      if (searchFilters.eventName) params.eventName = searchFilters.eventName;
+      if (searchFilters.date) params.date = searchFilters.date;
+      if (searchFilters.status) params.status = searchFilters.status;
 
-    const res = await apiClient.getEvents(params);
-    if (res.success) {
-      const data = (res.data as any);
-      const allEvents = data.events || data;
-      // Split events into active and completed/canceled
-      const activeEvents = allEvents.filter((ev: any) => ev.status !== 'completed' && ev.status !== 'canceled');
-      const finishedEvents = allEvents.filter((ev: any) => ev.status === 'completed' || ev.status === 'canceled');
-      setEvents(activeEvents);
-      setCompletedEvents(finishedEvents);
+      const res = await apiClient.getEvents(params);
+      if (res.success) {
+        const data = (res.data as any);
+        const allEvents = data.events || data;
+        // Split events into active and completed/canceled
+        const activeEvents = allEvents.filter((ev: any) => ev.status !== 'completed' && ev.status !== 'canceled');
+        const finishedEvents = allEvents.filter((ev: any) => ev.status === 'completed' || ev.status === 'canceled');
+        setEvents(activeEvents);
+        setCompletedEvents(finishedEvents);
+      } else {
+        toast({ title: 'ดึงรายการอีเวนต์ไม่สำเร็จ', description: res.error, variant: 'destructive' });
+      }
     } else {
-      toast({ title: 'ดึงรายการอีเวนต์ไม่สำเร็จ', description: res.error, variant: 'destructive' });
+      // Regular user: Get events and user registrations
+      const eventsRes = await apiClient.getEvents({ limit: 50, offset: 0 });
+      if (eventsRes.success) {
+        const data = (eventsRes.data as any);
+        const allEvents = data.events || data;
+        const activeEvents = allEvents.filter((ev: any) => ev.status !== 'completed' && ev.status !== 'canceled');
+        setEvents(activeEvents);
+      }
+
+      // Get user registrations for activity count
+      const registrationsRes = await apiClient.getUserRegistrations({ includeCanceled: true });
+      if (registrationsRes.success) {
+        const data = (registrationsRes.data as any);
+        const registrations = data.registrations || [];
+        setUserRegistrations(registrations);
+      }
     }
     setEventsLoading(false);
   };
@@ -75,7 +95,7 @@ const IndexContent = () => {
   useEffect(() => {
     fetchEvents();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, searchFilters]);
+  }, [user, isAdmin, searchFilters]);
 
   const statusCounts = useMemo(() => {
     const base: Record<EventStatusType, number> = {
@@ -515,11 +535,11 @@ const IndexContent = () => {
               </CardContent>
             </Card>
 
-            <Card className="bg-white/90 backdrop-blur-md border-0 shadow-lg hover:shadow-2xl cursor-pointer transition-all duration-300 hover:-translate-y-1 overflow-hidden" onClick={() => navigate('/history')} role="button">
+            <Card className="bg-white/90 backdrop-blur-md border-0 shadow-lg hover:shadow-2xl cursor-pointer transition-all duration-300 hover:-translate-y-1 overflow-hidden" onClick={() => navigate('/activity/history')} role="button">
               <CardContent className="p-4 text-center">
                 <History className="h-8 w-8 text-purple-600 mx-auto mb-2" />
                 <p className="font-semibold text-gray-900">{t('nav.activity_history')}</p>
-                <p className="text-sm text-gray-600">{t('nav.activity_history_desc')} ({completedEvents.length})</p>
+                <p className="text-sm text-gray-600">{t('nav.activity_history_desc')} ({userRegistrations.length})</p>
               </CardContent>
             </Card>
           </div>

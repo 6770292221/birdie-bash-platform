@@ -12,6 +12,7 @@ import Register from "./pages/Register";
 import CreateEvent from "./pages/CreateEvent";
 import EventDetail from "./pages/EventDetail";
 import History from "./pages/History";
+import ActivityHistory from "./pages/ActivityHistory";
 import Matching from "./pages/Matching";
 import Payments from "./pages/Payments";
 import PaymentHistory from "./pages/PaymentHistory";
@@ -35,6 +36,7 @@ const App = () => (
               <Route path="/events/new" element={<CreateEvent />} />
               <Route path="/events/:id" element={<EventDetail />} />
               <Route path="/history" element={<History />} />
+              <Route path="/activity/history" element={<ActivityHistory />} />
               <Route path="/matching" element={<Matching />} />
               <Route path="/payments" element={<Payments />} />
               <Route path="/payments/history" element={<PaymentHistory />} />

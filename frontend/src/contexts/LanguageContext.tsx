@@ -292,6 +292,26 @@ const translations = {
     // Chart statistics
     'chart.percentage_of_total': 'คิดเป็น {percentage}% ของทั้งหมด',
 
+    // History page
+    'history.fetch_failed': 'ดึงประวัติไม่สำเร็จ',
+    'history.fetch_error': 'ไม่สามารถดึงข้อมูลประวัติได้',
+    'history.your_play_time': 'เวลาเล่นของคุณ',
+
+    // Activity History page
+    'activity.title': 'ประวัติกิจกรรมของฉัน',
+    'activity.subtitle': 'ดูประวัติการเข้าร่วมกิจกรรมแบดมินตันของคุณ',
+    'activity.total': 'ทั้งหมด {count} กิจกรรม',
+    'activity.empty_title': 'ยังไม่มีประวัติกิจกรรม',
+    'activity.empty_desc': 'คุณยังไม่ได้เข้าร่วมกิจกรรมใด ๆ',
+    'activity.browse_events': 'เรียกดูกิจกรรม',
+    'activity.location': 'สถานที่',
+    'activity.play_time': 'เวลาเล่นของคุณ',
+    'activity.registration_type': 'ประเภทการลงทะเบียน',
+    'activity.view_event': 'ดูรายละเอียด',
+
+    // Common
+    'common.error': 'เกิดข้อผิดพลาด',
+
     // User registration status
     'user.already_registered': 'คุณลงทะเบียนแล้ว',
     'user.confirmed_status': 'ยืนยันแล้ว',
@@ -589,6 +609,26 @@ const translations = {
 
     // Chart statistics
     'chart.percentage_of_total': '{percentage}% of total',
+
+    // History page
+    'history.fetch_failed': 'Failed to fetch history',
+    'history.fetch_error': 'Unable to retrieve history data',
+    'history.your_play_time': 'Your Play Time',
+
+    // Activity History page
+    'activity.title': 'My Activity History',
+    'activity.subtitle': 'View your badminton activity participation history',
+    'activity.total': 'Total {count} activities',
+    'activity.empty_title': 'No Activity History',
+    'activity.empty_desc': 'You haven\'t participated in any activities yet',
+    'activity.browse_events': 'Browse Events',
+    'activity.location': 'Location',
+    'activity.play_time': 'Your Play Time',
+    'activity.registration_type': 'Registration Type',
+    'activity.view_event': 'View Details',
+
+    // Common
+    'common.error': 'Error occurred',
 
     // User registration status
     'user.already_registered': 'You are registered',
