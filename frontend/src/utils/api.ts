@@ -288,15 +288,15 @@ class ApiClient {
   async issueSettlement(eventId: string, data: {
     currency?: string;
     shuttlecockCount?: number;
-    penaltyFee?: number;
+    absentPlayerIds?: string[];
   }): Promise<ApiResponse<any>> {
     return this.request(`/api/settlements/issue`, {
       method: "POST",
       data: {
         event_id: eventId,
         currency: data.currency || 'THB',
-        shuttlecockCount: data.shuttlecockCount || 4,
-        penaltyFee: data.penaltyFee || 0
+        shuttlecockCount: data.shuttlecockCount || 0,
+        absentPlayerIds: data.absentPlayerIds || []
       }
     });
   }

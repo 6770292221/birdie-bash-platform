@@ -54,7 +54,7 @@ const CreateEventPage = () => {
         },
         shuttlecockPrice: data.shuttlecockPrice,
         courtHourlyRate: data.courtHourlyRate,
-        absentPenaltyFee: data.absentPenaltyFee || 0,
+        absentPenaltyFee: data.absentPenaltyFee,
         courts: data.courts.map((c) => ({
           courtNumber: c.courtNumber,
           startTime: c.startTime,

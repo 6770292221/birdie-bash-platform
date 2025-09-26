@@ -33,7 +33,7 @@ const CreateEventForm = ({ onSubmit, onCancel, editEvent, onUpdateEvent }: Creat
   const [waitlistEnabled, setWaitlistEnabled] = useState((editEvent as any)?.waitlistEnabled || false);
   const [shuttlecockPrice, setShuttlecockPrice] = useState(editEvent?.shuttlecockPrice || 20);
   const [courtHourlyRate, setCourtHourlyRate] = useState(editEvent?.courtHourlyRate || 150);
-  const [absentPenaltyFee, setAbsentPenaltyFee] = useState((editEvent as any)?.absentPenaltyFee || 0);
+  const [absentPenaltyFee, setAbsentPenaltyFee] = useState((editEvent as any)?.absentPenaltyFee);
   const [courts, setCourts] = useState<Court[]>(
     editEvent?.courts && editEvent.courts.length > 0 
       ? editEvent.courts 

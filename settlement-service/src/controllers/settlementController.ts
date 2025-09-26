@@ -10,11 +10,12 @@ const calculator = new SettlementCalculator();
 
 export const calculateAndCharge = async (req: Request, res: Response) => {
   try {
-    const { event_id, shuttlecockCount, penaltyFee, currency = 'THB' } = req.body;
+    const { event_id, shuttlecockCount, absentPlayerIds = [], currency = 'THB' } = req.body;
 
     Logger.info('Settlement issue request received', {
       event_id,
       currency,
+      absentPlayersCount: absentPlayerIds.length,
       timestamp: new Date().toISOString()
     });
 
@@ -145,15 +146,27 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
 
       // Transform players to settlement format
       players = await Promise.all(players.map(async (player: any) => {
+        // Check if player is marked as absent
+        const isAbsent = absentPlayerIds.includes(player.playerId || player.id);
+
         // Map registration status to settlement status
         let settlementStatus = "played"; // Default
-        if (player.status === "registered") {
+        if (isAbsent) {
+          settlementStatus = "absent"; // Override to absent if marked
+        } else if (player.status === "registered") {
           settlementStatus = "played";
-        } else if (player.status === "cancelled") {
+        } else if (player.status === "canceled") {
           settlementStatus = "canceled";
         } else if (player.status === "waitlist") {
           settlementStatus = "waitlist";
         }
+
+        Logger.info('Player status determination', {
+          playerId: player.playerId || player.id,
+          originalStatus: player.status,
+          isAbsent,
+          finalStatus: settlementStatus
+        });
 
         // Determine role and fetch name based on userId presence
         let playerRole = "guest"; // Default
@@ -250,7 +263,7 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
     const costs = {
       shuttlecockPrice: eventData.shuttlecockPrice,
       shuttlecockCount: shuttlecockCount,
-      penaltyFee: penaltyFee // Default penalty, could be configurable
+      penaltyFee: eventData.absentPenaltyFee || 0 // Read penalty fee from event data
     };
 
     Logger.info('Event data transformed for settlement', {
@@ -307,7 +320,10 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
       Logger.info('Merging player data with settlement calculation', {
         playerId: settlement.playerId,
         playerName: player?.name,
-        hasUserId: !!player?.userId
+        hasUserId: !!player?.userId,
+        role: player?.role,
+        userId: player?.userId,
+        phoneNumber: player?.phoneNumber
       });
 
       return {

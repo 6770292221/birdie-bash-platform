@@ -122,12 +122,34 @@ export class SettlementCalculator {
   }
 
   private getPlayerHours(startTime: string, endTime: string): string[] {
-    const startHour = parseInt(startTime.split(':')[0]);
-    const endHour = parseInt(endTime.split(':')[0]);
+    const [startHourStr, startMinStr] = startTime.split(':');
+    const [endHourStr, endMinStr] = endTime.split(':');
+
+    const startHour = parseInt(startHourStr);
+    const startMin = parseInt(startMinStr);
+    const endHour = parseInt(endHourStr);
+    const endMin = parseInt(endMinStr);
+
+    // Convert to minutes for easier calculation
+    const startTotalMin = startHour * 60 + startMin;
+    const endTotalMin = endHour * 60 + endMin;
+
     const hours: string[] = [];
 
-    for (let hour = startHour; hour < endHour; hour++) {
-      hours.push(`${hour.toString().padStart(2, '0')}:00-${(hour + 1).toString().padStart(2, '0')}:00`);
+    // If the session is within the same hour (like 01:00-01:30)
+    if (startHour === endHour) {
+      // Still count as playing for that hour slot
+      hours.push(`${startHour.toString().padStart(2, '0')}:00-${(startHour + 1).toString().padStart(2, '0')}:00`);
+    } else {
+      // Multi-hour sessions
+      for (let hour = startHour; hour < endHour; hour++) {
+        hours.push(`${hour.toString().padStart(2, '0')}:00-${(hour + 1).toString().padStart(2, '0')}:00`);
+      }
+
+      // Add final hour if session extends into it
+      if (endMin > 0) {
+        hours.push(`${endHour.toString().padStart(2, '0')}:00-${(endHour + 1).toString().padStart(2, '0')}:00`);
+      }
     }
 
     return hours;
@@ -139,10 +161,25 @@ export class SettlementCalculator {
     const slotEndHour = parseInt(slotEnd.split(':')[0]);
 
     return players.filter(player => {
-      const playerStartHour = parseInt(player.startTime.split(':')[0]);
-      const playerEndHour = parseInt(player.endTime.split(':')[0]);
+      const [playerStartHourStr, playerStartMinStr] = player.startTime.split(':');
+      const [playerEndHourStr, playerEndMinStr] = player.endTime.split(':');
 
-      return playerStartHour <= slotStartHour && playerEndHour >= slotEndHour;
+      const playerStartHour = parseInt(playerStartHourStr);
+      const playerStartMin = parseInt(playerStartMinStr);
+      const playerEndHour = parseInt(playerEndHourStr);
+      const playerEndMin = parseInt(playerEndMinStr);
+
+      // For same hour sessions (like 02:00-02:30), player should be counted in 02:00-03:00 slot
+      if (playerStartHour === playerEndHour && playerStartHour === slotStartHour) {
+        return true;
+      }
+
+      // For sessions that span multiple hours
+      // Check if player's session overlaps with the time slot
+      const playerStartsBeforeSlotEnds = playerStartHour < slotEndHour || (playerStartHour === slotStartHour);
+      const playerEndsAfterSlotStarts = playerEndHour > slotStartHour || (playerEndHour === slotStartHour && playerEndMin > 0);
+
+      return playerStartsBeforeSlotEnds && playerEndsAfterSlotStarts;
     });
   }
 
@@ -151,10 +188,26 @@ export class SettlementCalculator {
     const slotStartHour = parseInt(slotStart.split(':')[0]);
 
     for (const court of courts) {
-      const courtStartHour = parseInt(court.startTime.split(':')[0]);
-      const courtEndHour = parseInt(court.endTime.split(':')[0]);
+      const [courtStartHourStr, courtStartMinStr] = court.startTime.split(':');
+      const [courtEndHourStr, courtEndMinStr] = court.endTime.split(':');
 
+      const courtStartHour = parseInt(courtStartHourStr);
+      const courtStartMin = parseInt(courtStartMinStr);
+      const courtEndHour = parseInt(courtEndHourStr);
+      const courtEndMin = parseInt(courtEndMinStr);
+
+      // For same hour sessions (like 01:00-01:30), still count the hour
+      if (courtStartHour === courtEndHour && slotStartHour === courtStartHour) {
+        return court.hourlyRate;
+      }
+
+      // For multi-hour sessions
       if (slotStartHour >= courtStartHour && slotStartHour < courtEndHour) {
+        return court.hourlyRate;
+      }
+
+      // Handle edge case where court ends in the middle of an hour
+      if (slotStartHour === courtEndHour && courtEndMin > 0) {
         return court.hourlyRate;
       }
     }

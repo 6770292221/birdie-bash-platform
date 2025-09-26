@@ -27,8 +27,9 @@ interface EventApi {
   eventDate: string;
   location: string;
   status: string;
-  capacity: { maxParticipants: number; currentParticipants: number; availableSlots?: number };
+  capacity: { maxParticipants: number; currentParticipants: number; availableSlots?: number, waitlistEnabled?: boolean };
   shuttlecockPrice: number;
+  absentPenaltyFee: number;
   courtHourlyRate: number;
   courts: Court[];
 }
@@ -389,6 +390,14 @@ const EventDetail = () => {
                 : 'bg-gradient-to-r from-gray-400 to-gray-500 text-white px-3 py-1'
               }>
                 {event.capacity?.waitlistEnabled ? '✅ เปิดสำรอง' : '❌ ปิดสำรอง'}
+              </Badge>
+              <Badge className={event?.absentPenaltyFee && event.absentPenaltyFee > 0
+                ? 'bg-gradient-to-r from-red-500 to-pink-500 text-white px-3 py-1'
+                : 'bg-gradient-to-r from-gray-400 to-gray-500 text-white px-3 py-1'
+              }>
+                {event?.absentPenaltyFee && event.absentPenaltyFee > 0
+                  ? `💰 ค่าปรับ ฿${event.absentPenaltyFee}`
+                  : '🚫 ไม่มีค่าปรับ'}
               </Badge>
             </div>
           </CardContent>
