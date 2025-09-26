@@ -10,11 +10,12 @@ const calculator = new SettlementCalculator();
 
 export const calculateAndCharge = async (req: Request, res: Response) => {
   try {
-    const { event_id, shuttlecockCount, penaltyFee, currency = 'THB' } = req.body;
+    const { event_id, shuttlecockCount, absentPlayerIds = [], currency = 'THB' } = req.body;
 
     Logger.info('Settlement issue request received', {
       event_id,
       currency,
+      absentPlayersCount: absentPlayerIds.length,
       timestamp: new Date().toISOString()
     });
 
@@ -31,11 +32,30 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
     // Fetch event details
     let eventData: any;
     try {
-      Logger.info('Fetching event details', { event_id });
-      const eventResponse = await fetch(`http://localhost:3002/api/events/${event_id}`, {
+      const gatewayUrl = process.env.GATEWAY_URL || 'http://localhost:3000';
+      const fullUrl = `${gatewayUrl}/api/events/${event_id}`;
+      const authHeader = req.headers.authorization || '';
+
+      Logger.info('Fetching event details', {
+        event_id,
+        gatewayUrl,
+        fullUrl,
+        hasAuth: !!authHeader,
+        authHeaderLength: authHeader.length
+      });
+
+      const eventResponse = await fetch(fullUrl, {
         headers: {
-          'Authorization': req.headers.authorization || ''
+          'Authorization': authHeader,
+          'Content-Type': 'application/json'
         }
+      });
+
+      Logger.info('Event API response received', {
+        event_id,
+        status: eventResponse.status,
+        statusText: eventResponse.statusText,
+        headers: Object.fromEntries(eventResponse.headers.entries())
       });
 
       if (!eventResponse.ok) {
@@ -70,7 +90,9 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
     } catch (error) {
       Logger.error('Error fetching event details', {
         event_id,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        gatewayUrl: process.env.GATEWAY_URL || 'http://localhost:3000',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : 'No stack trace'
       });
       return res.status(500).json({
         success: false,
@@ -87,7 +109,8 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
     let players: any[];
     try {
       Logger.info('Fetching event players', { event_id });
-      const playersResponse = await fetch(`http://localhost:3005/api/registration/events/${event_id}/players`, {
+      const gatewayUrl = process.env.GATEWAY_URL || 'http://localhost:3000';
+      const playersResponse = await fetch(`${gatewayUrl}/api/registration/events/${event_id}/players`, {
         headers: {
           'Authorization': req.headers.authorization || ''
         }
@@ -123,15 +146,27 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
 
       // Transform players to settlement format
       players = await Promise.all(players.map(async (player: any) => {
+        // Check if player is marked as absent
+        const isAbsent = absentPlayerIds.includes(player.playerId || player.id);
+
         // Map registration status to settlement status
         let settlementStatus = "played"; // Default
-        if (player.status === "registered") {
+        if (isAbsent) {
+          settlementStatus = "absent"; // Override to absent if marked
+        } else if (player.status === "registered") {
           settlementStatus = "played";
-        } else if (player.status === "cancelled") {
+        } else if (player.status === "canceled") {
           settlementStatus = "canceled";
         } else if (player.status === "waitlist") {
           settlementStatus = "waitlist";
         }
+
+        Logger.info('Player status determination', {
+          playerId: player.playerId || player.id,
+          originalStatus: player.status,
+          isAbsent,
+          finalStatus: settlementStatus
+        });
 
         // Determine role and fetch name based on userId presence
         let playerRole = "guest"; // Default
@@ -148,7 +183,8 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
               playerId: player.playerId
             });
 
-            const userResponse = await fetch(`http://localhost:3001/api/auth/user/${player.userId}`, {
+            const gatewayUrl = process.env.GATEWAY_URL || 'http://localhost:3000';
+            const userResponse = await fetch(`${gatewayUrl}/api/auth/user/${player.userId}`, {
               headers: {
                 'Authorization': req.headers.authorization || ''
               }
@@ -227,7 +263,7 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
     const costs = {
       shuttlecockPrice: eventData.shuttlecockPrice,
       shuttlecockCount: shuttlecockCount,
-      penaltyFee: penaltyFee // Default penalty, could be configurable
+      penaltyFee: eventData.absentPenaltyFee || 0 // Read penalty fee from event data
     };
 
     Logger.info('Event data transformed for settlement', {
@@ -244,7 +280,8 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
     if (createdBy) {
       try {
         Logger.info('Fetching event creator details', { createdBy });
-        const userResponse = await fetch(`http://localhost:3001/api/auth/user/${createdBy}`, {
+        const gatewayUrl = process.env.GATEWAY_URL || 'http://localhost:3000';
+        const userResponse = await fetch(`${gatewayUrl}/api/auth/user/${createdBy}`, {
           headers: {
             'Authorization': req.headers.authorization || ''
           }
@@ -283,7 +320,10 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
       Logger.info('Merging player data with settlement calculation', {
         playerId: settlement.playerId,
         playerName: player?.name,
-        hasUserId: !!player?.userId
+        hasUserId: !!player?.userId,
+        role: player?.role,
+        userId: player?.userId,
+        phoneNumber: player?.phoneNumber
       });
 
       return {
@@ -444,6 +484,35 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
       successfulCharges,
       failedCharges
     });
+
+    // Update event status to completed after successful settlement
+    try {
+      const gatewayUrl = process.env.GATEWAY_URL || 'http://localhost:3000';
+      const updateEventResponse = await fetch(`${gatewayUrl}/api/events/${event_id}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': req.headers.authorization || '',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ status: 'completed' })
+      });
+
+      if (updateEventResponse.ok) {
+        Logger.success('Event status updated to completed', { event_id });
+      } else {
+        Logger.error('Failed to update event status', {
+          event_id,
+          status: updateEventResponse.status,
+          statusText: updateEventResponse.statusText
+        });
+      }
+    } catch (error) {
+      Logger.error('Error updating event status', {
+        event_id,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      // Don't fail the entire settlement process if event status update fails
+    }
 
     res.status(201).json({
       success: true,

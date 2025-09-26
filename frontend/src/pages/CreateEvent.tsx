@@ -15,6 +15,7 @@ export interface Event {
   maxPlayers: number; // mapped to capacity.maxParticipants
   shuttlecockPrice: number;
   courtHourlyRate: number;
+  absentPenaltyFee?: number;
   courts: Court[];
   status: string;
   createdBy?: string;
@@ -53,6 +54,7 @@ const CreateEventPage = () => {
         },
         shuttlecockPrice: data.shuttlecockPrice,
         courtHourlyRate: data.courtHourlyRate,
+        absentPenaltyFee: data.absentPenaltyFee,
         courts: data.courts.map((c) => ({
           courtNumber: c.courtNumber,
           startTime: c.startTime,

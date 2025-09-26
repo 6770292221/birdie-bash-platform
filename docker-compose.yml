@@ -84,13 +84,16 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=3000
+      - JWT_SECRET=your-secret-key
       - AUTH_SERVICE_URL=http://auth-service:3001
       - EVENT_SERVICE_URL=http://event-service:3003
       - REGISTRATION_SERVICE_URL=http://registration-service:3005
+      - SETTLEMENT_SERVICE_URL=http://settlement-service:3006
     depends_on:
       - auth-service
       - event-service
       - registration-service
+      - settlement-service
     networks:
       - birdie-network
 
@@ -152,6 +155,24 @@ services:
         condition: service_healthy
       event-service:
         condition: service_started
+    networks:
+      - birdie-network
+
+  # Settlement Service
+  settlement-service:
+    build: ./settlement-service
+    container_name: birdie-settlement-service
+    restart: unless-stopped
+    ports:
+      - "3006:3006"
+    environment:
+      - NODE_ENV=development
+      - PORT=3006
+      - SETTLEMENT_DB_URI=mongodb+srv://birdie_admin:AppUser%232025%21@birdie-bash-cluster.lwadyko.mongodb.net/settlement?retryWrites=true&w=majority&appName=birdie-bash-cluster
+      - GRPC_PORT=50051
+      - GATEWAY_URL=http://birdie-gateway:3000
+    depends_on:
+      - mongodb
     networks:
       - birdie-network
 

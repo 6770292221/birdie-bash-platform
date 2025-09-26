@@ -225,11 +225,12 @@ router.get('/:settlement_id', getSettlementById);
  *       Automatically fetches event details and participants, then calculates settlement amounts and issues charges via gRPC to Payment Service.
  *
  *       **Data Sources:**
- *       - Event details from Event Service (port 3002)
+ *       - Event details from Event Service (port 3003)
  *       - Players/participants from Registration Service (port 3005)
  *       - Court and cost information from event configuration
  *
  *       **Automatic Actions:**
+ *       - Reads penalty fee from event configuration (absentPenaltyFee)
  *       - Updates event status to "completed" after successful settlement
  *     tags: [Settlements]
  *     requestBody:
@@ -251,12 +252,14 @@ router.get('/:settlement_id', getSettlementById);
  *                 example: "THB"
  *               shuttlecockCount:
  *                 type: number
- *                 description: Number of shuttlecocks used (optional, defaults from event if not provided)
+ *                 description: Number of shuttlecocks used during the event
  *                 example: 4
- *               penaltyFee:
- *                 type: number
- *                 description: Penalty fee amount (optional, defaults from event if not provided)
- *                 example: 10000
+ *               absentPlayerIds:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 description: Array of player IDs who were absent from the event
+ *                 example: ["player123", "player456"]
  *     responses:
  *       201:
  *         description: Settlements calculated and charges issued successfully

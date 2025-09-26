@@ -55,7 +55,7 @@ export function getRoutes(
       path: "/api/settlements",
       target: settlementUrl,
       protected: true,
-      adminRequired: false,
+      adminRequired: true,
     },
   ];
 }

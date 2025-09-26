@@ -284,6 +284,23 @@ class ApiClient {
     return this.request(`/api/registration/events/${eventId}/registrations`);
   }
 
+    // Settlement endpoints
+  async issueSettlement(eventId: string, data: {
+    currency?: string;
+    shuttlecockCount?: number;
+    absentPlayerIds?: string[];
+  }): Promise<ApiResponse<any>> {
+    return this.request(`/api/settlements/issue`, {
+      method: "POST",
+      data: {
+        event_id: eventId,
+        currency: data.currency || 'THB',
+        shuttlecockCount: data.shuttlecockCount || 0,
+        absentPlayerIds: data.absentPlayerIds || []
+      }
+    });
+  }
+
   // Venue endpoints
   async getVenues(params?: {
     name?: string;

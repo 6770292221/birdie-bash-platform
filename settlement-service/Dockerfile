@@ -7,8 +7,6 @@ RUN npm install
 
 COPY . .
 
-RUN npm run build
+EXPOSE 3006
 
-EXPOSE 3003
-
-CMD ["npm", "start"]
+CMD ["npm", "run", "dev"]

@@ -118,10 +118,10 @@ Copy the generated public URL (e.g., `https://abcd1234.ngrok.io`)
 1. **Create Account**: Register at [omise.co](https://www.omise.co/)
 2. **Access Dashboard**: Go to [dashboard.omise.co](https://dashboard.omise.co/)
 3. **Add Webhook**:
-    - Navigate to **Settings** → **Webhooks**
-    - Click **Add new webhook endpoint**
-    - **URL**: `<your-ngrok-url>/webhooks/omise`
-    - Save the configuration
+   - Navigate to **Settings** → **Webhooks**
+   - Click **Add new webhook endpoint**
+   - **URL**: `<your-ngrok-url>/webhooks/omise`
+   - Save the configuration
 
 #### 3. Test Webhook
 

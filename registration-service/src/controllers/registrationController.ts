@@ -17,7 +17,7 @@ interface ExtendedRequest extends Request {
 }
 
 async function fetchEventById(eventId: string): Promise<any | null> {
-  const base = process.env.EVENT_SERVICE_URL || "http://localhost:3002";
+  const base = process.env.EVENT_SERVICE_URL || "http://localhost:3003";
   const target = new URL(`/api/events/${eventId}`, base);
   console.log(`[fetchEventById] Calling: ${target.toString()}`);
   const lib = target.protocol === "https:" ? https : http;
@@ -64,7 +64,7 @@ async function fetchEventById(eventId: string): Promise<any | null> {
 }
 
 async function fetchEventStatus(eventId: string): Promise<any | null> {
-  const base = process.env.EVENT_SERVICE_URL || "http://localhost:3002";
+  const base = process.env.EVENT_SERVICE_URL || "http://localhost:3003";
   const target = new URL(`/api/events/${eventId}/status`, base);
   const lib = target.protocol === "https:" ? https : http;
   return new Promise((resolve) => {
