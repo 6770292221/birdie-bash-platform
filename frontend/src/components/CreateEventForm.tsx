@@ -34,10 +34,17 @@ const CreateEventForm = ({ onSubmit, onCancel, editEvent, onUpdateEvent }: Creat
   const [shuttlecockPrice, setShuttlecockPrice] = useState(editEvent?.shuttlecockPrice || 20);
   const [courtHourlyRate, setCourtHourlyRate] = useState(editEvent?.courtHourlyRate || 150);
   const [courts, setCourts] = useState<Court[]>(
-    editEvent?.courts && editEvent.courts.length > 0 
-      ? editEvent.courts 
+    editEvent?.courts && editEvent.courts.length > 0
+      ? editEvent.courts
       : [{ courtNumber: 1, startTime: '20:00', endTime: '22:00' }]
   );
+  const [venueError, setVenueError] = useState<string>('');
+  const [eventNameError, setEventNameError] = useState<string>('');
+  const [eventDateError, setEventDateError] = useState<string>('');
+  const [courtsError, setCourtsError] = useState<string>('');
+  const [maxPlayersError, setMaxPlayersError] = useState<string>('');
+  const [shuttlecockPriceError, setShuttlecockPriceError] = useState<string>('');
+  const [courtHourlyRateError, setCourtHourlyRateError] = useState<string>('');
 
   const selectedVenue = useMemo(() => {
     if (!venue) return null;
@@ -76,16 +83,18 @@ const CreateEventForm = ({ onSubmit, onCancel, editEvent, onUpdateEvent }: Creat
 
   const addCourt = () => {
     const newCourtNumber = Math.max(...courts.map(c => c.courtNumber), 0) + 1;
-    setCourts([...courts, { 
-      courtNumber: newCourtNumber, 
-      startTime: '20:00', 
-      endTime: '22:00' 
+    setCourts([...courts, {
+      courtNumber: newCourtNumber,
+      startTime: '20:00',
+      endTime: '22:00'
     }]);
   };
 
   const removeCourt = (index: number) => {
     if (courts.length > 1) {
-      setCourts(courts.filter((_, i) => i !== index));
+      const newCourts = courts.filter((_, i) => i !== index);
+      setCourts(newCourts);
+      setCourtsError(''); // Clear error when removing court
     }
   };
 
@@ -98,7 +107,58 @@ const CreateEventForm = ({ onSubmit, onCancel, editEvent, onUpdateEvent }: Creat
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
+    // Reset all errors
+    setEventNameError('');
+    setEventDateError('');
+    setVenueError('');
+    setCourtsError('');
+    setMaxPlayersError('');
+    setShuttlecockPriceError('');
+    setCourtHourlyRateError('');
+
+    // Client-side validation
+    let hasError = false;
+
+    if (!eventName || eventName.trim().length === 0) {
+      setEventNameError('กรุณากรอกชื่ออีเวนต์');
+      hasError = true;
+    }
+
+    if (!eventDate || eventDate.trim().length === 0) {
+      setEventDateError('กรุณาเลือกวันที่จัดงาน');
+      hasError = true;
+    }
+
+    if (!venue || venue.trim().length === 0) {
+      setVenueError('กรุณาเลือกสถานที่เล่นแบดมินตัน');
+      hasError = true;
+    }
+
+    if (!courts || courts.length === 0) {
+      setCourtsError('กรุณาเพิ่มอย่างน้อย 1 สนาม');
+      hasError = true;
+    }
+
+    if (!maxPlayers || maxPlayers <= 0) {
+      setMaxPlayersError('จำนวนผู้เล่นต้องมากกว่า 0');
+      hasError = true;
+    }
+
+    if (shuttlecockPrice < 0) {
+      setShuttlecockPriceError('ราคาลูกแบดต้องไม่ติดลบ');
+      hasError = true;
+    }
+
+    if (!courtHourlyRate || courtHourlyRate <= 0) {
+      setCourtHourlyRateError('ค่าเช่าสนามต้องมากกว่า 0');
+      hasError = true;
+    }
+
+    if (hasError) {
+      return;
+    }
+
     if (isEditing && editEvent && onUpdateEvent) {
       // Update existing event
       onUpdateEvent(editEvent.id, {
@@ -144,35 +204,41 @@ const CreateEventForm = ({ onSubmit, onCancel, editEvent, onUpdateEvent }: Creat
           {/* Basic Event Info */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="eventName" className="text-gray-700 font-medium">{t('form.event_name')}</Label>
+              <Label htmlFor="eventName" className="text-gray-700 font-medium">{t('form.event_name')} <span className="text-red-500">*</span></Label>
               <Input
                 id="eventName"
                 value={eventName}
-                onChange={(e) => setEventName(e.target.value)}
+                onChange={(e) => { setEventName(e.target.value); setEventNameError(''); }}
                 placeholder="e.g., Weekly Badminton Session"
                 required
-                className="border-blue-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200"
+                className={`border-blue-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200 ${eventNameError ? 'border-red-500 focus:border-red-500 focus:ring-red-200' : ''}`}
               />
+              {eventNameError && (
+                <p className="text-sm text-red-600 mt-1">{eventNameError}</p>
+              )}
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="eventDate" className="text-gray-700 font-medium">{t('form.event_date')}</Label>
+              <Label htmlFor="eventDate" className="text-gray-700 font-medium">{t('form.event_date')} <span className="text-red-500">*</span></Label>
               <Input
                 id="eventDate"
                 type="date"
                 value={eventDate}
-                onChange={(e) => setEventDate(e.target.value)}
+                onChange={(e) => { setEventDate(e.target.value); setEventDateError(''); }}
                 min={today}
                 required
-                className="border-blue-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200"
+                className={`border-blue-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200 ${eventDateError ? 'border-red-500 focus:border-red-500 focus:ring-red-200' : ''}`}
               />
+              {eventDateError && (
+                <p className="text-sm text-red-600 mt-1">{eventDateError}</p>
+              )}
             </div>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="venue" className="text-gray-700 font-medium">{t('form.venue')}</Label>
-            <Select value={venue} onValueChange={setVenue} disabled={venuesLoading}>
-              <SelectTrigger className="border-blue-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 h-auto items-start py-3">
+            <Label htmlFor="venue" className="text-gray-700 font-medium">{t('form.venue')} <span className="text-red-500">*</span></Label>
+            <Select value={venue} onValueChange={(value) => { setVenue(value); setVenueError(''); }} disabled={venuesLoading} required>
+              <SelectTrigger className={`border-blue-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 h-auto items-start py-3 ${venueError ? 'border-red-500 focus:border-red-500 focus:ring-red-200' : ''}`}>
                 <SelectValue
                   placeholder={venuesLoading ? "กำลังโหลดสถานที่..." : "เลือกสถานที่เล่นแบดมินตัน"}
                   asChild
@@ -242,49 +308,61 @@ const CreateEventForm = ({ onSubmit, onCancel, editEvent, onUpdateEvent }: Creat
                 )}
               </SelectContent>
             </Select>
+            {venueError && (
+              <p className="text-sm text-red-600 mt-1">{venueError}</p>
+            )}
           </div>
 
           {/* Pricing and Capacity */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="maxPlayers" className="text-gray-700 font-medium">{t('form.max_players')}</Label>
+              <Label htmlFor="maxPlayers" className="text-gray-700 font-medium">{t('form.max_players')} <span className="text-red-500">*</span></Label>
               <Input
                 id="maxPlayers"
                 type="number"
                 value={maxPlayers}
-                onChange={(e) => setMaxPlayers(Number(e.target.value))}
-                min="2"
+                onChange={(e) => { setMaxPlayers(Number(e.target.value)); setMaxPlayersError(''); }}
+                min="1"
                 required
-                className="border-blue-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200"
+                className={`border-blue-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200 ${maxPlayersError ? 'border-red-500 focus:border-red-500 focus:ring-red-200' : ''}`}
               />
+              {maxPlayersError && (
+                <p className="text-sm text-red-600 mt-1">{maxPlayersError}</p>
+              )}
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="shuttlecockPrice" className="text-gray-700 font-medium">{t('form.shuttlecock_price')}</Label>
+              <Label htmlFor="shuttlecockPrice" className="text-gray-700 font-medium">{t('form.shuttlecock_price')} <span className="text-red-500">*</span></Label>
               <Input
                 id="shuttlecockPrice"
                 type="number"
                 value={shuttlecockPrice}
-                onChange={(e) => setShuttlecockPrice(Number(e.target.value))}
+                onChange={(e) => { setShuttlecockPrice(Number(e.target.value)); setShuttlecockPriceError(''); }}
                 min="0"
                 step="0.01"
                 required
-                className="border-blue-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200"
+                className={`border-blue-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200 ${shuttlecockPriceError ? 'border-red-500 focus:border-red-500 focus:ring-red-200' : ''}`}
               />
+              {shuttlecockPriceError && (
+                <p className="text-sm text-red-600 mt-1">{shuttlecockPriceError}</p>
+              )}
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="courtHourlyRate" className="text-gray-700 font-medium">{t('form.court_rate')}</Label>
+              <Label htmlFor="courtHourlyRate" className="text-gray-700 font-medium">{t('form.court_rate')} <span className="text-red-500">*</span></Label>
               <Input
                 id="courtHourlyRate"
                 type="number"
                 value={courtHourlyRate}
-                onChange={(e) => setCourtHourlyRate(Number(e.target.value))}
+                onChange={(e) => { setCourtHourlyRate(Number(e.target.value)); setCourtHourlyRateError(''); }}
                 min="0"
                 step="0.01"
                 required
-                className="border-blue-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200"
+                className={`border-blue-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200 ${courtHourlyRateError ? 'border-red-500 focus:border-red-500 focus:ring-red-200' : ''}`}
               />
+              {courtHourlyRateError && (
+                <p className="text-sm text-red-600 mt-1">{courtHourlyRateError}</p>
+              )}
             </div>
           </div>
 
@@ -300,10 +378,10 @@ const CreateEventForm = ({ onSubmit, onCancel, editEvent, onUpdateEvent }: Creat
           {/* Courts */}
           <div className="space-y-4">
             <div className="flex justify-between items-center">
-              <Label className="text-gray-700 font-medium text-lg">{t('form.courts')}</Label>
+              <Label className="text-gray-700 font-medium text-lg">{t('form.courts')} <span className="text-red-500">*</span></Label>
               <Button
                 type="button"
-                onClick={addCourt}
+                onClick={() => { addCourt(); setCourtsError(''); }}
                 size="sm"
                 className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200"
               >
@@ -311,6 +389,9 @@ const CreateEventForm = ({ onSubmit, onCancel, editEvent, onUpdateEvent }: Creat
                 {t('form.add_court')}
               </Button>
             </div>
+            {courtsError && (
+              <p className="text-sm text-red-600">{courtsError}</p>
+            )}
 
             {courts.map((court, index) => (
               <div key={index} className="bg-gradient-to-br from-gray-50 to-blue-50 p-4 rounded-xl border border-gray-200 shadow-md hover:shadow-lg transition-all duration-300">
@@ -331,6 +412,7 @@ const CreateEventForm = ({ onSubmit, onCancel, editEvent, onUpdateEvent }: Creat
                     <TimePicker
                       value={court.startTime}
                       onChange={(v) => updateCourt(index, 'startTime', v)}
+                      hourlyOnly={true}
                     />
                   </div>
 
@@ -339,21 +421,26 @@ const CreateEventForm = ({ onSubmit, onCancel, editEvent, onUpdateEvent }: Creat
                     <TimePicker
                       value={court.endTime}
                       onChange={(v) => updateCourt(index, 'endTime', v)}
+                      hourlyOnly={true}
                     />
                   </div>
 
                   <div className="flex justify-end">
-                    {courts.length > 1 && (
-                      <Button
-                        type="button"
-                        onClick={() => removeCourt(index)}
-                        size="sm"
-                        variant="outline"
-                        className="border-red-300 text-red-600 hover:bg-red-50 hover:shadow-md transform hover:-translate-y-0.5 transition-all duration-200"
-                      >
-                        <Minus className="w-4 h-4" />
-                      </Button>
-                    )}
+                    <Button
+                      type="button"
+                      onClick={() => removeCourt(index)}
+                      size="sm"
+                      variant="outline"
+                      disabled={courts.length <= 1}
+                      className={`${
+                        courts.length <= 1
+                          ? 'border-gray-300 text-gray-400 cursor-not-allowed'
+                          : 'border-red-300 text-red-600 hover:bg-red-50 hover:shadow-md transform hover:-translate-y-0.5'
+                      } transition-all duration-200`}
+                      title={courts.length <= 1 ? 'ต้องมีอย่างน้อย 1 สนาม' : 'ลบสนาม'}
+                    >
+                      <Minus className="w-4 h-4" />
+                    </Button>
                   </div>
                 </div>
               </div>

@@ -454,17 +454,17 @@ const EventDetail = () => {
               </Badge>
               <Badge className="bg-gradient-to-r from-green-500 to-teal-500 text-white px-3 py-1">
                 <DollarSign className="w-3 h-3 mr-1" />
-                ประมาณ ฿{estimatedCourtCost.toFixed(0)}
+                {t('badge.estimated')} ฿{estimatedCourtCost.toFixed(0)}
               </Badge>
               <Badge className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-3 py-1">
                 <Users className="w-3 h-3 mr-1" />
-                {perPlayer !== undefined ? `฿${perPlayer}/คน` : 'คำนวณไม่ได้'}
+                {perPlayer !== undefined ? `฿${perPlayer}/${t('badge.players')}` : t('badge.cannot_calculate')}
               </Badge>
               <Badge className={event.capacity?.waitlistEnabled
                 ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white px-3 py-1'
                 : 'bg-gradient-to-r from-gray-400 to-gray-500 text-white px-3 py-1'
               }>
-                {event.capacity?.waitlistEnabled ? '✅ เปิดสำรอง' : '❌ ปิดสำรอง'}
+                {event.capacity?.waitlistEnabled ? `✅ ${t('badge.waitlist_open')}` : `❌ ${t('badge.waitlist_closed')}`}
               </Badge>
             </div>
           </CardContent>
@@ -504,7 +504,7 @@ const EventDetail = () => {
                         </div>
                       </div>
                       <Badge className="bg-gradient-to-r from-green-500 to-teal-500 text-white">
-                        {calcHours(c.startTime, c.endTime)} ชั่วโมง
+                        {calcHours(c.startTime, c.endTime)} {t('badge.hours')}
                       </Badge>
                     </div>
                   </div>
@@ -551,13 +551,13 @@ const EventDetail = () => {
                         onChange={(e) => setGuestForm({ ...guestForm, name: e.target.value })}
                         required
                         className="bg-white/80 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                        placeholder="กรุณาระบุชื่อผู้เล่น"
+                        placeholder={t('placeholder.player_name')}
                       />
                     </div>
                     <div>
                       <Label htmlFor="gphone" className="text-sm font-medium text-gray-700 flex items-center gap-1">
                         <Phone className="w-3 h-3" />
-                        เบอร์โทรศัพท์
+                        {t('event.phone_number')}
                       </Label>
                       <Input
                         id="gphone"
@@ -567,7 +567,7 @@ const EventDetail = () => {
                         maxLength={10}
                         inputMode="numeric"
                         className="bg-white/80 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                        placeholder="0812345678"
+                        placeholder={t('placeholder.phone_number')}
                       />
                     </div>
                   </div>
@@ -575,7 +575,7 @@ const EventDetail = () => {
                     <div>
                       <Label htmlFor="gstart" className="text-sm font-medium text-gray-700 flex items-center gap-1">
                         <Timer className="w-3 h-3" />
-                        เวลาเริ่มเล่น
+                        {t('event.start_time')}
                       </Label>
                       <TimePicker
                         value={guestForm.startTime}
@@ -585,7 +585,7 @@ const EventDetail = () => {
                     <div>
                       <Label htmlFor="gend" className="text-sm font-medium text-gray-700 flex items-center gap-1">
                         <Timer className="w-3 h-3" />
-                        เวลาสิ้นสุดเล่น
+                        {t('event.end_time')}
                       </Label>
                       <TimePicker
                         value={guestForm.endTime}
@@ -599,7 +599,7 @@ const EventDetail = () => {
                     disabled={isAddingGuest}
                   >
                     <UserPlus className="w-4 h-4 mr-2" />
-                    เพิ่มผู้เล่นแขก
+                    {t('event.add_guest')}
                   </Button>
                 </form>
               </div>
@@ -612,15 +612,15 @@ const EventDetail = () => {
                     <div className="w-6 h-6 rounded-full bg-gradient-to-r from-green-500 to-teal-500 flex items-center justify-center">
                       <Users className="w-3 h-3 text-white" />
                     </div>
-                    <h4 className="font-semibold text-gray-900">ผู้เล่นที่ลงทะเบียน</h4>
+                    <h4 className="font-semibold text-gray-900">{t('event.registered_players')}</h4>
                     <Badge className="bg-gradient-to-r from-green-500 to-teal-500 text-white">
-                      {players.filter((p:any)=>p.status==='registered').length} คน
+                      {players.filter((p:any)=>p.status==='registered').length} {t('event.people')}
                     </Badge>
                   </div>
                   {players.filter((p:any)=>p.status==='registered').length === 0 ? (
                     <div className="text-center py-8 bg-gray-50/50 rounded-xl border border-gray-200/50">
                       <Users className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                      <div className="text-gray-600">ไม่มีผู้เล่นที่ลงทะเบียน</div>
+                      <div className="text-gray-600">{t('event.no_registered_players')}</div>
                     </div>
                   ) : (
                     <div className="space-y-3">
@@ -633,12 +633,12 @@ const EventDetail = () => {
                               </div>
                               <div>
                                 <div className="font-medium text-gray-900 flex items-center gap-2">
-                                  {p.name || (p.userId ? memberNames[p.userId] : '') || 'ไม่ระบุชื่อ'}
+                                  {p.name || (p.userId ? memberNames[p.userId] : '') || t('user.no_name_display')}
                                   <Badge className={p.userType === 'member'
                                     ? 'bg-blue-100 text-blue-800 border border-blue-300'
                                     : 'bg-gray-100 text-gray-800 border border-gray-300'
                                   }>
-                                    {p.userType === 'member' ? 'สมาชิก' : 'แขก'}
+                                    {p.userType === 'member' ? t('user.member_badge') : t('user.guest_badge')}
                                   </Badge>
                                 </div>
                                 <div className="text-sm text-gray-600 flex items-center gap-2">
@@ -661,7 +661,7 @@ const EventDetail = () => {
                               {cancelingPlayerId === (p.playerId || p.id || p._id) ? (
                                 <Loader2 className="w-4 h-4 mr-1 animate-spin" />
                               ) : (
-                                <>ยกเลิก</>
+                                <>{t('badge.canceled')}</>
                               )}
                             </Button>
                           </div>
@@ -677,15 +677,15 @@ const EventDetail = () => {
                     <div className="w-6 h-6 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 flex items-center justify-center">
                       <Clock className="w-3 h-3 text-white" />
                     </div>
-                    <h4 className="font-semibold text-gray-900">รายชื่อสำรอง</h4>
+                    <h4 className="font-semibold text-gray-900">{t('event.waitlist')}</h4>
                     <Badge className="bg-gradient-to-r from-amber-500 to-orange-500 text-white">
-                      {players.filter((p:any)=>p.status==='waitlist').length} คน
+                      {players.filter((p:any)=>p.status==='waitlist').length} {t('event.people')}
                     </Badge>
                   </div>
                   {players.filter((p:any)=>p.status==='waitlist').length === 0 ? (
                     <div className="text-center py-8 bg-amber-50/50 rounded-xl border border-amber-200/50">
                       <Clock className="w-12 h-12 text-amber-300 mx-auto mb-3" />
-                      <div className="text-gray-600">ไม่มีรายชื่อสำรอง</div>
+                      <div className="text-gray-600">{t('event.no_waitlist')}</div>
                     </div>
                   ) : (
                     <div className="space-y-3">
@@ -698,12 +698,12 @@ const EventDetail = () => {
                               </div>
                               <div>
                                 <div className="font-medium text-gray-900 flex items-center gap-2">
-                                  {p.name || (p.userId ? memberNames[p.userId] : '') || 'ไม่ระบุชื่อ'}
+                                  {p.name || (p.userId ? memberNames[p.userId] : '') || t('user.no_name_display')}
                                   <Badge className={p.userType === 'member'
                                     ? 'bg-blue-100 text-blue-800 border border-blue-300'
                                     : 'bg-gray-100 text-gray-800 border border-gray-300'
                                   }>
-                                    {p.userType === 'member' ? 'สมาชิก' : 'แขก'}
+                                    {p.userType === 'member' ? t('user.member_badge') : t('user.guest_badge')}
                                   </Badge>
                                 </div>
                                 <div className="text-sm text-gray-600 flex items-center gap-2">
@@ -726,7 +726,7 @@ const EventDetail = () => {
                               {cancelingPlayerId === (p.playerId || p.id || p._id) ? (
                                 <Loader2 className="w-4 h-4 mr-1 animate-spin" />
                               ) : (
-                                <>ยกเลิก</>
+                                <>{t('badge.canceled')}</>
                               )}
                             </Button>
                           </div>
@@ -750,9 +750,9 @@ const EventDetail = () => {
                 <div className="w-8 h-8 rounded-lg bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center">
                   <UserPlus className="w-4 h-4 text-white" />
                 </div>
-                ลงทะเบียนเข้าร่วมกิจกรรม
+                {t('event.register_to_join')}
               </CardTitle>
-              <CardDescription>ลงทะเบียนเข้าร่วมเล่นแบดมินตัน</CardDescription>
+              <CardDescription>{t('event.register_description')}</CardDescription>
             </CardHeader>
             <CardContent>
               {(() => {
@@ -767,19 +767,19 @@ const EventDetail = () => {
                           </div>
                           <div>
                             <div className="font-medium text-gray-900 flex items-center gap-2">
-                              คุณลงทะเบียนแล้ว
+                              {t('user.already_registered')}
                               <Badge className={mine.status === 'registered'
                                 ? 'bg-green-100 text-green-800 border border-green-300'
                                 : 'bg-amber-100 text-amber-800 border border-amber-300'
                               }>
-                                {mine.status === 'registered' ? '✅ ยืนยันแล้ว' : '⏳ รอสำรอง'}
+                                {mine.status === 'registered' ? `✅ ${t('user.confirmed_status')}` : `⏳ ${t('user.waitlist_status')}`}
                               </Badge>
                             </div>
                             <div className="text-sm text-gray-600 flex items-center gap-1">
                               <Timer className="w-3 h-3" />
-                              เวลาเล่น: {mine.startTime || '-'} - {mine.endTime || '-'}
+                              {t('user.play_time_display')}: {mine.startTime || '-'} - {mine.endTime || '-'}
                             </div>
-                            <div className="text-xs text-gray-500">สถานะ: {mine.status === 'registered' ? 'ยืนยันการลงทะเบียน' : 'อยู่ในรายชื่อสำรอง'}</div>
+                            <div className="text-xs text-gray-500">{t('user.status_display')}: {mine.status === 'registered' ? t('user.confirmed_registration') : t('user.on_waitlist')}</div>
                           </div>
                         </div>
                         <Button
@@ -791,10 +791,10 @@ const EventDetail = () => {
                           {cancelingPlayerId === mine.playerId ? (
                             <>
                               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                              ยกเลิก...
+                              {t('event.canceling')}
                             </>
                           ) : (
-                            'ยกเลิก'
+                            t('badge.canceled')
                           )}
                         </Button>
                       </div>
@@ -805,21 +805,21 @@ const EventDetail = () => {
                   <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-6 border border-blue-200/50">
                     <h4 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
                       <Timer className="w-4 h-4 text-blue-600" />
-                      เลือกเวลาเล่น
+                      {t('user.select_play_time')}
                     </h4>
                     <form onSubmit={registerAsMember} className="space-y-4">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                           <Label htmlFor="mstart" className="text-sm font-medium text-gray-700 flex items-center gap-1">
                             <Timer className="w-3 h-3" />
-                            เวลาเริ่มเล่น
+                            {t('event.start_time')}
                           </Label>
                           <TimePicker value={memberTime.startTime} onChange={(v)=>setMemberTime({...memberTime,startTime:v})} />
                         </div>
                         <div>
                           <Label htmlFor="mend" className="text-sm font-medium text-gray-700 flex items-center gap-1">
                             <Timer className="w-3 h-3" />
-                            เวลาสิ้นสุดเล่น
+                            {t('event.end_time')}
                           </Label>
                           <TimePicker value={memberTime.endTime} onChange={(v)=>setMemberTime({...memberTime,endTime:v})} />
                         </div>
@@ -832,12 +832,12 @@ const EventDetail = () => {
                         {isRegisteringMember ? (
                           <>
                             <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            กำลังลงทะเบียน...
+                            {t('event.registering')}
                           </>
                         ) : (
                           <>
                             <UserPlus className="w-4 h-4 mr-2" />
-                            ลงทะเบียน
+                            {t('event.register')}
                           </>
                         )}
                       </Button>
@@ -857,9 +857,9 @@ const EventDetail = () => {
                 <div className="w-8 h-8 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center">
                   <Users className="w-4 h-4 text-white" />
                 </div>
-                รายชื่อผู้เล่น
+                {t('user.player_list')}
               </CardTitle>
-              <CardDescription>ดูรายชื่อผู้เข้าร่วมกิจกรรม</CardDescription>
+              <CardDescription>{t('user.view_participants')}</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-6">
@@ -869,15 +869,15 @@ const EventDetail = () => {
                     <div className="w-6 h-6 rounded-full bg-gradient-to-r from-green-500 to-teal-500 flex items-center justify-center">
                       <Users className="w-3 h-3 text-white" />
                     </div>
-                    <h4 className="font-semibold text-gray-900">ผู้เล่นที่ลงทะเบียน</h4>
+                    <h4 className="font-semibold text-gray-900">{t('event.registered_players')}</h4>
                     <Badge className="bg-gradient-to-r from-green-500 to-teal-500 text-white">
-                      {players.filter((p:any)=>p.status==='registered').length} คน
+                      {players.filter((p:any)=>p.status==='registered').length} {t('event.people')}
                     </Badge>
                   </div>
                   {players.filter((p:any)=>p.status==='registered').length === 0 ? (
                     <div className="text-center py-8 bg-gray-50/50 rounded-xl border border-gray-200/50">
                       <Users className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                      <div className="text-gray-600">ไม่มีผู้เล่นที่ลงทะเบียน</div>
+                      <div className="text-gray-600">{t('event.no_registered_players')}</div>
                     </div>
                   ) : (
                     <div className="space-y-3">
@@ -889,16 +889,16 @@ const EventDetail = () => {
                             </div>
                             <div className="flex-1">
                               <div className="font-medium text-gray-900 flex items-center gap-2">
-                                {p.name || (p.userId ? memberNames[p.userId] : '') || 'ไม่ระบุชื่อ'}
+                                {p.name || (p.userId ? memberNames[p.userId] : '') || t('user.no_name_display')}
                                 <Badge className={p.userType === 'member'
                                   ? 'bg-blue-100 text-blue-800 border border-blue-300'
                                   : 'bg-gray-100 text-gray-800 border border-gray-300'
                                 }>
-                                  {p.userType === 'member' ? 'สมาชิก' : 'แขก'}
+                                  {p.userType === 'member' ? t('user.member_badge') : t('user.guest_badge')}
                                 </Badge>
                                 {p.userId === user?.id && (
                                   <Badge className="bg-purple-100 text-purple-800 border border-purple-300">
-                                    👤 คุณ
+                                    👤 {t('user.you_badge')}
                                   </Badge>
                                 )}
                               </div>
@@ -924,15 +924,15 @@ const EventDetail = () => {
                     <div className="w-6 h-6 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 flex items-center justify-center">
                       <Clock className="w-3 h-3 text-white" />
                     </div>
-                    <h4 className="font-semibold text-gray-900">รายชื่อสำรอง</h4>
+                    <h4 className="font-semibold text-gray-900">{t('event.waitlist')}</h4>
                     <Badge className="bg-gradient-to-r from-amber-500 to-orange-500 text-white">
-                      {players.filter((p:any)=>p.status==='waitlist').length} คน
+                      {players.filter((p:any)=>p.status==='waitlist').length} {t('event.people')}
                     </Badge>
                   </div>
                   {players.filter((p:any)=>p.status==='waitlist').length === 0 ? (
                     <div className="text-center py-8 bg-amber-50/50 rounded-xl border border-amber-200/50">
                       <Clock className="w-12 h-12 text-amber-300 mx-auto mb-3" />
-                      <div className="text-gray-600">ไม่มีรายชื่อสำรอง</div>
+                      <div className="text-gray-600">{t('event.no_waitlist')}</div>
                     </div>
                   ) : (
                     <div className="space-y-3">
@@ -944,16 +944,16 @@ const EventDetail = () => {
                             </div>
                             <div className="flex-1">
                               <div className="font-medium text-gray-900 flex items-center gap-2">
-                                {p.name || (p.userId ? memberNames[p.userId] : '') || 'ไม่ระบุชื่อ'}
+                                {p.name || (p.userId ? memberNames[p.userId] : '') || t('user.no_name_display')}
                                 <Badge className={p.userType === 'member'
                                   ? 'bg-blue-100 text-blue-800 border border-blue-300'
                                   : 'bg-gray-100 text-gray-800 border border-gray-300'
                                 }>
-                                  {p.userType === 'member' ? 'สมาชิก' : 'แขก'}
+                                  {p.userType === 'member' ? t('user.member_badge') : t('user.guest_badge')}
                                 </Badge>
                                 {p.userId === user?.id && (
                                   <Badge className="bg-purple-100 text-purple-800 border border-purple-300">
-                                    👤 คุณ
+                                    👤 {t('user.you_badge')}
                                   </Badge>
                                 )}
                               </div>

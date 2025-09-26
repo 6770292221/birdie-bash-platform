@@ -258,7 +258,40 @@ const translations = {
     'event.select_play_time_instruction': 'กรุณาเลือกเวลาที่ต้องการเล่น',
     'event.registering': 'กำลังลงทะเบียน...',
     'event.register': 'ลงทะเบียน',
-    'event.back_to_home': 'กลับหน้าหลัก'
+    'event.back_to_home': 'กลับหน้าหลัก',
+
+    // TimePicker
+    'timepicker.hour': 'ชั่วโมง',
+    'timepicker.minute': 'นาที',
+
+    // Badge labels
+    'badge.hours': 'ชั่วโมง',
+    'badge.players': 'คน',
+    'badge.canceled': 'ยกเลิก',
+    'badge.estimated': 'ประมาณ',
+    'badge.cannot_calculate': 'คำนวณไม่ได้',
+    'badge.waitlist_open': 'เปิดสำรอง',
+    'badge.waitlist_closed': 'ปิดสำรอง',
+
+    // Placeholders
+    'placeholder.player_name': 'กรุณาระบุชื่อผู้เล่น',
+    'placeholder.phone_number': '0812345678',
+
+    // User registration status
+    'user.already_registered': 'คุณลงทะเบียนแล้ว',
+    'user.confirmed_status': 'ยืนยันแล้ว',
+    'user.waitlist_status': 'รอสำรอง',
+    'user.confirmed_registration': 'ยืนยันการลงทะเบียน',
+    'user.on_waitlist': 'อยู่ในรายชื่อสำรอง',
+    'user.play_time_display': 'เวลาเล่น',
+    'user.status_display': 'สถานะ',
+    'user.select_play_time': 'เลือกเวลาเล่น',
+    'user.player_list': 'รายชื่อผู้เล่น',
+    'user.view_participants': 'ดูรายชื่อผู้เข้าร่วมกิจกรรม',
+    'user.you_badge': 'คุณ',
+    'user.member_badge': 'สมาชิก',
+    'user.guest_badge': 'แขก',
+    'user.no_name_display': 'ไม่ระบุชื่อ'
   },
   en: {
     'app.title': 'Birdie Bash',
@@ -508,7 +541,40 @@ const translations = {
     'event.select_play_time_instruction': 'Please select your play time',
     'event.registering': 'Registering...',
     'event.register': 'Register',
-    'event.back_to_home': 'Back to Home'
+    'event.back_to_home': 'Back to Home',
+
+    // TimePicker
+    'timepicker.hour': 'Hour',
+    'timepicker.minute': 'Minute',
+
+    // Badge labels
+    'badge.hours': 'Hours',
+    'badge.players': 'People',
+    'badge.canceled': 'Cancel',
+    'badge.estimated': 'Est.',
+    'badge.cannot_calculate': 'Cannot calculate',
+    'badge.waitlist_open': 'Waitlist Open',
+    'badge.waitlist_closed': 'Waitlist Closed',
+
+    // Placeholders
+    'placeholder.player_name': 'Please enter player name',
+    'placeholder.phone_number': '0812345678',
+
+    // User registration status
+    'user.already_registered': 'You are registered',
+    'user.confirmed_status': 'Confirmed',
+    'user.waitlist_status': 'Waitlist',
+    'user.confirmed_registration': 'Registration Confirmed',
+    'user.on_waitlist': 'On Waitlist',
+    'user.play_time_display': 'Play Time',
+    'user.status_display': 'Status',
+    'user.select_play_time': 'Select Play Time',
+    'user.player_list': 'Player List',
+    'user.view_participants': 'View event participants',
+    'user.you_badge': 'You',
+    'user.member_badge': 'Member',
+    'user.guest_badge': 'Guest',
+    'user.no_name_display': 'No name specified'
   }
 };
 

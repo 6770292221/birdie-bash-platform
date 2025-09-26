@@ -45,24 +45,20 @@ function validateEventDate(eventDate: string): {
     };
   }
 
-  // ตรวจสอบว่าไม่ใช่วันที่ในอดีต (เทียบกับ UTC วันนี้)
-  const today = new Date();
-  const todayUTC = new Date(
-    today.getFullYear(),
-    today.getMonth(),
-    today.getDate()
-  );
+  // ตรวจสอบว่าไม่ใช่วันที่ในอดีต (เทียบกับเวลาไทย)
+  const nowBangkok = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Bangkok"}));
+  const todayBangkok = new Date(nowBangkok.getFullYear(), nowBangkok.getMonth(), nowBangkok.getDate());
   const eventDateLocal = new Date(
     eventDateObj.getFullYear(),
     eventDateObj.getMonth(),
     eventDateObj.getDate()
   );
 
-  if (eventDateLocal < todayUTC) {
+  if (eventDateLocal < todayBangkok) {
     return {
       isValid: false,
       error: `Event date cannot be in the past. Event date: ${eventDate}, Today: ${
-        todayUTC.toISOString().split("T")[0]
+        todayBangkok.toISOString().split("T")[0]
       }`,
     };
   }
@@ -80,35 +76,40 @@ function validateEventDateTime(
     return dateValidation;
   }
 
-  // ถ้าเป็นวันนี้ ตรวจสอบเวลาด้วย
+  // ใช้เวลาไทย (UTC+7) สำหรับการตรวจสอบ
+  const nowBangkok = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Bangkok"}));
+  const todayBangkok = new Date(nowBangkok.getFullYear(), nowBangkok.getMonth(), nowBangkok.getDate());
   const eventDateObj = new Date(eventDate + "T00:00:00.000Z");
-  const today = new Date();
-  const todayUTC = new Date(
-    today.getFullYear(),
-    today.getMonth(),
-    today.getDate()
-  );
-  const eventDateLocal = new Date(
-    eventDateObj.getFullYear(),
-    eventDateObj.getMonth(),
-    eventDateObj.getDate()
-  );
+  const eventDateLocal = new Date(eventDateObj.getFullYear(), eventDateObj.getMonth(), eventDateObj.getDate());
 
-  if (eventDateLocal.getTime() === todayUTC.getTime()) {
+  // ตรวจสอบว่าเป็นวันนี้หรือวันในอดีต
+  if (eventDateLocal.getTime() < todayBangkok.getTime()) {
+    return {
+      isValid: false,
+      error: `Event date cannot be in the past. Event date: ${eventDate}, Today: ${todayBangkok.toISOString().split("T")[0]}`,
+    };
+  }
+
+  if (eventDateLocal.getTime() === todayBangkok.getTime()) {
     // เป็นวันนี้ - ตรวจสอบเวลา
-    const now = new Date();
-    const currentTimeMinutes = now.getHours() * 60 + now.getMinutes();
+    const currentTimeMinutes = nowBangkok.getHours() * 60 + nowBangkok.getMinutes();
+    const currentTimeString = nowBangkok.toTimeString().slice(0, 5);
 
     for (const court of courts) {
-      const startMinutes = timeToMinutes(court.startTime);
+      let startMinutes = timeToMinutes(court.startTime);
+
+      // ถ้าเป็นเวลาข้ามวัน (เช่น 23:00-01:00) ให้ถือว่าเริ่มวันถัดไป
+      const endMinutes = timeToMinutes(court.endTime);
+      if (endMinutes <= startMinutes) {
+        // เวลาข้ามวัน - ให้ผ่าน validation เพราะเป็นวันถัดไป
+        continue;
+      }
+
+      // ตรวจสอบเฉพาะเวลาในวันเดียวกัน
       if (startMinutes <= currentTimeMinutes) {
         return {
           isValid: false,
-          error: `Court ${court.courtNumber} start time (${
-            court.startTime
-          }) cannot be in the past. Current time: ${now
-            .toTimeString()
-            .slice(0, 5)}`,
+          error: `Court ${court.courtNumber} start time (${court.startTime}) cannot be in the past. Current time: ${currentTimeString}`,
         };
       }
     }
@@ -147,20 +148,25 @@ function validateCourts(courts: ICourtTime[]): CourtValidationResult {
       courtErrors.endTime = `Invalid time format: ${court.endTime}. Expected HH:MM (24-hour format)`;
     }
 
-    // ตรวจสอบ startTime < endTime
+    // ตรวจสอบ startTime < endTime (รองรับเวลาข้ามวัน)
     if (timeRegex.test(court.startTime) && timeRegex.test(court.endTime)) {
       const startMinutes = timeToMinutes(court.startTime);
-      const endMinutes = timeToMinutes(court.endTime);
+      let endMinutes = timeToMinutes(court.endTime);
 
-      if (startMinutes >= endMinutes) {
-        courtErrors.timeRange = `Start time (${court.startTime}) must be before end time (${court.endTime})`;
+      // ถ้า endTime เป็น 00:00 หรือน้อยกว่า startTime แสดงว่าข้ามวัน
+      if (endMinutes <= startMinutes) {
+        endMinutes += 1440; // เพิ่ม 24 ชั่วโมง (1440 นาที)
       }
 
       // ตรวจสอบระยะเวลาขั้นต่ำ (30 นาที)
-      if (endMinutes - startMinutes < 30) {
-        courtErrors.minimumDuration = `Court session must be at least 30 minutes. Current: ${
-          endMinutes - startMinutes
-        } minutes`;
+      const duration = endMinutes - startMinutes;
+      if (duration < 30) {
+        courtErrors.minimumDuration = `Court session must be at least 30 minutes. Current: ${duration} minutes`;
+      }
+
+      // ตรวจสอบระยะเวลาสูงสุด (ไม่เกิน 12 ชั่วโมง)
+      if (duration > 720) {
+        courtErrors.maximumDuration = `Court session cannot exceed 12 hours. Current: ${duration} minutes`;
       }
 
       // ตรวจสอบเวลาสมเหตุสมผล (6:00-24:00)
@@ -207,11 +213,15 @@ function findTimeOverlaps(courts: ICourtTime[]): any[] {
       // ถ้าเป็นสนามเดียวกัน ตรวจสอบการซ้อนทับ
       if (court1.courtNumber === court2.courtNumber) {
         const start1 = timeToMinutes(court1.startTime);
-        const end1 = timeToMinutes(court1.endTime);
+        let end1 = timeToMinutes(court1.endTime);
         const start2 = timeToMinutes(court2.startTime);
-        const end2 = timeToMinutes(court2.endTime);
+        let end2 = timeToMinutes(court2.endTime);
 
-        // ตรวจสอบการซ้อนทับ
+        // ปรับ endTime สำหรับเวลาข้ามวัน
+        if (end1 <= start1) end1 += 1440;
+        if (end2 <= start2) end2 += 1440;
+
+        // ตรวจสอบการซ้อนทับ (รองรับเวลาข้ามวัน)
         if (start1 < end2 && start2 < end1) {
           overlaps.push({
             court: court1.courtNumber,
