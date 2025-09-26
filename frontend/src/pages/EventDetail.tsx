@@ -299,12 +299,14 @@ const EventDetail = () => {
         endTime: memberTime.endTime,
       });
 
-      // Add 3-second delay for loading effect
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
       if (res.success) {
-        toast({ title: t('success.registered') });
+        // Update players list immediately after successful registration
         await fetchPlayersFiltered();
+
+        // Add 2-second delay for loading effect after updating state
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        toast({ title: t('success.registered') });
         setIsRegisteringMember(false);
         setOverlayAction(null);
         // Refresh page after completion with small delay
@@ -312,6 +314,9 @@ const EventDetail = () => {
           window.location.reload();
         }, 500);
       } else {
+        // Add 2-second delay for loading effect
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
         toast({ title: t('error.registration_failed'), description: res.error, variant: 'destructive' });
         setIsRegisteringMember(false);
         setOverlayAction(null);
@@ -830,7 +835,7 @@ const EventDetail = () => {
             </CardHeader>
             <CardContent>
               {(() => {
-                const mine = players.find((p:any) => p.userId && user && (p.userId === user.id) && p.status !== 'canceled');
+                const mine = players.find((p:any) => p.userId && user && (p.userId === user.userId) && p.status !== 'canceled');
                 if (mine) {
                   return (
                     <div className="bg-gradient-to-r from-green-50 to-teal-50 rounded-xl p-6 border border-green-200/50">
