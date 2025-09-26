@@ -147,6 +147,33 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUser(null);
       setSession(null);
       apiClient.clearToken();
+
+      // Clear all caches
+      try {
+        // Clear localStorage (except for essential data like language preference)
+        const keysToKeep = ['language', 'theme']; // Keep essential preferences
+        const allKeys = Object.keys(localStorage);
+        allKeys.forEach(key => {
+          if (!keysToKeep.includes(key)) {
+            localStorage.removeItem(key);
+          }
+        });
+
+        // Clear sessionStorage completely
+        sessionStorage.clear();
+
+        // Clear browser cache if Cache API is available
+        if ('caches' in window) {
+          const cacheNames = await caches.keys();
+          await Promise.all(
+            cacheNames.map(cacheName => caches.delete(cacheName))
+          );
+        }
+
+        console.log('Cache cleared successfully on logout');
+      } catch (cacheError) {
+        console.error('Error clearing cache on logout:', cacheError);
+      }
     }
   };
 

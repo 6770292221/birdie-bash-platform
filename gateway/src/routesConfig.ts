@@ -22,6 +22,7 @@ export function getRoutes(
           { path: "/api/registration/events/:id/guests", target: registrationUrl, protected: true, adminRequired: true },
           { path: "/api/registration/events/:id/players", target: registrationUrl, protected: true },
           { path: "/api/registration/events/:id/players/:pid/cancel", target: registrationUrl, protected: true },
+          { path: "/api/registration/users/registrations", target: registrationUrl, protected: true },
           // Legacy compatibility (optional; remove if you want to hard cutover)
           { path: "/api/events/:id/members", target: registrationUrl, protected: true },
           { path: "/api/events/:id/member", target: registrationUrl, protected: true },
