@@ -217,8 +217,8 @@ const EventDetail = () => {
         // Update players list immediately after successful add guest
         await fetchPlayersFiltered();
 
-        // Add 2-second delay for loading effect after updating state
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // Add 1-second delay for loading effect after updating state
+        await new Promise(resolve => setTimeout(resolve, 1000));
 
         toast({ title: t('success.player_added') });
         setGuestForm({ name: '', phoneNumber: '', startTime: '', endTime: '' });
@@ -227,8 +227,8 @@ const EventDetail = () => {
         // Refresh page immediately after loading completes
         window.location.reload();
       } else {
-        // Add 2-second delay for loading effect
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // Add 1-second delay for loading effect
+        await new Promise(resolve => setTimeout(resolve, 1000));
 
         toast({ title: t('error.add_player_failed'), description: res.error, variant: 'destructive' });
         setIsAddingGuest(false);
@@ -237,8 +237,8 @@ const EventDetail = () => {
         window.location.reload();
       }
     } catch (err: any) {
-      // Add 2-second delay for loading effect
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Add 1-second delay for loading effect
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
       toast({ title: t('error.add_player_failed'), description: err?.message || t('error.unknown'), variant: 'destructive' });
       setIsAddingGuest(false);
@@ -261,8 +261,8 @@ const EventDetail = () => {
       // Update players list immediately after successful cancellation
       await fetchPlayersFiltered();
 
-      // Add 2-second delay for loading effect after updating state
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Add 1-second delay for loading effect after updating state
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
       toast({ title: t('success.player_cancelled') });
       setCancelingPlayerId(null);
@@ -304,8 +304,8 @@ const EventDetail = () => {
         // Update players list immediately after successful registration
         await fetchPlayersFiltered();
 
-        // Add 2-second delay for loading effect after updating state
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // Add 1-second delay for loading effect after updating state
+        await new Promise(resolve => setTimeout(resolve, 1000));
 
         toast({ title: t('success.registered') });
         setIsRegisteringMember(false);
@@ -313,8 +313,8 @@ const EventDetail = () => {
         // Refresh page immediately after loading completes
         window.location.reload();
       } else {
-        // Add 2-second delay for loading effect
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // Add 1-second delay for loading effect
+        await new Promise(resolve => setTimeout(resolve, 1000));
 
         toast({ title: t('error.registration_failed'), description: res.error, variant: 'destructive' });
         setIsRegisteringMember(false);
