@@ -287,6 +287,18 @@ class ApiClient {
     });
   }
 
+  async getUserRegistrations(
+    params?: { includeCanceled?: boolean }
+  ): Promise<ApiResponse<{ registrations: PlayerItem[] }>> {
+    const query: Record<string, any> = {};
+    if (typeof params?.includeCanceled === 'boolean') {
+      query.includeCanceled = params.includeCanceled;
+    }
+    return this.request(`/api/registration/users/registrations`, {
+      params: Object.keys(query).length ? query : undefined,
+    });
+  }
+
   async cancelPlayer(eventId: string, playerId: string): Promise<ApiResponse<any>> {
     return this.request(`/api/registration/events/${eventId}/players/${playerId}/cancel`, {
       method: "POST",

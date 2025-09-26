@@ -12,7 +12,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import LanguageToggle from '@/components/LanguageToggle';
 
 const History = () => {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
   const { t } = useLanguage();
@@ -25,23 +25,69 @@ const History = () => {
       if (!user) return;
       setLoading(true);
 
-      const res = await apiClient.getEvents({ limit: 50, offset: 0 });
-      if (res.success) {
-        const data = (res.data as any);
-        const allEvents = data.events || data;
-        // Get only completed and canceled events
-        const finishedEvents = allEvents.filter((ev: any) =>
-          ev.status === 'completed' || ev.status === 'canceled'
-        );
-        // Sort by date (newest first)
-        finishedEvents.sort((a: any, b: any) =>
-          new Date(b.eventDate).getTime() - new Date(a.eventDate).getTime()
-        );
-        setCompletedEvents(finishedEvents);
-      } else {
+      try {
+        if (isAdmin) {
+          // Admin: Get all events
+          const res = await apiClient.getEvents({ limit: 50, offset: 0 });
+          if (res.success) {
+            const data = (res.data as any);
+            const allEvents = data.events || data;
+            // Get only completed and canceled events
+            const finishedEvents = allEvents.filter((ev: any) =>
+              ev.status === 'completed' || ev.status === 'canceled'
+            );
+            // Sort by date (newest first)
+            finishedEvents.sort((a: any, b: any) =>
+              new Date(b.eventDate).getTime() - new Date(a.eventDate).getTime()
+            );
+            setCompletedEvents(finishedEvents);
+          } else {
+            toast({
+              title: t('history.fetch_failed'),
+              description: res.error,
+              variant: 'destructive'
+            });
+          }
+        } else {
+          // Regular user: Get user registrations
+          const res = await apiClient.getUserRegistrations({ includeCanceled: true });
+          if (res.success) {
+            const data = (res.data as any);
+            const registrations = data.registrations || data;
+            // Transform registrations to match event format
+            const userEvents = registrations.map((reg: any) => ({
+              id: reg.eventId || reg._id,
+              eventName: reg.eventName || 'Unknown Event',
+              eventDate: reg.eventDate,
+              location: reg.location || reg.venue,
+              status: reg.status,
+              maxPlayers: reg.maxPlayers || 0,
+              currentParticipants: reg.currentParticipants || 0,
+              // Add user-specific data
+              userRegistration: {
+                playerId: reg.playerId,
+                status: reg.status,
+                startTime: reg.startTime,
+                endTime: reg.endTime
+              }
+            }));
+            // Sort by date (newest first)
+            userEvents.sort((a: any, b: any) =>
+              new Date(b.eventDate).getTime() - new Date(a.eventDate).getTime()
+            );
+            setCompletedEvents(userEvents);
+          } else {
+            toast({
+              title: t('history.fetch_failed'),
+              description: res.error,
+              variant: 'destructive'
+            });
+          }
+        }
+      } catch (error) {
         toast({
-          title: 'ดึงประวัติไม่สำเร็จ',
-          description: res.error,
+          title: t('common.error'),
+          description: t('history.fetch_error'),
           variant: 'destructive'
         });
       }
@@ -49,10 +95,16 @@ const History = () => {
     };
 
     fetchHistory();
-  }, [user, toast]);
+  }, [user, isAdmin, toast, t]);
 
   if (!user) {
     navigate('/login');
+    return null;
+  }
+
+  // Redirect regular users to activity history page
+  if (!isAdmin) {
+    navigate('/activity/history');
     return null;
   }
 
@@ -170,22 +222,42 @@ const History = () => {
                       </div>
                     </div>
 
-                    {/* Participants */}
-                    <div className="flex items-start gap-3">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                        ev.status === 'completed' ? 'bg-blue-100' : 'bg-gray-200'
-                      }`}>
-                        <Users className={`w-4 h-4 ${
-                          ev.status === 'completed' ? 'text-blue-600' : 'text-gray-600'
-                        }`} />
+                    {/* Participants or User Play Time */}
+                    {isAdmin ? (
+                      <div className="flex items-start gap-3">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                          ev.status === 'completed' ? 'bg-blue-100' : 'bg-gray-200'
+                        }`}>
+                          <Users className={`w-4 h-4 ${
+                            ev.status === 'completed' ? 'text-blue-600' : 'text-gray-600'
+                          }`} />
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-sm text-gray-500 mb-1">{t('history.participants')}</p>
+                          <p className="text-gray-800 font-medium">
+                            {ev?.capacity?.currentParticipants ?? 0} / {ev?.capacity?.maxParticipants ?? 0}
+                          </p>
+                        </div>
                       </div>
-                      <div className="flex-1">
-                        <p className="text-sm text-gray-500 mb-1">{t('history.participants')}</p>
-                        <p className="text-gray-800 font-medium">
-                          {ev?.capacity?.currentParticipants ?? 0} / {ev?.capacity?.maxParticipants ?? 0}
-                        </p>
-                      </div>
-                    </div>
+                    ) : (
+                      ev.userRegistration && (
+                        <div className="flex items-start gap-3">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                            ev.status === 'completed' ? 'bg-purple-100' : 'bg-gray-200'
+                          }`}>
+                            <Calendar className={`w-4 h-4 ${
+                              ev.status === 'completed' ? 'text-purple-600' : 'text-gray-600'
+                            }`} />
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-sm text-gray-500 mb-1">{t('history.your_play_time')}</p>
+                            <p className="text-gray-800 font-medium">
+                              {ev.userRegistration.startTime || '-'} - {ev.userRegistration.endTime || '-'}
+                            </p>
+                          </div>
+                        </div>
+                      )
+                    )}
 
                     {/* Action Button */}
                     <div className="pt-2 space-y-3">

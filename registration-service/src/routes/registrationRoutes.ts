@@ -5,6 +5,7 @@ import {
   registerGuest,
   cancelPlayerRegistration,
   promoteWaitlist,
+  getRegistrationsByUser,
 } from "../controllers/registrationController";
 
 const router = express.Router();
@@ -78,6 +79,73 @@ const router = express.Router();
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.get("/events/:id/players", getPlayers);
+
+/**
+ * @swagger
+ * /api/registration/users/registrations:
+ *   get:
+ *     summary: Get registrations for the authenticated user
+ *     tags: [Registrations]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: header
+ *         name: x-user-id
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: User ID set by Gateway after JWT validation. Optional here; required only if calling the service directly without Gateway.
+ *       - in: query
+ *         name: includeCanceled
+ *         schema:
+ *           type: boolean
+ *           default: false
+ *         description: Include registrations with canceled status
+ *     responses:
+ *       200:
+ *         description: List of registrations for the authenticated user (self only)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 userId:
+ *                   type: string
+ *                 includeCanceled:
+ *                   type: boolean
+ *                 total:
+ *                   type: integer
+ *                 registrations:
+ *                   type: array
+ *                   items:
+ *                     allOf:
+ *                       - $ref: '#/components/schemas/Player'
+ *                       - type: object
+ *                         properties:
+ *                           event:
+ *                             type: object
+ *                             nullable: true
+ *                             description: Event details fetched from Event Service
+ *       401:
+ *         description: Authentication required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       403:
+ *         description: Insufficient permissions
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+router.get("/users/registrations", getRegistrationsByUser);
 
 /**
  * @swagger

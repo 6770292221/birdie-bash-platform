@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import Player from "../models/Player";
+import Player, { IPlayerDocument } from "../models/Player";
 import { RegisterByUser, RegisterByGuest, EventStatus } from "../types/event";
 import http from "http";
 import https from "https";
@@ -114,6 +114,42 @@ const ACCEPTING_EVENT_STATUSES: ReadonlySet<EventStatus> = new Set([
   "in_progress",
 ]);
 
+async function fetchEventsByIds(
+  eventIds: string[]
+): Promise<Record<string, any | null>> {
+  const uniqueIds = Array.from(new Set(eventIds.filter(Boolean)));
+  if (uniqueIds.length === 0) return {};
+
+  const results = await Promise.all(
+    uniqueIds.map(async (id) => {
+      const event = await fetchEventById(id);
+      return { id, event };
+    })
+  );
+
+  return results.reduce<Record<string, any | null>>((acc, { id, event }) => {
+    acc[id] = event ?? null;
+    return acc;
+  }, {});
+}
+
+const mapPlayerResponse = (player: IPlayerDocument) => ({
+  playerId: player.id,
+  eventId: player.eventId?.toString() ?? null,
+  userId: player.userId || null,
+  name: player.name || null,
+  email: player.email || null,
+  phoneNumber: (player as any).phoneNumber,
+  startTime: player.startTime || null,
+  endTime: player.endTime || null,
+  userType: (player as any).userType ?? (player.userId ? "member" : "guest"),
+  status: player.status,
+  createdBy: (player as any).createdBy || null,
+  registrationTime: player.registrationTime
+    ? player.registrationTime.toISOString()
+    : null,
+});
+
 function extractEventStatus(status: any): {
   state?: EventStatus;
   isAcceptingRegistrations?: boolean;
@@ -181,19 +217,7 @@ export const getPlayers = async (
 
     res.status(200).json({
       eventId,
-      players: players.map((player) => ({
-        playerId: player.id,
-        userId: player.userId || null,
-        name: player.name || null,
-        email: player.email || null,
-        phoneNumber: (player as any).phoneNumber,
-        startTime: player.startTime || null,
-        endTime: player.endTime || null,
-        userType: (player as any).userType ?? (player.userId ? 'member' : 'guest'),
-        status: player.status,
-        createdBy: (player as any).createdBy || null,
-        registrationTime: player.registrationTime.toISOString(),
-      })),
+      players: players.map(mapPlayerResponse),
       summary: {
         total,
         registered: groupedPlayers.registered.length,
@@ -208,6 +232,80 @@ export const getPlayers = async (
     });
   } catch (error) {
     console.error("Get players error:", error);
+    res.status(500).json({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Internal server error",
+      details: {},
+    });
+  }
+};
+
+export const getRegistrationsByUser = async (
+  req: ExtendedRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const pathUserId = req.params?.userId;
+    const headerUserId = req.headers["x-user-id"];
+    const userId = pathUserId || headerUserId;
+
+    if (!userId) {
+      res.status(401).json({
+        code: "AUTHENTICATION_REQUIRED",
+        message: "Authentication is required to fetch user registrations",
+        details: {},
+      });
+      return;
+    }
+
+    if (!headerUserId) {
+      res.status(401).json({
+        code: "AUTHENTICATION_REQUIRED",
+        message: "Authentication is required to fetch user registrations",
+        details: {},
+      });
+      return;
+    }
+
+    if (pathUserId && headerUserId !== pathUserId) {
+      res.status(403).json({
+        code: "INSUFFICIENT_PERMISSIONS",
+        message: "You can only view your own registrations",
+        details: { requesterId: headerUserId, userId: pathUserId },
+      });
+      return;
+    }
+
+    const includeCanceledParam = String(
+      req.query.includeCanceled ?? "false"
+    ).toLowerCase();
+    const includeCanceled = ["true", "1", "yes"].includes(includeCanceledParam);
+
+    const filter: any = { userId };
+    if (!includeCanceled) {
+      filter.status = { $ne: "canceled" };
+    }
+
+    const players = await Player.find(filter).sort({ registrationTime: -1 });
+    const eventIds = players
+      .map((player) => player.eventId?.toString())
+      .filter((id): id is string => Boolean(id));
+    const eventsMap = await fetchEventsByIds(eventIds);
+
+    const registrations = players.map((player) => {
+      const base = mapPlayerResponse(player);
+      const eventData = base.eventId ? eventsMap[base.eventId] ?? null : null;
+      return { ...base, event: eventData };
+    });
+
+    res.status(200).json({
+      userId,
+      includeCanceled,
+      total: registrations.length,
+      registrations,
+    });
+  } catch (error) {
+    console.error("Get registrations by user error:", error);
     res.status(500).json({
       code: "INTERNAL_SERVER_ERROR",
       message: "Internal server error",
