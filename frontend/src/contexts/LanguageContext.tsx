@@ -1,5 +1,5 @@
 
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 
 type Language = 'th' | 'en';
 
@@ -776,8 +776,41 @@ const translations = {
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
+// Cookie helper functions
+const LANGUAGE_COOKIE_KEY = 'birdie-bash-language';
+
+const getCookieLanguage = (): Language => {
+  if (typeof document !== 'undefined') {
+    const cookies = document.cookie.split(';');
+    const languageCookie = cookies.find(cookie =>
+      cookie.trim().startsWith(`${LANGUAGE_COOKIE_KEY}=`)
+    );
+    if (languageCookie) {
+      const value = languageCookie.split('=')[1];
+      if (value === 'th' || value === 'en') {
+        return value as Language;
+      }
+    }
+  }
+  return 'en'; // default
+};
+
+const setCookieLanguage = (language: Language) => {
+  if (typeof document !== 'undefined') {
+    // Set cookie to expire in 1 year
+    const expires = new Date();
+    expires.setFullYear(expires.getFullYear() + 1);
+    document.cookie = `${LANGUAGE_COOKIE_KEY}=${language}; expires=${expires.toUTCString()}; path=/`;
+  }
+};
+
 export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [language, setLanguage] = useState<Language>('en');
+  const [language, setLanguage] = useState<Language>(() => getCookieLanguage());
+
+  const handleSetLanguage = (newLanguage: Language) => {
+    setLanguage(newLanguage);
+    setCookieLanguage(newLanguage);
+  };
 
   const t = (key: string, variables?: Record<string, string | number>): string => {
     let text = translations[language][key] || key;
@@ -792,7 +825,7 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   return (
-    <LanguageContext.Provider value={{ language, setLanguage, t }}>
+    <LanguageContext.Provider value={{ language, setLanguage: handleSetLanguage, t }}>
       {children}
     </LanguageContext.Provider>
   );
