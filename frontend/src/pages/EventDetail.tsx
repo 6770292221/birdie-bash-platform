@@ -44,17 +44,22 @@ const getAvailableHours = (courts: Court[], isStartTime: boolean = true): number
   courts.forEach(court => {
     if (court.startTime && court.endTime) {
       const startHour = parseInt(court.startTime.split(':')[0]);
-      const endHour = parseInt(court.endTime.split(':')[0]);
+      let endHour = parseInt(court.endTime.split(':')[0]);
+
+      // รองรับกรณีเวลาข้ามวัน เช่น 23:00 -> 00:45
+      if (Number.isFinite(startHour) && Number.isFinite(endHour) && endHour <= startHour) {
+        endHour += 24;
+      }
 
       if (isStartTime) {
         // For start time: include all hours from start to end-1
         for (let h = startHour; h < endHour; h++) {
-          allHours.add(h);
+          allHours.add((h + 24) % 24);
         }
       } else {
         // For end time: include all hours from start+1 to end
         for (let h = startHour + 1; h <= endHour; h++) {
-          allHours.add(h);
+          allHours.add((h + 24) % 24);
         }
       }
     }
@@ -407,7 +412,7 @@ const EventDetail = () => {
               <div className="flex items-center gap-2">
                 {isAdmin && (event.status === 'calculating' || event.status === 'in_progress' || event.status === 'upcoming') && (
                   <div className="flex gap-2 ml-2">
-                    {(event.status === 'calculating' || event.status === 'in_progress') && (
+                    {(event.status === 'calculating' || event.status === 'in_progress' || event.status === 'upcoming') && (
                       <Button onClick={() => setEditing((v) => !v)} variant="outline" size="sm" className="bg-white/50 hover:bg-white/80">
                         <Edit3 className="w-4 h-4 mr-1" />
                         {editing ? t('event.cancel') : t('event.edit')}
@@ -550,7 +555,14 @@ const EventDetail = () => {
               <CardDescription>{t('event.add_guest_player')}</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className={`bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-6 mb-6 border border-blue-200/50 ${['awaiting_payment','completed','canceled'].includes(event.status) ? 'opacity-60 pointer-events-none select-none' : ''}`}>
+              {(() => {
+                const restrictedStatuses = ['awaiting_payment','completed','canceled'];
+                const disabled = restrictedStatuses.includes(event.status);
+                const startHours = !disabled ? getAvailableHours(event.courts || [], true) : [];
+                const endHours = !disabled ? getAvailableHours(event.courts || [], false) : [];
+
+                return (
+                  <div className={`bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-6 mb-6 border border-blue-200/50 ${disabled ? 'opacity-60 pointer-events-none select-none' : ''}`}>
                 <h4 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
                   <UserPlus className="w-4 h-4 text-blue-600" />
                   {t('event.add_new_guest')}
@@ -594,7 +606,7 @@ const EventDetail = () => {
                       <TimePicker
                         value={guestForm.startTime}
                         onChange={(v) => setGuestForm({ ...guestForm, startTime: v })}
-                        availableHours={event?.courts ? getAvailableHours(event.courts, true) : undefined}
+                        availableHours={startHours}
                       />
                     </div>
                     <div>
@@ -605,20 +617,22 @@ const EventDetail = () => {
                       <TimePicker
                         value={guestForm.endTime}
                         onChange={(v) => setGuestForm({ ...guestForm, endTime: v })}
-                        availableHours={event?.courts ? getAvailableHours(event.courts, false) : undefined}
+                        availableHours={endHours}
                       />
                     </div>
                   </div>
                   <Button
                     type="submit"
                     className="w-full bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 text-white font-medium py-2"
-                    disabled={isAddingGuest || ['awaiting_payment','completed','canceled'].includes(event.status)}
+                    disabled={isAddingGuest || disabled}
                   >
                     <UserPlus className="w-4 h-4 mr-2" />
                     {t('event.add_guest')}
                   </Button>
                 </form>
-              </div>
+                  </div>
+                );
+              })()}
 
               {/* Players List */}
               <div className="space-y-6">
