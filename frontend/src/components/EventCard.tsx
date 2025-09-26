@@ -111,7 +111,7 @@ const EventCard = ({ event, onSelectEvent, onCancelRegistration, onEditEvent, on
         <Badge
           className={`rounded-none rounded-bl-lg px-3 py-1 font-medium text-xs shadow-md ${getEventStatusColor(event.status as EventStatusType)}`}
         >
-          {getEventStatusLabel(event.status as EventStatusType)}
+          {getEventStatusLabel(event.status as EventStatusType, t)}
         </Badge>
       </div>
 

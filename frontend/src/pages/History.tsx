@@ -8,11 +8,13 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import { apiClient } from '@/utils/api';
 import { EventStatusType, getEventStatusLabel, getEventStatusColor } from '@/types/event';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 const History = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { t } = useLanguage();
 
   const [loading, setLoading] = useState(false);
   const [completedEvents, setCompletedEvents] = useState<any[]>([]);
@@ -126,7 +128,7 @@ const History = () => {
                 {/* Status Badge - Top Right */}
                 <div className="absolute top-0 right-0 z-10">
                   <Badge className={`rounded-none rounded-bl-lg px-3 py-1 font-medium text-xs shadow-md ${getEventStatusColor(ev.status as EventStatusType)}`}>
-                    {getEventStatusLabel(ev.status as EventStatusType)}
+                    {getEventStatusLabel(ev.status as EventStatusType, t)}
                   </Badge>
                 </div>
 

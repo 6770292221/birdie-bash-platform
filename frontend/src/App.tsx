@@ -14,6 +14,7 @@ import EventDetail from "./pages/EventDetail";
 import History from "./pages/History";
 import Matching from "./pages/Matching";
 import Payments from "./pages/Payments";
+import PaymentHistory from "./pages/PaymentHistory";
 import Calculate from "./pages/Calculate";
 import NotFound from "./pages/NotFound";
 
@@ -36,6 +37,7 @@ const App = () => (
               <Route path="/history" element={<History />} />
               <Route path="/matching" element={<Matching />} />
               <Route path="/payments" element={<Payments />} />
+              <Route path="/payments/history" element={<PaymentHistory />} />
               <Route path="/calculate" element={<Calculate />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />

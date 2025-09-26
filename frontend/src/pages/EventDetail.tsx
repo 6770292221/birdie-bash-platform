@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { apiClient } from '@/utils/api';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -39,6 +40,7 @@ const EventDetail = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { isAdmin, user } = useAuth();
+  const { t, language, setLanguage } = useLanguage();
   const [loading, setLoading] = useState(true);
   const [cancelingPlayerId, setCancelingPlayerId] = useState<string | null>(null);
   const [event, setEvent] = useState<EventApi | null>(null);
@@ -46,9 +48,11 @@ const EventDetail = () => {
   const [players, setPlayers] = useState<any[]>([]);
   const [memberNames, setMemberNames] = useState<Record<string, string>>({});
   const [memberPhones, setMemberPhones] = useState<Record<string, string>>({});
-  const [guestForm, setGuestForm] = useState({ name: '', phoneNumber: '', startTime: '20:00', endTime: '22:00' });
-  const [memberTime, setMemberTime] = useState({ startTime: '19:00', endTime: '21:00' });
+  const [guestForm, setGuestForm] = useState({ name: '', phoneNumber: '', startTime: '', endTime: '' });
+  const [isAddingGuest, setIsAddingGuest] = useState(false);
+  const [memberTime, setMemberTime] = useState({ startTime: '', endTime: '' });
   const [isRegisteringMember, setIsRegisteringMember] = useState(false);
+  const [overlayAction, setOverlayAction] = useState<'cancel' | 'register' | 'guest' | null>(null);
 
   useEffect(() => {
     const fetchDetail = async () => {
@@ -62,7 +66,7 @@ const EventDetail = () => {
         // fetch players list: only registered and waitlist
         await fetchPlayersFiltered();
       } else {
-        toast({ title: 'โหลดอีเวนต์ไม่สำเร็จ', description: res.error, variant: 'destructive' });
+        toast({ title: t('error.load_event_failed'), description: res.error, variant: 'destructive' });
       }
       setLoading(false);
     };
@@ -126,7 +130,7 @@ const EventDetail = () => {
 
       const res = await apiClient.updateEvent(id, payload);
       if (res.success) {
-        toast({ title: 'บันทึกสำเร็จ' });
+        toast({ title: t('success.saved') });
         setEditing(false);
         // refetch
         const d = await apiClient.getEvent(id);
@@ -135,29 +139,39 @@ const EventDetail = () => {
           setEvent((data?.event || data) as EventApi);
         }
       } else {
-        toast({ title: 'บันทึกไม่สำเร็จ', description: res.error, variant: 'destructive' });
+        toast({ title: t('error.save_failed'), description: res.error, variant: 'destructive' });
       }
     } catch (e: any) {
-      toast({ title: 'บันทึกไม่สำเร็จ', description: e?.message || 'เกิดข้อผิดพลาด', variant: 'destructive' });
+      toast({ title: t('error.save_failed'), description: e?.message || t('error.unknown'), variant: 'destructive' });
     }
   };
 
   const handleDelete = async () => {
     if (!id) return;
-    if (!confirm('ยืนยันการลบอีเวนต์นี้?')) return;
+    if (!confirm(t('confirm.delete_event'))) return;
     const res = await apiClient.deleteEvent(id);
     if (res.success) {
-      toast({ title: 'ลบอีเวนต์สำเร็จ' });
+      toast({ title: t('success.event_deleted') });
       navigate('/');
     } else {
-      toast({ title: 'ลบอีเวนต์ไม่สำเร็จ', description: res.error, variant: 'destructive' });
+      toast({ title: t('error.delete_event_failed'), description: res.error, variant: 'destructive' });
     }
   };
 
   const addGuest = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!id) return;
+    if (!id || isAddingGuest) return;
+    if (!guestForm.startTime || !guestForm.endTime) {
+      toast({
+        title: t('error.time_required_title'),
+        description: t('error.time_required_guest'),
+        variant: 'destructive',
+      });
+      return;
+    }
     try {
+      setIsAddingGuest(true);
+      setOverlayAction('guest');
       const payload = {
         name: guestForm.name.trim(),
         phoneNumber: guestForm.phoneNumber.trim(),
@@ -166,14 +180,22 @@ const EventDetail = () => {
       };
       const res = await apiClient.addGuest(id, payload);
       if (res.success) {
-        toast({ title: 'เพิ่มผู้เล่นสำเร็จ' });
-        setGuestForm({ name: '', phoneNumber: '', startTime: '20:00', endTime: '22:00' });
+        toast({ title: t('success.player_added') });
+        setGuestForm({ name: '', phoneNumber: '', startTime: '', endTime: '' });
         await fetchPlayersFiltered();
+        setTimeout(() => {
+          setIsAddingGuest(false);
+          window.location.reload();
+        }, 1200);
       } else {
-        toast({ title: 'เพิ่มผู้เล่นไม่สำเร็จ', description: res.error, variant: 'destructive' });
+        toast({ title: t('error.add_player_failed'), description: res.error, variant: 'destructive' });
+        setIsAddingGuest(false);
+        setOverlayAction(null);
       }
     } catch (err: any) {
-      toast({ title: 'เพิ่มผู้เล่นไม่สำเร็จ', description: err?.message || 'เกิดข้อผิดพลาด', variant: 'destructive' });
+      toast({ title: t('error.add_player_failed'), description: err?.message || t('error.unknown'), variant: 'destructive' });
+      setIsAddingGuest(false);
+      setOverlayAction(null);
     }
   };
 
@@ -182,47 +204,64 @@ const EventDetail = () => {
 
     // Show loading state for specific player
     setCancelingPlayerId(playerId);
+    setOverlayAction('cancel');
 
     const res = await apiClient.cancelPlayer(id, playerId);
     if (res.success) {
-      toast({ title: 'ยกเลิกผู้เล่นสำเร็จ' });
+      toast({ title: t('success.player_cancelled') });
 
       // Wait 2 seconds then refresh the page
       setTimeout(() => {
         window.location.reload();
       }, 2000);
     } else {
-      toast({ title: 'ยกเลิกผู้เล่นไม่สำเร็จ', description: res.error, variant: 'destructive' });
+      toast({ title: t('error.cancel_player_failed'), description: res.error, variant: 'destructive' });
       setCancelingPlayerId(null);
+      setOverlayAction(null);
     }
   };
 
   const registerAsMember = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!id) return;
+    if (!memberTime.startTime || !memberTime.endTime) {
+      toast({
+        title: t('error.time_required_title'),
+        description: t('error.time_required_member'),
+        variant: 'destructive',
+      });
+      return;
+    }
     setIsRegisteringMember(true);
+    setOverlayAction('register');
     try {
       const res = await apiClient.registerMember(id, {
         startTime: memberTime.startTime,
         endTime: memberTime.endTime,
       });
       if (res.success) {
-        toast({ title: 'ลงทะเบียนสำเร็จ' });
+        toast({ title: t('success.registered') });
         await fetchPlayersFiltered();
+        setTimeout(() => {
+          setIsRegisteringMember(false);
+          window.location.reload();
+        }, 1200);
       } else {
-        toast({ title: 'ลงทะเบียนไม่สำเร็จ', description: res.error, variant: 'destructive' });
+        toast({ title: t('error.registration_failed'), description: res.error, variant: 'destructive' });
+        setIsRegisteringMember(false);
+        setOverlayAction(null);
       }
     } catch (err: any) {
-      toast({ title: 'ลงทะเบียนไม่สำเร็จ', description: err?.message || 'เกิดข้อผิดพลาด', variant: 'destructive' });
-    } finally {
+      toast({ title: t('error.registration_failed'), description: err?.message || t('error.unknown'), variant: 'destructive' });
       setIsRegisteringMember(false);
+      setOverlayAction(null);
     }
   };
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-gray-600">กำลังโหลด...</div>
+        <div className="text-gray-600">{t('event.loading')}</div>
       </div>
     );
   }
@@ -230,7 +269,7 @@ const EventDetail = () => {
   if (!event) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-gray-600">ไม่พบอีเวนต์</div>
+        <div className="text-gray-600">{t('event.not_found')}</div>
       </div>
     );
   }
@@ -266,17 +305,29 @@ const EventDetail = () => {
     ? Math.round(estimatedCourtCost / event.capacity.maxParticipants)
     : undefined;
 
-  const overlayTitle = cancelingPlayerId
-    ? 'กำลังยกเลิกการลงทะเบียน'
-    : 'กำลังลงทะเบียนผู้เล่น';
-  const overlaySubtitle = cancelingPlayerId
-    ? 'กรุณารอสักครู่...'
-    : 'กำลังบันทึกข้อมูลการลงทะเบียน';
-  const overlayFootnote = cancelingPlayerId
-    ? 'หน้าจะรีเฟรชอัตโนมัติในอีกไม่ช้า'
-    : 'ระบบจะอัปเดตรายชื่อให้อัตโนมัติทันทีที่เสร็จสิ้น';
+  const overlayTitle = overlayAction === 'cancel'
+    ? t('loading.cancelling_registration')
+    : overlayAction === 'register'
+      ? t('loading.registering_player')
+      : overlayAction === 'guest'
+        ? t('loading.adding_guest_player')
+        : '';
+  const overlaySubtitle = overlayAction === 'cancel'
+    ? t('loading.please_wait')
+    : overlayAction === 'register'
+      ? t('loading.saving_registration_data')
+      : overlayAction === 'guest'
+        ? t('loading.saving_guest_data')
+        : '';
+  const overlayFootnote = overlayAction === 'cancel'
+    ? t('loading.page_will_refresh')
+    : overlayAction === 'register'
+      ? t('loading.list_will_update_automatically')
+      : overlayAction === 'guest'
+        ? t('loading.player_list_will_update')
+        : '';
 
-  const showOverlay = Boolean(cancelingPlayerId || isRegisteringMember);
+  const showOverlay = overlayAction !== null;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-green-50 py-6 px-4 relative">
@@ -304,11 +355,11 @@ const EventDetail = () => {
       )}
 
       <div className="max-w-4xl mx-auto space-y-6">
-        {/* Header Card */}
+        {/* Header Card with Language Switcher */}
         <Card className="bg-white/80 backdrop-blur-md border-0 shadow-xl overflow-hidden">
           <div className="h-1 bg-gradient-to-r from-blue-600 via-purple-600 to-teal-600" />
           <CardHeader className="pb-4">
-            <div className="flex items-start justify-between">
+            <div className="flex items-start justify-between mb-4">
               <div className="flex-1">
                 <CardTitle className="text-3xl font-bold text-gray-900 mb-2 flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center">
@@ -321,18 +372,43 @@ const EventDetail = () => {
                   <span className="text-gray-700">{event.location}</span>
                 </CardDescription>
               </div>
-              {isAdmin && (
-                <div className="flex gap-2">
-                  <Button onClick={() => setEditing((v) => !v)} variant="outline" size="sm" className="bg-white/50 hover:bg-white/80">
-                    <Edit3 className="w-4 h-4 mr-1" />
-                    {editing ? 'ยกเลิก' : 'แก้ไข'}
-                  </Button>
-                  <Button onClick={handleDelete} variant="destructive" size="sm">
-                    <Trash2 className="w-4 h-4 mr-1" />
-                    ลบ
-                  </Button>
+              <div className="flex items-center gap-2">
+                {/* Language Toggle Buttons */}
+                <div className="flex items-center bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl shadow-lg border-2 border-blue-200 p-1.5">
+                  <button
+                    onClick={() => setLanguage('th')}
+                    className={`px-4 py-2 text-sm font-bold rounded-lg transition-all duration-200 ${
+                      language === 'th'
+                        ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg transform scale-105'
+                        : 'text-gray-700 hover:bg-white/70 hover:shadow-md'
+                    }`}
+                  >
+                    🇹🇭 ไทย
+                  </button>
+                  <button
+                    onClick={() => setLanguage('en')}
+                    className={`px-4 py-2 text-sm font-bold rounded-lg transition-all duration-200 ${
+                      language === 'en'
+                        ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg transform scale-105'
+                        : 'text-gray-700 hover:bg-white/70 hover:shadow-md'
+                    }`}
+                  >
+                    🇺🇸 EN
+                  </button>
                 </div>
-              )}
+                {isAdmin && (
+                  <div className="flex gap-2 ml-2">
+                    <Button onClick={() => setEditing((v) => !v)} variant="outline" size="sm" className="bg-white/50 hover:bg-white/80">
+                      <Edit3 className="w-4 h-4 mr-1" />
+                      {editing ? t('event.cancel') : t('event.edit')}
+                    </Button>
+                    <Button onClick={handleDelete} variant="destructive" size="sm">
+                      <Trash2 className="w-4 h-4 mr-1" />
+                      {t('event.delete')}
+                    </Button>
+                  </div>
+                )}
+              </div>
             </div>
           </CardHeader>
           <CardContent>
@@ -341,7 +417,7 @@ const EventDetail = () => {
               <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4 border border-blue-200/50">
                 <div className="flex items-center justify-between mb-2">
                   <Calendar className="w-5 h-5 text-blue-600" />
-                  <Badge variant="outline" className="bg-white/50 text-blue-700 border-blue-300">วันที่</Badge>
+                  <Badge variant="outline" className="bg-white/50 text-blue-700 border-blue-300">{t('event.date')}</Badge>
                 </div>
                 <div className="font-semibold text-gray-900">{event.eventDate}</div>
               </div>
@@ -349,7 +425,7 @@ const EventDetail = () => {
               <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-4 border border-green-200/50">
                 <div className="flex items-center justify-between mb-2">
                   <Users className="w-5 h-5 text-green-600" />
-                  <Badge variant="outline" className="bg-white/50 text-green-700 border-green-300">ผู้เข้าร่วม</Badge>
+                  <Badge variant="outline" className="bg-white/50 text-green-700 border-green-300">{t('event.participants')}</Badge>
                 </div>
                 <div className="font-semibold text-gray-900">{event.capacity?.currentParticipants ?? '-'} / {event.capacity?.maxParticipants ?? '-'}</div>
               </div>
@@ -357,7 +433,7 @@ const EventDetail = () => {
               <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-4 border border-purple-200/50">
                 <div className="flex items-center justify-between mb-2">
                   <DollarSign className="w-5 h-5 text-purple-600" />
-                  <Badge variant="outline" className="bg-white/50 text-purple-700 border-purple-300">ค่าสนาม/ชม.</Badge>
+                  <Badge variant="outline" className="bg-white/50 text-purple-700 border-purple-300">{t('event.court_rate')}</Badge>
                 </div>
                 <div className="font-semibold text-gray-900">฿{event.courtHourlyRate}</div>
               </div>
@@ -365,7 +441,7 @@ const EventDetail = () => {
               <div className="bg-gradient-to-br from-amber-50 to-amber-100 rounded-xl p-4 border border-amber-200/50">
                 <div className="flex items-center justify-between mb-2">
                   <Settings className="w-5 h-5 text-amber-600" />
-                  <Badge variant="outline" className="bg-white/50 text-amber-700 border-amber-300">ลูกขนไก่</Badge>
+                  <Badge variant="outline" className="bg-white/50 text-amber-700 border-amber-300">{t('event.shuttlecock')}</Badge>
                 </div>
                 <div className="font-semibold text-gray-900">฿{event.shuttlecockPrice}</div>
               </div>
@@ -375,7 +451,7 @@ const EventDetail = () => {
             <div className="flex flex-wrap items-center gap-2">
               <Badge className="bg-gradient-to-r from-blue-500 to-purple-500 text-white px-3 py-1">
                 <Timer className="w-3 h-3 mr-1" />
-                {totalCourtHours.toFixed(1)} ชั่วโมง
+                {totalCourtHours.toFixed(1)} {t('event.hours')}
               </Badge>
               <Badge className="bg-gradient-to-r from-green-500 to-teal-500 text-white px-3 py-1">
                 <DollarSign className="w-3 h-3 mr-1" />
@@ -410,14 +486,14 @@ const EventDetail = () => {
               <div className="w-8 h-8 rounded-lg bg-gradient-to-r from-teal-500 to-blue-500 flex items-center justify-center">
                 <Clock className="w-4 h-4 text-white" />
               </div>
-              กำหนดการสนาม
+              {t('event.court_schedule')}
             </CardTitle>
           </CardHeader>
           <CardContent>
             {(!event.courts || event.courts.length === 0) ? (
               <div className="text-center py-8">
                 <Clock className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                <div className="text-gray-600">ไม่มีข้อมูลสนาม</div>
+                <div className="text-gray-600">{t('event.no_courts')}</div>
               </div>
             ) : (
               <div className="space-y-3">
@@ -429,7 +505,7 @@ const EventDetail = () => {
                           <span className="text-white font-semibold text-sm">#{c.courtNumber}</span>
                         </div>
                         <div>
-                          <div className="font-medium text-gray-900">สนาม #{c.courtNumber}</div>
+                          <div className="font-medium text-gray-900">{t('event.court_number')}{c.courtNumber}</div>
                           <div className="text-sm text-gray-600 flex items-center gap-2">
                             <Clock className="w-3 h-3" />
                             {fmtTime(c.startTime)} - {fmtTime(c.endTime)}
@@ -464,20 +540,20 @@ const EventDetail = () => {
                 <div className="w-8 h-8 rounded-lg bg-gradient-to-r from-green-500 to-teal-500 flex items-center justify-center">
                   <UserPlus className="w-4 h-4 text-white" />
                 </div>
-                จัดการผู้เล่น
+                {t('event.manage_players')}
               </CardTitle>
-              <CardDescription>เพิ่มผู้เล่นแขกเข้าร่วมกิจกรรม</CardDescription>
+              <CardDescription>{t('event.add_guest_player')}</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-6 mb-6 border border-blue-200/50">
                 <h4 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
                   <UserPlus className="w-4 h-4 text-blue-600" />
-                  เพิ่มผู้เล่นแขกใหม่
+                  {t('event.add_new_guest')}
                 </h4>
                 <form onSubmit={addGuest} className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <Label htmlFor="gname" className="text-sm font-medium text-gray-700">ชื่อผู้เล่น</Label>
+                      <Label htmlFor="gname" className="text-sm font-medium text-gray-700">{t('event.player_name')}</Label>
                       <Input
                         id="gname"
                         value={guestForm.name}
@@ -510,12 +586,9 @@ const EventDetail = () => {
                         <Timer className="w-3 h-3" />
                         เวลาเริ่มเล่น
                       </Label>
-                      <Input
-                        id="gstart"
+                      <TimePicker
                         value={guestForm.startTime}
-                        onChange={(e) => setGuestForm({ ...guestForm, startTime: e.target.value })}
-                        placeholder="18:30"
-                        className="bg-white/80 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                        onChange={(v) => setGuestForm({ ...guestForm, startTime: v })}
                       />
                     </div>
                     <div>
@@ -523,16 +596,17 @@ const EventDetail = () => {
                         <Timer className="w-3 h-3" />
                         เวลาสิ้นสุดเล่น
                       </Label>
-                      <Input
-                        id="gend"
+                      <TimePicker
                         value={guestForm.endTime}
-                        onChange={(e) => setGuestForm({ ...guestForm, endTime: e.target.value })}
-                        placeholder="20:00"
-                        className="bg-white/80 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                        onChange={(v) => setGuestForm({ ...guestForm, endTime: v })}
                       />
                     </div>
                   </div>
-                  <Button type="submit" className="w-full bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 text-white font-medium py-2">
+                  <Button
+                    type="submit"
+                    className="w-full bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 text-white font-medium py-2"
+                    disabled={isAddingGuest}
+                  >
                     <UserPlus className="w-4 h-4 mr-2" />
                     เพิ่มผู้เล่นแขก
                   </Button>
