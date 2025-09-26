@@ -121,22 +121,22 @@ const CreateEventForm = ({ onSubmit, onCancel, editEvent, onUpdateEvent }: Creat
     let hasError = false;
 
     if (!eventName || eventName.trim().length === 0) {
-      setEventNameError('กรุณากรอกชื่ออีเวนต์');
+      setEventNameError(t('validation.required_event_name'));
       hasError = true;
     }
 
     if (!eventDate || eventDate.trim().length === 0) {
-      setEventDateError('กรุณาเลือกวันที่จัดงาน');
+      setEventDateError(t('validation.required_event_date'));
       hasError = true;
     }
 
     if (!venue || venue.trim().length === 0) {
-      setVenueError('กรุณาเลือกสถานที่เล่นแบดมินตัน');
+      setVenueError(t('validation.required_venue'));
       hasError = true;
     }
 
     if (!courts || courts.length === 0) {
-      setCourtsError('กรุณาเพิ่มอย่างน้อย 1 สนาม');
+      setCourtsError(t('validation.required_court'));
       hasError = true;
     }
 
@@ -146,7 +146,7 @@ const CreateEventForm = ({ onSubmit, onCancel, editEvent, onUpdateEvent }: Creat
     }
 
     if (shuttlecockPrice < 0) {
-      setShuttlecockPriceError('ราคาลูกแบดต้องไม่ติดลบ');
+      setShuttlecockPriceError(t('validation.positive_shuttlecock_price'));
       hasError = true;
     }
 
@@ -193,10 +193,10 @@ const CreateEventForm = ({ onSubmit, onCancel, editEvent, onUpdateEvent }: Creat
     <Card className="bg-white/95 backdrop-blur-sm border-0 shadow-2xl hover:shadow-3xl transition-all duration-300">
       <CardHeader>
         <CardTitle className="text-2xl bg-gradient-to-r from-blue-600 via-purple-600 to-teal-600 bg-clip-text text-transparent font-bold">
-          {isEditing ? 'แก้ไขอีเวนต์' : t('events.create')}
+          {isEditing ? t('events.edit') : t('events.create')}
         </CardTitle>
         <CardDescription>
-          {isEditing ? 'แก้ไขข้อมูลอีเวนต์' : t('app.subtitle')}
+          {isEditing ? t('events.edit_description') : t('app.subtitle')}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -240,7 +240,7 @@ const CreateEventForm = ({ onSubmit, onCancel, editEvent, onUpdateEvent }: Creat
             <Select value={venue} onValueChange={(value) => { setVenue(value); setVenueError(''); }} disabled={venuesLoading} required>
               <SelectTrigger className={`border-blue-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 h-auto items-start py-3 ${venueError ? 'border-red-500 focus:border-red-500 focus:ring-red-200' : ''}`}>
                 <SelectValue
-                  placeholder={venuesLoading ? "กำลังโหลดสถานที่..." : "เลือกสถานที่เล่นแบดมินตัน"}
+                  placeholder={venuesLoading ? t('form.loading_venues') : t('form.select_venue')}
                   asChild
                 >
                   {selectedVenue ? (
@@ -271,7 +271,7 @@ const CreateEventForm = ({ onSubmit, onCancel, editEvent, onUpdateEvent }: Creat
                     <div className="flex items-center gap-2 text-sm text-gray-500">
                       <MapPin className="w-4 h-4 text-gray-400" />
                       <span className="truncate">
-                        {venuesLoading ? "กำลังโหลดสถานที่..." : "เลือกสถานที่เล่นแบดมินตัน"}
+                        {venuesLoading ? t('form.loading_venues') : t('form.select_venue')}
                       </span>
                     </div>
                   )}
@@ -302,7 +302,7 @@ const CreateEventForm = ({ onSubmit, onCancel, editEvent, onUpdateEvent }: Creat
                   <SelectItem value="no-venues" disabled>
                     <div className="flex items-center">
                       <MapPin className="w-4 h-4 mr-2 text-gray-400" />
-                      <span className="text-gray-500">ไม่พบสถานที่</span>
+                      <span className="text-gray-500">{t('form.no_venues_found')}</span>
                     </div>
                   </SelectItem>
                 )}
@@ -370,7 +370,7 @@ const CreateEventForm = ({ onSubmit, onCancel, editEvent, onUpdateEvent }: Creat
           <div className="mt-2">
             <label className="inline-flex items-center space-x-2">
               <Checkbox id="waitlistEnabled" checked={waitlistEnabled} onCheckedChange={(v: any) => setWaitlistEnabled(Boolean(v))} />
-              <span className="text-gray-700">เปิดรับ Waitlist (คิวสำรอง)</span>
+              <span className="text-gray-700">{t('form.enable_waitlist')}</span>
             </label>
             <p className="text-xs text-gray-500 mt-1">ถ้าเปิด ระบบจะอนุญาตผู้เล่นเข้าคิวเมื่อที่นั่งเต็ม</p>
           </div>
@@ -470,7 +470,7 @@ const CreateEventForm = ({ onSubmit, onCancel, editEvent, onUpdateEvent }: Creat
               type="submit"
               className="flex-1 bg-gradient-to-r from-blue-600 via-purple-600 to-teal-600 hover:from-blue-700 hover:via-purple-700 hover:to-teal-700 text-white shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200 font-medium"
             >
-              {isEditing ? 'อัพเดทอีเวนต์' : t('form.create_event')}
+              {isEditing ? t('form.update_event') : t('form.create_event')}
             </Button>
             <Button 
               type="button" 

@@ -347,7 +347,49 @@ const translations = {
     'user.you_badge': 'คุณ',
     'user.member_badge': 'สมาชิก',
     'user.guest_badge': 'แขก',
-    'user.no_name_display': 'ไม่ระบุชื่อ'
+    'user.no_name_display': 'ไม่ระบุชื่อ',
+
+    // Registration closed messages for users
+    'user.registration_closed_calculating': 'ปิดรับลงทะเบียนแล้ว - กำลังคำนวณผล',
+    'user.registration_closed_awaiting_payment': 'ปิดรับลงทะเบียนแล้ว - รอการชำระเงิน',
+    'user.registration_closed_completed': 'ปิดรับลงทะเบียนแล้ว - กิจกรรมเสร็จสิ้น',
+    'user.registration_closed_canceled': 'ปิดรับลงทะเบียนแล้ว - กิจกรรมยกเลิก',
+    'user.registration_closed_in_progress': 'ปิดรับลงทะเบียนแล้ว - กิจกรรมกำลังดำเนินการ',
+    'user.registration_closed_calculating_desc': 'กิจกรรมนี้กำลังคำนวณผลลัพธ์ ไม่สามารถลงทะเบียนได้แล้ว',
+    'user.registration_closed_awaiting_payment_desc': 'กิจกรรมนี้รอการยืนยันการชำระเงิน ไม่สามารถลงทะเบียนได้แล้ว',
+    'user.registration_closed_completed_desc': 'กิจกรรมนี้เสร็จสิ้นแล้ว ไม่สามารถลงทะเบียนได้แล้ว',
+    'user.registration_closed_canceled_desc': 'กิจกรรมนี้ถูกยกเลิก ไม่สามารถลงทะเบียนได้แล้ว',
+    'user.registration_closed_in_progress_desc': 'กิจกรรมนี้กำลังดำเนินการอยู่ ไม่สามารถลงทะเบียนได้แล้ว',
+
+    // Registration closed messages for guests
+    'guest.registration_closed_calculating': 'ปิดรับแขกแล้ว - กำลังคำนวณผล',
+    'guest.registration_closed_awaiting_payment': 'ปิดรับแขกแล้ว - รอการชำระเงิน',
+    'guest.registration_closed_completed': 'ปิดรับแขกแล้ว - กิจกรรมเสร็จสิ้น',
+    'guest.registration_closed_canceled': 'ปิดรับแขกแล้ว - กิจกรรมยกเลิก',
+    'guest.registration_closed_in_progress': 'ปิดรับแขกแล้ว - กิจกรรมกำลังดำเนินการ',
+    'guest.registration_closed_calculating_desc': 'กิจกรรมนี้กำลังคำนวณผลลัพธ์ ไม่สามารถเพิ่มแขกได้แล้ว',
+    'guest.registration_closed_awaiting_payment_desc': 'กิจกรรมนี้รอการยืนยันการชำระเงิน ไม่สามารถเพิ่มแขกได้แล้ว',
+    'guest.registration_closed_completed_desc': 'กิจกรรมนี้เสร็จสิ้นแล้ว ไม่สามารถเพิ่มแขกได้แล้ว',
+    'guest.registration_closed_canceled_desc': 'กิจกรรมนี้ถูกยกเลิก ไม่สามารถเพิ่มแขกได้แล้ว',
+    'guest.registration_closed_in_progress_desc': 'กิจกรรมนี้กำลังดำเนินการอยู่ ไม่สามารถเพิ่มแขกได้แล้ว',
+
+    // Form validation messages
+    'validation.required_event_name': 'กรุณากรอกชื่ออีเวนต์',
+    'validation.required_event_date': 'กรุณาเลือกวันที่จัดงาน',
+    'validation.required_venue': 'กรุณาเลือกสถานที่เล่นแบดมินตัน',
+    'validation.required_court': 'กรุณาเพิ่มอย่างน้อย 1 สนาม',
+    'validation.positive_shuttlecock_price': 'ราคาลูกแบดต้องไม่ติดลบ',
+
+    // Form elements
+    'form.loading_venues': 'กำลังโหลดสถานที่...',
+    'form.select_venue': 'เลือกสถานที่เล่นแบดมินตัน',
+    'form.no_venues_found': 'ไม่พบสถานที่',
+    'form.enable_waitlist': 'เปิดรับ Waitlist (คิวสำรอง)',
+    'form.update_event': 'อัพเดทอีเวนต์',
+
+    // Events
+    'events.edit': 'แก้ไขอีเวนต์',
+    'events.edit_description': 'แก้ไขข้อมูลอีเวนต์'
   },
   en: {
     'app.title': 'Birdie Bash',
@@ -686,7 +728,49 @@ const translations = {
     'user.you_badge': 'You',
     'user.member_badge': 'Member',
     'user.guest_badge': 'Guest',
-    'user.no_name_display': 'No name specified'
+    'user.no_name_display': 'No name specified',
+
+    // Registration closed messages for users
+    'user.registration_closed_calculating': 'Registration Closed - Calculating Results',
+    'user.registration_closed_awaiting_payment': 'Registration Closed - Awaiting Payment',
+    'user.registration_closed_completed': 'Registration Closed - Event Completed',
+    'user.registration_closed_canceled': 'Registration Closed - Event Canceled',
+    'user.registration_closed_in_progress': 'Registration Closed - Event In Progress',
+    'user.registration_closed_calculating_desc': 'This event is currently calculating results. Registration is no longer available.',
+    'user.registration_closed_awaiting_payment_desc': 'This event is awaiting payment confirmation. Registration is no longer available.',
+    'user.registration_closed_completed_desc': 'This event has been completed. Registration is no longer available.',
+    'user.registration_closed_canceled_desc': 'This event has been canceled. Registration is no longer available.',
+    'user.registration_closed_in_progress_desc': 'This event is currently in progress. Registration is no longer available.',
+
+    // Registration closed messages for guests
+    'guest.registration_closed_calculating': 'Guest Registration Closed - Calculating Results',
+    'guest.registration_closed_awaiting_payment': 'Guest Registration Closed - Awaiting Payment',
+    'guest.registration_closed_completed': 'Guest Registration Closed - Event Completed',
+    'guest.registration_closed_canceled': 'Guest Registration Closed - Event Canceled',
+    'guest.registration_closed_in_progress': 'Guest Registration Closed - Event In Progress',
+    'guest.registration_closed_calculating_desc': 'This event is currently calculating results. Adding guests is no longer available.',
+    'guest.registration_closed_awaiting_payment_desc': 'This event is awaiting payment confirmation. Adding guests is no longer available.',
+    'guest.registration_closed_completed_desc': 'This event has been completed. Adding guests is no longer available.',
+    'guest.registration_closed_canceled_desc': 'This event has been canceled. Adding guests is no longer available.',
+    'guest.registration_closed_in_progress_desc': 'This event is currently in progress. Adding guests is no longer available.',
+
+    // Form validation messages
+    'validation.required_event_name': 'Please enter event name',
+    'validation.required_event_date': 'Please select event date',
+    'validation.required_venue': 'Please select a badminton venue',
+    'validation.required_court': 'Please add at least 1 court',
+    'validation.positive_shuttlecock_price': 'Shuttlecock price must be positive',
+
+    // Form elements
+    'form.loading_venues': 'Loading venues...',
+    'form.select_venue': 'Select a badminton venue',
+    'form.no_venues_found': 'No venues found',
+    'form.enable_waitlist': 'Enable Waitlist (Queue)',
+    'form.update_event': 'Update Event',
+
+    // Events
+    'events.edit': 'Edit Event',
+    'events.edit_description': 'Edit event information'
   }
 };
 

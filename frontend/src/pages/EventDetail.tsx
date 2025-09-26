@@ -602,11 +602,38 @@ const EventDetail = () => {
               {(() => {
                 const restrictedStatuses = ['awaiting_payment','completed','canceled', 'calculating', 'in_progress'];
                 const disabled = restrictedStatuses.includes(event.status);
-                const startHours = !disabled ? getAvailableHours(event.courts || [], true) : [];
-                const endHours = !disabled ? getAvailableHours(event.courts || [], false) : [];
+
+                if (disabled) {
+                  return (
+                    <div className="bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl p-6 mb-6 border border-gray-200/50">
+                      <div className="text-center">
+                        <div className="w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center mx-auto mb-4">
+                          <UserPlus className="w-8 h-8 text-gray-400" />
+                        </div>
+                        <h4 className="font-semibold text-gray-700 mb-2">
+                          {event.status === 'calculating' && t('guest.registration_closed_calculating')}
+                          {event.status === 'awaiting_payment' && t('guest.registration_closed_awaiting_payment')}
+                          {event.status === 'completed' && t('guest.registration_closed_completed')}
+                          {event.status === 'canceled' && t('guest.registration_closed_canceled')}
+                          {event.status === 'in_progress' && t('guest.registration_closed_in_progress')}
+                        </h4>
+                        <p className="text-sm text-gray-500">
+                          {event.status === 'calculating' && t('guest.registration_closed_calculating_desc')}
+                          {event.status === 'awaiting_payment' && t('guest.registration_closed_awaiting_payment_desc')}
+                          {event.status === 'completed' && t('guest.registration_closed_completed_desc')}
+                          {event.status === 'canceled' && t('guest.registration_closed_canceled_desc')}
+                          {event.status === 'in_progress' && t('guest.registration_closed_in_progress_desc')}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                }
+
+                const startHours = getAvailableHours(event.courts || [], true);
+                const endHours = getAvailableHours(event.courts || [], false);
 
                 return (
-                  <div className={`bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-6 mb-6 border border-blue-200/50 ${disabled ? 'opacity-60 pointer-events-none select-none' : ''}`}>
+                  <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-6 mb-6 border border-blue-200/50">
                 <h4 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
                   <UserPlus className="w-4 h-4 text-blue-600" />
                   {t('event.add_new_guest')}
@@ -668,7 +695,7 @@ const EventDetail = () => {
                   <Button
                     type="submit"
                     className="w-full bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 text-white font-medium py-2"
-                    disabled={isAddingGuest || disabled}
+                    disabled={isAddingGuest}
                   >
                     <UserPlus className="w-4 h-4 mr-2" />
                     {t('event.add_guest')}
@@ -846,18 +873,18 @@ const EventDetail = () => {
                           <UserPlus className="w-8 h-8 text-gray-400" />
                         </div>
                         <h4 className="font-semibold text-gray-700 mb-2">
-                          {event.status === 'calculating' && 'Registration Closed - Calculating Results'}
-                          {event.status === 'awaiting_payment' && 'Registration Closed - Awaiting Payment'}
-                          {event.status === 'completed' && 'Registration Closed - Event Completed'}
-                          {event.status === 'canceled' && 'Registration Closed - Event Canceled'}
-                          {event.status === 'in_progress' && 'Registration Closed - Event In Progress'}
+                          {event.status === 'calculating' && t('user.registration_closed_calculating')}
+                          {event.status === 'awaiting_payment' && t('user.registration_closed_awaiting_payment')}
+                          {event.status === 'completed' && t('user.registration_closed_completed')}
+                          {event.status === 'canceled' && t('user.registration_closed_canceled')}
+                          {event.status === 'in_progress' && t('user.registration_closed_in_progress')}
                         </h4>
                         <p className="text-sm text-gray-500">
-                          {event.status === 'calculating' && 'This event is currently calculating results. Registration is no longer available.'}
-                          {event.status === 'awaiting_payment' && 'This event is awaiting payment confirmation. Registration is no longer available.'}
-                          {event.status === 'completed' && 'This event has been completed. Registration is no longer available.'}
-                          {event.status === 'canceled' && 'This event has been canceled. Registration is no longer available.'}
-                          {event.status === 'in_progress' && 'This event is currently in progress. Registration is no longer available.'}
+                          {event.status === 'calculating' && t('user.registration_closed_calculating_desc')}
+                          {event.status === 'awaiting_payment' && t('user.registration_closed_awaiting_payment_desc')}
+                          {event.status === 'completed' && t('user.registration_closed_completed_desc')}
+                          {event.status === 'canceled' && t('user.registration_closed_canceled_desc')}
+                          {event.status === 'in_progress' && t('user.registration_closed_in_progress_desc')}
                         </p>
                       </div>
                     </div>
