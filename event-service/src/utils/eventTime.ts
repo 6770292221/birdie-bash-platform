@@ -12,9 +12,20 @@ export function getLatestCourtEndTimestamp(
 
   for (const court of courts) {
     if (!court || !court.endTime) continue;
-    // Use Bangkok timezone by appending +07:00
-    const endDate = new Date(`${eventDate}T${court.endTime}:00+07:00`);
+
+    // สร้างวันที่เริ่มและสิ้นสุดในโซนเวลา Bangkok (+07:00)
+    const startDate = court.startTime
+      ? new Date(`${eventDate}T${court.startTime}:00+07:00`)
+      : null;
+    let endDate = new Date(`${eventDate}T${court.endTime}:00+07:00`);
+
     if (Number.isNaN(endDate.getTime())) continue;
+
+    // หากเวลาสิ้นสุดน้อยกว่าหรือเท่ากับเวลาเริ่ม แสดงว่าเป็นคอร์ทที่เล่นข้ามวัน
+    if (startDate && !Number.isNaN(startDate.getTime()) && endDate.getTime() <= startDate.getTime()) {
+      endDate = new Date(endDate.getTime() + 24 * 60 * 60 * 1000);
+    }
+
     const timestamp = endDate.getTime();
     latest = latest === null ? timestamp : Math.max(latest, timestamp);
   }

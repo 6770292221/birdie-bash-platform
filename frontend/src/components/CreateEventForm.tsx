@@ -412,7 +412,6 @@ const CreateEventForm = ({ onSubmit, onCancel, editEvent, onUpdateEvent }: Creat
                     <TimePicker
                       value={court.startTime}
                       onChange={(v) => updateCourt(index, 'startTime', v)}
-                      hourlyOnly={true}
                     />
                   </div>
 
@@ -421,7 +420,6 @@ const CreateEventForm = ({ onSubmit, onCancel, editEvent, onUpdateEvent }: Creat
                     <TimePicker
                       value={court.endTime}
                       onChange={(v) => updateCourt(index, 'endTime', v)}
-                      hourlyOnly={true}
                     />
                   </div>
 

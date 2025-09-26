@@ -19,6 +19,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import CreateEventForm from '@/components/CreateEventForm';
+import LanguageToggle from '@/components/LanguageToggle';
 import { Loader2, Calendar, MapPin, Users, Clock, DollarSign, Settings, UserPlus, Edit3, Trash2, Phone, Timer } from 'lucide-react';
 
 interface Court { courtNumber: number; startTime: string; endTime: string }
@@ -33,6 +34,34 @@ interface EventApi {
   courtHourlyRate: number;
   courts: Court[];
 }
+
+// Helper function to get available hours from court schedule
+const getAvailableHours = (courts: Court[], isStartTime: boolean = true): number[] => {
+  if (!courts || courts.length === 0) return [];
+
+  const allHours = new Set<number>();
+
+  courts.forEach(court => {
+    if (court.startTime && court.endTime) {
+      const startHour = parseInt(court.startTime.split(':')[0]);
+      const endHour = parseInt(court.endTime.split(':')[0]);
+
+      if (isStartTime) {
+        // For start time: include all hours from start to end-1
+        for (let h = startHour; h < endHour; h++) {
+          allHours.add(h);
+        }
+      } else {
+        // For end time: include all hours from start+1 to end
+        for (let h = startHour + 1; h <= endHour; h++) {
+          allHours.add(h);
+        }
+      }
+    }
+  });
+
+  return Array.from(allHours).sort((a, b) => a - b);
+};
 
 const EventDetail = () => {
   const { id } = useParams();
@@ -330,6 +359,10 @@ const EventDetail = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-green-50 py-6 px-4 relative">
+      {/* Language Toggle */}
+      <div className="absolute top-4 right-4 z-10">
+        <LanguageToggle />
+      </div>
       {/* Beautiful loading overlay */}
       {showOverlay && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
@@ -372,39 +405,20 @@ const EventDetail = () => {
                 </CardDescription>
               </div>
               <div className="flex items-center gap-2">
-                {/* Language Toggle Buttons */}
-                <div className="flex items-center bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl shadow-lg border-2 border-blue-200 p-1.5">
-                  <button
-                    onClick={() => setLanguage('th')}
-                    className={`px-4 py-2 text-sm font-bold rounded-lg transition-all duration-200 ${
-                      language === 'th'
-                        ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg transform scale-105'
-                        : 'text-gray-700 hover:bg-white/70 hover:shadow-md'
-                    }`}
-                  >
-                    🇹🇭 ไทย
-                  </button>
-                  <button
-                    onClick={() => setLanguage('en')}
-                    className={`px-4 py-2 text-sm font-bold rounded-lg transition-all duration-200 ${
-                      language === 'en'
-                        ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg transform scale-105'
-                        : 'text-gray-700 hover:bg-white/70 hover:shadow-md'
-                    }`}
-                  >
-                    🇺🇸 EN
-                  </button>
-                </div>
-                {isAdmin && (
+                {isAdmin && (event.status === 'calculating' || event.status === 'in_progress' || event.status === 'upcoming') && (
                   <div className="flex gap-2 ml-2">
-                    <Button onClick={() => setEditing((v) => !v)} variant="outline" size="sm" className="bg-white/50 hover:bg-white/80">
-                      <Edit3 className="w-4 h-4 mr-1" />
-                      {editing ? t('event.cancel') : t('event.edit')}
-                    </Button>
-                    <Button onClick={handleDelete} variant="destructive" size="sm">
-                      <Trash2 className="w-4 h-4 mr-1" />
-                      {t('event.delete')}
-                    </Button>
+                    {(event.status === 'calculating' || event.status === 'in_progress') && (
+                      <Button onClick={() => setEditing((v) => !v)} variant="outline" size="sm" className="bg-white/50 hover:bg-white/80">
+                        <Edit3 className="w-4 h-4 mr-1" />
+                        {editing ? t('event.cancel') : t('event.edit')}
+                      </Button>
+                    )}
+                    {event.status === 'upcoming' && (
+                      <Button onClick={handleDelete} variant="destructive" size="sm">
+                        <Trash2 className="w-4 h-4 mr-1" />
+                        {t('event.cancel')}
+                      </Button>
+                    )}
                   </div>
                 )}
               </div>
@@ -536,7 +550,7 @@ const EventDetail = () => {
               <CardDescription>{t('event.add_guest_player')}</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-6 mb-6 border border-blue-200/50">
+              <div className={`bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-6 mb-6 border border-blue-200/50 ${['awaiting_payment','completed','canceled'].includes(event.status) ? 'opacity-60 pointer-events-none select-none' : ''}`}>
                 <h4 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
                   <UserPlus className="w-4 h-4 text-blue-600" />
                   {t('event.add_new_guest')}
@@ -580,6 +594,7 @@ const EventDetail = () => {
                       <TimePicker
                         value={guestForm.startTime}
                         onChange={(v) => setGuestForm({ ...guestForm, startTime: v })}
+                        availableHours={event?.courts ? getAvailableHours(event.courts, true) : undefined}
                       />
                     </div>
                     <div>
@@ -590,13 +605,14 @@ const EventDetail = () => {
                       <TimePicker
                         value={guestForm.endTime}
                         onChange={(v) => setGuestForm({ ...guestForm, endTime: v })}
+                        availableHours={event?.courts ? getAvailableHours(event.courts, false) : undefined}
                       />
                     </div>
                   </div>
                   <Button
                     type="submit"
                     className="w-full bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 text-white font-medium py-2"
-                    disabled={isAddingGuest}
+                    disabled={isAddingGuest || ['awaiting_payment','completed','canceled'].includes(event.status)}
                   >
                     <UserPlus className="w-4 h-4 mr-2" />
                     {t('event.add_guest')}
@@ -651,19 +667,21 @@ const EventDetail = () => {
                                 </div>
                               </div>
                             </div>
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              onClick={() => cancelPlayer(p.playerId || p.id || p._id)}
-                              disabled={cancelingPlayerId === (p.playerId || p.id || p._id)}
-                              className="bg-red-500 hover:bg-red-600"
-                            >
-                              {cancelingPlayerId === (p.playerId || p.id || p._id) ? (
-                                <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                              ) : (
-                                <>{t('badge.canceled')}</>
-                              )}
-                            </Button>
+                            {(event.status === 'upcoming' || event.status === 'in_progress') && (
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => cancelPlayer(p.playerId || p.id || p._id)}
+                                disabled={cancelingPlayerId === (p.playerId || p.id || p._id)}
+                                className="bg-red-500 hover:bg-red-600"
+                              >
+                                {cancelingPlayerId === (p.playerId || p.id || p._id) ? (
+                                  <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                                ) : (
+                                  t('event.cancel_registration')
+                                )}
+                              </Button>
+                            )}
                           </div>
                         </div>
                       ))}
@@ -716,19 +734,21 @@ const EventDetail = () => {
                                 </div>
                               </div>
                             </div>
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              onClick={() => cancelPlayer(p.playerId || p.id || p._id)}
-                              disabled={cancelingPlayerId === (p.playerId || p.id || p._id)}
-                              className="bg-red-500 hover:bg-red-600"
-                            >
-                              {cancelingPlayerId === (p.playerId || p.id || p._id) ? (
-                                <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                              ) : (
-                                <>{t('badge.canceled')}</>
-                              )}
-                            </Button>
+                            {(event.status === 'upcoming' || event.status === 'in_progress') && (
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => cancelPlayer(p.playerId || p.id || p._id)}
+                                disabled={cancelingPlayerId === (p.playerId || p.id || p._id)}
+                                className="bg-red-500 hover:bg-red-600"
+                              >
+                                {cancelingPlayerId === (p.playerId || p.id || p._id) ? (
+                                  <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                                ) : (
+                                  t('event.cancel_registration')
+                                )}
+                              </Button>
+                            )}
                           </div>
                         </div>
                       ))}
@@ -782,21 +802,23 @@ const EventDetail = () => {
                             <div className="text-xs text-gray-500">{t('user.status_display')}: {mine.status === 'registered' ? t('user.confirmed_registration') : t('user.on_waitlist')}</div>
                           </div>
                         </div>
-                        <Button
-                          variant="destructive"
-                          onClick={() => cancelPlayer(mine.playerId)}
-                          disabled={cancelingPlayerId === mine.playerId}
-                          className="bg-red-500 hover:bg-red-600"
-                        >
-                          {cancelingPlayerId === mine.playerId ? (
-                            <>
-                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                              {t('event.canceling')}
-                            </>
-                          ) : (
-                            t('badge.canceled')
-                          )}
-                        </Button>
+                        {(event.status === 'upcoming' || event.status === 'in_progress') && (
+                          <Button
+                            variant="destructive"
+                            onClick={() => cancelPlayer(mine.playerId)}
+                            disabled={cancelingPlayerId === mine.playerId}
+                            className="bg-red-500 hover:bg-red-600"
+                          >
+                            {cancelingPlayerId === mine.playerId ? (
+                              <>
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                {t('event.canceling')}
+                              </>
+                            ) : (
+                              t('event.cancel')
+                            )}
+                          </Button>
+                        )}
                       </div>
                     </div>
                   );
@@ -814,14 +836,22 @@ const EventDetail = () => {
                             <Timer className="w-3 h-3" />
                             {t('event.start_time')}
                           </Label>
-                          <TimePicker value={memberTime.startTime} onChange={(v)=>setMemberTime({...memberTime,startTime:v})} />
+                          <TimePicker
+                            value={memberTime.startTime}
+                            onChange={(v)=>setMemberTime({...memberTime,startTime:v})}
+                            availableHours={event?.courts ? getAvailableHours(event.courts, true) : undefined}
+                          />
                         </div>
                         <div>
                           <Label htmlFor="mend" className="text-sm font-medium text-gray-700 flex items-center gap-1">
                             <Timer className="w-3 h-3" />
                             {t('event.end_time')}
                           </Label>
-                          <TimePicker value={memberTime.endTime} onChange={(v)=>setMemberTime({...memberTime,endTime:v})} />
+                          <TimePicker
+                            value={memberTime.endTime}
+                            onChange={(v)=>setMemberTime({...memberTime,endTime:v})}
+                            availableHours={event?.courts ? getAvailableHours(event.courts, false) : undefined}
+                          />
                         </div>
                       </div>
                       <Button

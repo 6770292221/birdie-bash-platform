@@ -6,7 +6,7 @@ type Language = 'th' | 'en';
 interface LanguageContextType {
   language: Language;
   setLanguage: (lang: Language) => void;
-  t: (key: string) => string;
+  t: (key: string, variables?: Record<string, string | number>) => string;
 }
 
 const translations = {
@@ -130,6 +130,18 @@ const translations = {
     'nav.activity_history': 'ประวัติกิจกรรม',
     'nav.activity_history_desc': 'ดูประวัติอีเวนต์',
     'nav.back_home': 'กลับหน้าหลัก',
+
+    // History page
+    'history.title': 'ประวัติอีเวนต์',
+    'history.subtitle': 'ดูประวัติอีเวนต์ที่เสร็จสิ้นและยกเลิกแล้ว',
+    'history.total': 'ทั้งหมด {count} อีเวนต์',
+    'history.loading': 'กำลังโหลดประวัติ...',
+    'history.empty_title': 'ยังไม่มีประวัติอีเวนต์',
+    'history.empty_desc': 'เมื่อมีอีเวนต์ที่เสร็จสิ้นหรือยกเลิก จะแสดงที่นี่',
+    'history.view_current': 'ดูอีเวนต์ปัจจุบัน',
+    'history.view_details': 'ดูรายละเอียด',
+    'history.location': 'สถานที่',
+    'history.participants': 'ผู้เข้าร่วม',
 
     // Login/Register Forms
     'login.title': 'เข้าสู่ระบบ',
@@ -277,6 +289,9 @@ const translations = {
     'placeholder.player_name': 'กรุณาระบุชื่อผู้เล่น',
     'placeholder.phone_number': '0812345678',
 
+    // Chart statistics
+    'chart.percentage_of_total': 'คิดเป็น {percentage}% ของทั้งหมด',
+
     // User registration status
     'user.already_registered': 'คุณลงทะเบียนแล้ว',
     'user.confirmed_status': 'ยืนยันแล้ว',
@@ -413,6 +428,18 @@ const translations = {
     'nav.activity_history': 'Activity History',
     'nav.activity_history_desc': 'View event history',
     'nav.back_home': 'Back to Home',
+
+    // History page
+    'history.title': 'Event History',
+    'history.subtitle': 'Review completed and canceled events',
+    'history.total': '{count} events in total',
+    'history.loading': 'Loading history...',
+    'history.empty_title': 'No event history yet',
+    'history.empty_desc': 'Completed or canceled events will appear here once available.',
+    'history.view_current': 'View current events',
+    'history.view_details': 'View details',
+    'history.location': 'Location',
+    'history.participants': 'Participants',
 
     // Login/Register Forms
     'login.title': 'Login',
@@ -560,6 +587,9 @@ const translations = {
     'placeholder.player_name': 'Please enter player name',
     'placeholder.phone_number': '0812345678',
 
+    // Chart statistics
+    'chart.percentage_of_total': '{percentage}% of total',
+
     // User registration status
     'user.already_registered': 'You are registered',
     'user.confirmed_status': 'Confirmed',
@@ -583,8 +613,16 @@ const LanguageContext = createContext<LanguageContextType | undefined>(undefined
 export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [language, setLanguage] = useState<Language>('en');
 
-  const t = (key: string): string => {
-    return translations[language][key] || key;
+  const t = (key: string, variables?: Record<string, string | number>): string => {
+    let text = translations[language][key] || key;
+
+    if (variables) {
+      Object.entries(variables).forEach(([varKey, value]) => {
+        text = text.replace(`{${varKey}}`, String(value));
+      });
+    }
+
+    return text;
   };
 
   return (

@@ -10,6 +10,7 @@ import { Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { useLanguage } from '@/contexts/LanguageContext';
+import LanguageToggle from '@/components/LanguageToggle';
 
 interface LoginFormData {
   email: string;
@@ -50,7 +51,11 @@ const LoginForm = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-green-50 py-12 px-4 sm:px-6 lg:px-8 flex items-center justify-center">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-green-50 py-12 px-4 sm:px-6 lg:px-8 flex items-center justify-center relative">
+      {/* Language Toggle */}
+      <div className="absolute top-4 right-4 z-10">
+        <LanguageToggle />
+      </div>
       <Card className="w-full max-w-md bg-white/80 backdrop-blur-md border-0 shadow-2xl overflow-hidden">
         <div className="h-1 bg-gradient-to-r from-blue-600 via-purple-600 to-teal-600" />
         <CardHeader className="text-center space-y-4 pb-6">
@@ -60,9 +65,9 @@ const LoginForm = () => {
                 <path fillRule="evenodd" d="M3 3a1 1 0 011 1v12a1 1 0 11-2 0V4a1 1 0 011-1zm7.707 3.293a1 1 0 010 1.414L9.414 9H17a1 1 0 110 2H9.414l1.293 1.293a1 1 0 01-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0z" clipRule="evenodd" />
               </svg>
             </div>
-            เข้าสู่ระบบ
+            {t('login.title')}
           </CardTitle>
-          <p className="text-gray-700 text-base">เข้าสู่ระบบเพื่อจัดการแบดมินตันของคุณ</p>
+          <p className="text-gray-700 text-base">{t('login.subtitle')}</p>
         </CardHeader>
         
         <CardContent className="space-y-6">
@@ -73,19 +78,19 @@ const LoginForm = () => {
                 control={form.control}
                 name="email"
                 rules={{
-                  required: 'กรุณากรอกอีเมล',
+                  required: t('validation.required_email'),
                   pattern: {
                     value: /^\S+@\S+$/,
-                    message: 'รูปแบบอีเมลไม่ถูกต้อง'
+                    message: t('validation.invalid_email')
                   }
                 }}
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-base">อีเมล</FormLabel>
+                    <FormLabel className="text-base">{t('login.email')}</FormLabel>
                     <FormControl>
                       <Input
                         type="email"
-                        placeholder="example@email.com"
+                        placeholder={t('email_placeholder')}
                         className="h-12 text-base"
                         {...field}
                       />
@@ -99,20 +104,20 @@ const LoginForm = () => {
                 control={form.control}
                 name="password"
                 rules={{
-                  required: 'กรุณากรอกรหัสผ่าน',
+                  required: t('validation.required_password'),
                   minLength: {
                     value: 6,
-                    message: 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร'
+                    message: t('validation.min_password')
                   }
                 }}
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-base">รหัสผ่าน</FormLabel>
+                    <FormLabel className="text-base">{t('login.password')}</FormLabel>
                     <FormControl>
                       <div className="relative">
                         <Input
                           type={showPassword ? 'text' : 'password'}
-                          placeholder="••••••••"
+                          placeholder={t('password_placeholder')}
                           className="h-12 text-base pr-12"
                           {...field}
                         />
@@ -145,10 +150,10 @@ const LoginForm = () => {
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                       <path className="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                     </svg>
-                    กำลังเข้าสู่ระบบ...
+                    {t('login.logging_in')}
                   </>
                 ) : (
-                  'เข้าสู่ระบบ'
+                  t('login.title')
                 )}
               </Button>
             </form>
@@ -156,16 +161,16 @@ const LoginForm = () => {
 
           <div className="text-center space-y-4">
             <p className="text-sm text-gray-700">
-              ยังไม่มีบัญชี?{' '}
+              {t('login.no_account')}{' '}
               <Link to="/register" className="text-blue-600 hover:text-blue-700 font-bold transition-colors">
-                ลงทะเบียน
+                {t('login.register_link')}
               </Link>
             </p>
             <Link
               to="/"
               className="inline-block text-sm text-gray-600 hover:text-gray-800 py-2 px-6 rounded-xl bg-gray-100/60 hover:bg-gray-200/70 border border-gray-200/50 transition-all duration-200 font-medium"
             >
-              กลับหน้าหลัก
+              {t('nav.back_home')}
             </Link>
           </div>
         </CardContent>

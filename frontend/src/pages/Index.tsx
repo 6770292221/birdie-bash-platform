@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import NotificationDropdown from '@/components/NotificationDropdown';
+import LanguageToggle from '@/components/LanguageToggle';
 import { LanguageProvider, useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Link, useNavigate } from 'react-router-dom';
@@ -137,15 +138,7 @@ const IndexContent = () => {
             <div className="grid grid-cols-3 items-center mb-4">
               <div className="justify-self-start">
                 <div className="flex items-center gap-2">
-                  <Button
-                    onClick={() => setLanguage(language === 'th' ? 'en' : 'th')}
-                    variant="outline"
-                    size="sm"
-                    className="bg-white/80 backdrop-blur-sm border-gray-200 hover:bg-white shadow-md hover:shadow-lg transition-all duration-200 flex items-center gap-2"
-                  >
-                    <span className="text-lg">{language === 'th' ? '🇹🇭' : '🇺🇸'}</span>
-                    <span className="font-medium text-sm">{language === 'th' ? 'ไทย' : 'EN'}</span>
-                  </Button>
+                  <LanguageToggle />
                 </div>
               </div>
 
@@ -163,19 +156,7 @@ const IndexContent = () => {
                 </Button>
               </div>
             </div>
-          ) : (
-            <div className="flex justify-end mb-4">
-              <Button
-                onClick={() => setLanguage(language === 'th' ? 'en' : 'th')}
-                variant="outline"
-                size="sm"
-                className="bg-white/80 backdrop-blur-sm border-gray-200 hover:bg-white shadow-md hover:shadow-lg transition-all duration-200 flex items-center gap-2"
-              >
-                <span className="text-lg">{language === 'th' ? '🇹🇭' : '🇺🇸'}</span>
-                <span className="font-medium text-sm">{language === 'th' ? 'ไทย' : 'EN'}</span>
-              </Button>
-            </div>
-          )}
+          ) : null}
 
           {/* User Info */}
           {user && (
@@ -224,6 +205,10 @@ const IndexContent = () => {
         {/* Guest Hero Section */}
         {!user && (
           <div className="relative mb-8 overflow-hidden rounded-3xl border border-white/20 bg-gradient-to-br from-white/90 via-blue-50/80 to-emerald-50/80 shadow-2xl backdrop-blur-sm">
+            {/* Language Toggle for guests */}
+            <div className="absolute top-4 right-4 z-10">
+              <LanguageToggle />
+            </div>
             <div className="pointer-events-none absolute -left-40 top-10 h-80 w-80 rounded-full bg-emerald-400/20 blur-3xl animate-pulse" />
             <div className="pointer-events-none absolute -right-24 -bottom-24 h-96 w-96 rounded-full bg-indigo-400/20 blur-[140px] animate-pulse" style={{ animationDelay: '1s' }} />
             <div className="pointer-events-none absolute top-20 right-40 h-32 w-32 rounded-full bg-purple-400/15 blur-2xl animate-pulse" style={{ animationDelay: '2s' }} />
@@ -415,7 +400,7 @@ const IndexContent = () => {
                             </span>
                             <div>
                               <p className="font-medium text-gray-800">{item.label}</p>
-                              <p className="text-xs text-gray-500">คิดเป็น {totalEventsCount ? Math.round((item.value / totalEventsCount) * 100) : 0}% ของทั้งหมด</p>
+                              <p className="text-xs text-gray-500">{t('chart.percentage_of_total', { percentage: totalEventsCount ? Math.round((item.value / totalEventsCount) * 100) : 0 })}</p>
                             </div>
                           </div>
                           <span className="text-lg font-semibold text-gray-900">{item.value}</span>

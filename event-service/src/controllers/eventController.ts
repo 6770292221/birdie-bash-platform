@@ -170,14 +170,8 @@ function validateCourts(courts: ICourtTime[]): CourtValidationResult {
       }
 
       // ตรวจสอบเวลาสมเหตุสมผล (6:00-24:00)
-      if (startMinutes < 360) {
-        // ก่อน 6:00
-        courtErrors.startTimeRealistic = `Start time too early: ${court.startTime}. Courts typically open after 6:00`;
-      }
-      if (endMinutes > 1440) {
-        // หลัง 24:00
-        courtErrors.endTimeRealistic = `End time too late: ${court.endTime}. Courts typically close before 24:00`;
-      }
+      // เดิมเคยบังคับเวลาเปิดสนาม (เช่น เปิดหลัง 06:00 และปิดก่อน 24:00)
+      // ปัจจุบันยกเลิกเงื่อนไขนี้เพื่อให้ผู้ใช้สามารถกำหนดเวลาได้ยืดหยุ่นมากขึ้น
     }
 
     if (Object.keys(courtErrors).length > 0) {
