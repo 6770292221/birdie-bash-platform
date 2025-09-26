@@ -8,7 +8,6 @@ export enum EventStatus {
 }
 
 export type EventStatusType = 'upcoming' | 'in_progress' | 'calculating' | 'awaiting_payment' | 'completed' | 'canceled';
-export type PlayerStatus = 'registered' | 'waitlist' | 'canceled';
 
 export interface TimeInfo {
   date: Date;
@@ -106,39 +105,3 @@ export interface ICourtCreate {
   maxPlayers: number;
 }
 
-export interface IPlayer {
-  id: string;
-  eventId: string;
-  userId?: string;
-  name: string;
-  email: string;
-  phoneNumber: string;
-  startTime?: string;
-  endTime?: string;
-  registrationTime: Date;
-  status: PlayerStatus;
-  createdBy?: string;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export interface IPlayerRegister {
-  userId?: string;
-  name: string;
-  email: string;
-  phoneNumber: string;
-  startTime?: string;
-  endTime?: string;
-}
-
-export interface RegisterByUser {
-  startTime?: string;
-  endTime?: string;
-}
-
-export interface RegisterByGuest {
-  name: string;
-  phoneNumber: string;
-  startTime?: string;
-  endTime?: string;
-}
