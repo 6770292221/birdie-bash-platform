@@ -213,38 +213,38 @@ const EventDetail = () => {
       };
       const res = await apiClient.addGuest(id, payload);
 
-      // Add 3-second delay before completing the operation
-      setTimeout(() => {
-        if (res.success) {
-          toast({ title: t('success.player_added') });
-          setGuestForm({ name: '', phoneNumber: '', startTime: '', endTime: '' });
-          setIsAddingGuest(false);
-          setOverlayAction(null);
-          // Refresh page after successful operation
-          setTimeout(() => {
-            window.location.reload();
-          }, 500);
-        } else {
-          toast({ title: t('error.add_player_failed'), description: res.error, variant: 'destructive' });
-          setIsAddingGuest(false);
-          setOverlayAction(null);
-          // Refresh page after error with longer delay
-          setTimeout(() => {
-            window.location.reload();
-          }, 1500);
-        }
-      }, 2000);
-    } catch (err: any) {
-      // Add 2-second delay before handling error
-      setTimeout(() => {
-        toast({ title: t('error.add_player_failed'), description: err?.message || t('error.unknown'), variant: 'destructive' });
+      if (res.success) {
+        // Update players list immediately after successful add guest
+        await fetchPlayersFiltered();
+
+        // Add 2-second delay for loading effect after updating state
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        toast({ title: t('success.player_added') });
+        setGuestForm({ name: '', phoneNumber: '', startTime: '', endTime: '' });
         setIsAddingGuest(false);
         setOverlayAction(null);
-        // Refresh page after error with longer delay
-        setTimeout(() => {
-          window.location.reload();
-        }, 1500);
-      }, 2000);
+        // Refresh page immediately after loading completes
+        window.location.reload();
+      } else {
+        // Add 2-second delay for loading effect
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        toast({ title: t('error.add_player_failed'), description: res.error, variant: 'destructive' });
+        setIsAddingGuest(false);
+        setOverlayAction(null);
+        // Refresh page after error
+        window.location.reload();
+      }
+    } catch (err: any) {
+      // Add 2-second delay for loading effect
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      toast({ title: t('error.add_player_failed'), description: err?.message || t('error.unknown'), variant: 'destructive' });
+      setIsAddingGuest(false);
+      setOverlayAction(null);
+      // Refresh page after error
+      window.location.reload();
     }
   };
 
@@ -257,26 +257,27 @@ const EventDetail = () => {
 
     const res = await apiClient.cancelPlayer(id, playerId);
 
-    // Add 3-second delay for loading effect
-    await new Promise(resolve => setTimeout(resolve, 2000));
-
     if (res.success) {
-      toast({ title: t('success.player_cancelled') });
+      // Update players list immediately after successful cancellation
       await fetchPlayersFiltered();
+
+      // Add 2-second delay for loading effect after updating state
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      toast({ title: t('success.player_cancelled') });
       setCancelingPlayerId(null);
       setOverlayAction(null);
-      // Refresh page after completion with small delay
-      setTimeout(() => {
-        window.location.reload();
-      }, 500);
+      // Refresh page immediately after loading completes
+      window.location.reload();
     } else {
+      // Add 2-second delay for loading effect
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
       toast({ title: t('error.cancel_player_failed'), description: res.error, variant: 'destructive' });
       setCancelingPlayerId(null);
       setOverlayAction(null);
-      // Refresh page even on error to reset state
-      setTimeout(() => {
-        window.location.reload();
-      }, 1500);
+      // Refresh page after error
+      window.location.reload();
     }
   };
 
@@ -309,10 +310,8 @@ const EventDetail = () => {
         toast({ title: t('success.registered') });
         setIsRegisteringMember(false);
         setOverlayAction(null);
-        // Refresh page after completion with small delay
-        setTimeout(() => {
-          window.location.reload();
-        }, 500);
+        // Refresh page immediately after loading completes
+        window.location.reload();
       } else {
         // Add 2-second delay for loading effect
         await new Promise(resolve => setTimeout(resolve, 2000));
