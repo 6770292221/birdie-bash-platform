@@ -600,7 +600,7 @@ const EventDetail = () => {
             </CardHeader>
             <CardContent>
               {(() => {
-                const restrictedStatuses = ['awaiting_payment','completed','canceled'];
+                const restrictedStatuses = ['awaiting_payment','completed','canceled', 'calculating', 'in_progress'];
                 const disabled = restrictedStatuses.includes(event.status);
                 const startHours = !disabled ? getAvailableHours(event.courts || [], true) : [];
                 const endHours = !disabled ? getAvailableHours(event.courts || [], false) : [];
@@ -834,7 +834,36 @@ const EventDetail = () => {
             </CardHeader>
             <CardContent>
               {(() => {
+                // Check if registration is disabled due to event status
+                const registrationDisabled = event.status === 'calculating' || event.status === 'awaiting_payment' || event.status === 'completed' || event.status === 'canceled' || event.status === 'in_progress';
                 const mine = players.find((p:any) => p.userId && user && (p.userId === user.userId) && p.status !== 'canceled');
+
+                if (registrationDisabled && !mine) {
+                  return (
+                    <div className="bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl p-6 border border-gray-200/50">
+                      <div className="text-center">
+                        <div className="w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center mx-auto mb-4">
+                          <UserPlus className="w-8 h-8 text-gray-400" />
+                        </div>
+                        <h4 className="font-semibold text-gray-700 mb-2">
+                          {event.status === 'calculating' && 'Registration Closed - Calculating Results'}
+                          {event.status === 'awaiting_payment' && 'Registration Closed - Awaiting Payment'}
+                          {event.status === 'completed' && 'Registration Closed - Event Completed'}
+                          {event.status === 'canceled' && 'Registration Closed - Event Canceled'}
+                          {event.status === 'in_progress' && 'Registration Closed - Event In Progress'}
+                        </h4>
+                        <p className="text-sm text-gray-500">
+                          {event.status === 'calculating' && 'This event is currently calculating results. Registration is no longer available.'}
+                          {event.status === 'awaiting_payment' && 'This event is awaiting payment confirmation. Registration is no longer available.'}
+                          {event.status === 'completed' && 'This event has been completed. Registration is no longer available.'}
+                          {event.status === 'canceled' && 'This event has been canceled. Registration is no longer available.'}
+                          {event.status === 'in_progress' && 'This event is currently in progress. Registration is no longer available.'}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                }
+
                 if (mine) {
                   return (
                     <div className="bg-gradient-to-r from-green-50 to-teal-50 rounded-xl p-6 border border-green-200/50">
