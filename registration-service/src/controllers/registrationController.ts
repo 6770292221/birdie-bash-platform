@@ -539,6 +539,7 @@ export const registerMember = async (
       email: userEmail || "",
       registrationTime: new Date(),
       userType: "member",
+      isPenalty: false,
     };
 
     const userPhoneNumber = req.headers["x-user-phone"] as string;
@@ -913,6 +914,7 @@ export const registerGuest = async (
       registrationTime: new Date(),
       createdBy: adminUserId,
       userType: "guest",
+      isPenalty: false,
     };
     if (registrationData.startTime)
       playerData.startTime = registrationData.startTime;
