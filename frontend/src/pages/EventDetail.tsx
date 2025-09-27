@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/table';
 import CreateEventForm from '@/components/CreateEventForm';
 import LanguageToggle from '@/components/LanguageToggle';
-import { Loader2, Calendar, MapPin, Users, Clock, DollarSign, Settings, UserPlus, Edit3, Trash2, Phone, Timer, ArrowLeft, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
+import { Loader2, Calendar, MapPin, Users, Clock, DollarSign, Settings, UserPlus, Edit3, Trash2, Phone, Timer, ArrowLeft, AlertTriangle, CheckCircle, XCircle, CreditCard, Check } from 'lucide-react';
 
 interface Court { courtNumber: number; startTime: string; endTime: string }
 interface EventApi {
@@ -86,7 +86,10 @@ const EventDetail = () => {
   const [isAddingGuest, setIsAddingGuest] = useState(false);
   const [memberTime, setMemberTime] = useState({ startTime: '', endTime: '' });
   const [isRegisteringMember, setIsRegisteringMember] = useState(false);
-  const [overlayAction, setOverlayAction] = useState<'cancel' | 'register' | 'guest' | null>(null);
+  const [overlayAction, setOverlayAction] = useState<'cancel' | 'register' | 'guest' | 'payment' | null>(null);
+  const [settlements, setSettlements] = useState<any>(null);
+  const [loadingPayments, setLoadingPayments] = useState(false);
+  const [markingPaid, setMarkingPaid] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchDetail = async () => {
@@ -99,6 +102,11 @@ const EventDetail = () => {
         setEvent((data?.event || data) as EventApi);
         // fetch players list: only registered and waitlist
         await fetchPlayersFiltered();
+
+        // fetch settlements if event is awaiting payment
+        if ((data?.event || data)?.status === 'awaiting_payment') {
+          await fetchSettlements();
+        }
       } else {
         toast({ title: t('error.load_event_failed'), description: res.error, variant: 'destructive' });
       }
@@ -106,6 +114,43 @@ const EventDetail = () => {
     };
     fetchDetail();
   }, [id]);
+
+  const fetchSettlements = async () => {
+    if (!id) return;
+    setLoadingPayments(true);
+    try {
+      const res = await apiClient.getSettlements(id);
+      if (res.success) {
+        setSettlements(res.data);
+      }
+    } catch (error) {
+      console.error('Error fetching settlements:', error);
+    } finally {
+      setLoadingPayments(false);
+    }
+  };
+
+  const markAsPaid = async (playerId: string) => {
+    if (!id) return;
+    setMarkingPaid(playerId);
+    setOverlayAction('payment');
+
+    try {
+      const res = await apiClient.markPlayerAsPaid(id, playerId);
+      if (res.success) {
+        toast({ title: 'สำเร็จ', description: 'ทำการชำระเงินแล้ว' });
+        // Refresh settlements data
+        await fetchSettlements();
+      } else {
+        toast({ title: 'เกิดข้อผิดพลาด', description: res.error, variant: 'destructive' });
+      }
+    } catch (error) {
+      toast({ title: 'เกิดข้อผิดพลาด', description: 'ไม่สามารถอัปเดตสถานะการชำระเงินได้', variant: 'destructive' });
+    } finally {
+      setMarkingPaid(null);
+      setOverlayAction(null);
+    }
+  };
 
   const fetchPlayersFiltered = async () => {
     if (!id) return;
@@ -391,21 +436,27 @@ const EventDetail = () => {
       ? t('loading.registering_player')
       : overlayAction === 'guest'
         ? t('loading.adding_guest_player')
-        : '';
+        : overlayAction === 'payment'
+          ? 'กำลังอัปเดตสถานะการชำระเงิน'
+          : '';
   const overlaySubtitle = overlayAction === 'cancel'
     ? t('loading.please_wait')
     : overlayAction === 'register'
       ? t('loading.saving_registration_data')
       : overlayAction === 'guest'
         ? t('loading.saving_guest_data')
-        : '';
+        : overlayAction === 'payment'
+          ? 'กำลังทำการอัปเดตข้อมูลการชำระเงิน'
+          : '';
   const overlayFootnote = overlayAction === 'cancel'
     ? t('loading.page_will_refresh')
     : overlayAction === 'register'
       ? t('loading.list_will_update_automatically')
       : overlayAction === 'guest'
         ? t('loading.player_list_will_update')
-        : '';
+        : overlayAction === 'payment'
+          ? 'สถานะการชำระเงินจะถูกอัปเดตอัตโนมัติ'
+          : '';
 
   const showOverlay = overlayAction !== null;
 
@@ -768,10 +819,20 @@ const EventDetail = () => {
                   ) : (
                     <div className="space-y-3">
                       {players.filter((p:any)=>p.status==='registered').map((p:any)=>(
-                        <div key={p.playerId || p.id || p._id} className="bg-gradient-to-r from-green-50 to-teal-50 rounded-xl p-4 border border-green-200/50">
+                        <div key={p.playerId || p.id || p._id} className={`rounded-xl p-4 border ${(() => {
+                          const payment = settlements?.payments?.find((payment: any) => payment.playerId === (p.playerId || p.id || p._id));
+                          return payment?.hasPenalty
+                            ? "bg-gradient-to-r from-red-50 to-pink-50 border-red-200/50"
+                            : "bg-gradient-to-r from-green-50 to-teal-50 border-green-200/50";
+                        })()}`}>
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-full bg-gradient-to-r from-green-500 to-teal-500 flex items-center justify-center">
+                              <div className={`w-10 h-10 rounded-full flex items-center justify-center ${(() => {
+                                const payment = settlements?.payments?.find((payment: any) => payment.playerId === (p.playerId || p.id || p._id));
+                                return payment?.hasPenalty
+                                  ? "bg-gradient-to-r from-red-500 to-pink-500"
+                                  : "bg-gradient-to-r from-green-500 to-teal-500";
+                              })()}`}>
                                 <Users className="w-4 h-4 text-white" />
                               </div>
                               <div>
@@ -783,6 +844,15 @@ const EventDetail = () => {
                                   }>
                                     {p.userType === 'member' ? t('user.member_badge') : t('user.guest_badge')}
                                   </Badge>
+                                  {(() => {
+                                    const payment = settlements?.payments?.find((payment: any) => payment.playerId === (p.playerId || p.id || p._id));
+                                    return payment?.hasPenalty && (
+                                      <Badge className="bg-red-100 text-red-800 border border-red-300">
+                                        <AlertTriangle className="w-3 h-3 mr-1" />
+                                        มีค่าปรับ
+                                      </Badge>
+                                    );
+                                  })()}
                                 </div>
                                 <div className="text-sm text-gray-600 flex items-center gap-2">
                                   <Phone className="w-3 h-3" />
@@ -792,23 +862,76 @@ const EventDetail = () => {
                                   <Timer className="w-3 h-3" />
                                   {p.startTime || '-'} - {p.endTime || '-'}
                                 </div>
+                                {/* Payment Status for awaiting_payment events */}
+                                {event.status === 'awaiting_payment' && settlements && (
+                                  <div className="text-xs mt-1 flex items-center gap-1">
+                                    <CreditCard className="w-3 h-3" />
+                                    {(() => {
+                                      const payment = settlements.payments?.find((payment: any) => payment.playerId === (p.playerId || p.id || p._id));
+                                      if (payment?.status === 'paid') {
+                                        return (
+                                          <span className="text-green-600 flex items-center gap-1">
+                                            <CheckCircle className="w-3 h-3" />
+                                            จ่ายแล้ว ฿{payment.amount}
+                                            {payment.hasPenalty && (
+                                              <span className="text-red-600 ml-1">(รวมค่าปรับ ฿{payment.penaltyAmount})</span>
+                                            )}
+                                          </span>
+                                        );
+                                      } else {
+                                        const textColor = payment?.hasPenalty ? "text-red-600" : "text-orange-600";
+                                        return (
+                                          <span className={`${textColor} flex items-center gap-1`}>
+                                            <Clock className="w-3 h-3" />
+                                            รอชำระ ฿{payment?.amount || 0}
+                                            {payment?.hasPenalty && (
+                                              <span className="text-red-600 ml-1">(รวมค่าปรับ ฿{payment.penaltyAmount})</span>
+                                            )}
+                                          </span>
+                                        );
+                                      }
+                                    })()}
+                                  </div>
+                                )}
                               </div>
                             </div>
-                            {(event.status === 'upcoming' || event.status === 'in_progress') && (
-                              <Button
-                                variant="destructive"
-                                size="sm"
-                                onClick={() => cancelPlayer(p.playerId || p.id || p._id)}
-                                disabled={cancelingPlayerId === (p.playerId || p.id || p._id)}
-                                className="bg-red-500 hover:bg-red-600"
-                              >
-                                {cancelingPlayerId === (p.playerId || p.id || p._id) ? (
-                                  <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                                ) : (
-                                  t('event.cancel_registration')
-                                )}
-                              </Button>
-                            )}
+                            <div className="flex gap-2">
+                              {/* Mark as Paid button for awaiting_payment status - Guest only */}
+                              {event.status === 'awaiting_payment' && settlements && p.userType === 'guest' && (() => {
+                                const payment = settlements.payments?.find((payment: any) => payment.playerId === (p.playerId || p.id || p._id));
+                                return payment?.status !== 'paid' && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => markAsPaid(p.playerId || p.id || p._id)}
+                                    disabled={markingPaid === (p.playerId || p.id || p._id)}
+                                    className="bg-green-50 hover:bg-green-100 border-green-300 text-green-700"
+                                  >
+                                    {markingPaid === (p.playerId || p.id || p._id) ? (
+                                      <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                                    ) : (
+                                      <Check className="w-4 h-4 mr-1" />
+                                    )}
+                                    Mark Paid
+                                  </Button>
+                                );
+                              })()}
+                              {(event.status === 'upcoming' || event.status === 'in_progress') && (
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  onClick={() => cancelPlayer(p.playerId || p.id || p._id)}
+                                  disabled={cancelingPlayerId === (p.playerId || p.id || p._id)}
+                                  className="bg-red-500 hover:bg-red-600"
+                                >
+                                  {cancelingPlayerId === (p.playerId || p.id || p._id) ? (
+                                    <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                                  ) : (
+                                    t('event.cancel_registration')
+                                  )}
+                                </Button>
+                              )}
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -816,72 +939,74 @@ const EventDetail = () => {
                   )}
                 </div>
 
-                {/* Waitlist Players */}
-                <div>
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-6 h-6 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 flex items-center justify-center">
-                      <Clock className="w-3 h-3 text-white" />
+                {/* Waitlist Players - Hidden for awaiting_payment status */}
+                {event.status !== 'awaiting_payment' && (
+                  <div>
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-6 h-6 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 flex items-center justify-center">
+                        <Clock className="w-3 h-3 text-white" />
+                      </div>
+                      <h4 className="font-semibold text-gray-900">{t('event.waitlist')}</h4>
+                      <Badge className="bg-gradient-to-r from-amber-500 to-orange-500 text-white">
+                        {players.filter((p:any)=>p.status==='waitlist').length} {t('event.people')}
+                      </Badge>
                     </div>
-                    <h4 className="font-semibold text-gray-900">{t('event.waitlist')}</h4>
-                    <Badge className="bg-gradient-to-r from-amber-500 to-orange-500 text-white">
-                      {players.filter((p:any)=>p.status==='waitlist').length} {t('event.people')}
-                    </Badge>
-                  </div>
-                  {players.filter((p:any)=>p.status==='waitlist').length === 0 ? (
-                    <div className="text-center py-8 bg-amber-50/50 rounded-xl border border-amber-200/50">
-                      <Clock className="w-12 h-12 text-amber-300 mx-auto mb-3" />
-                      <div className="text-gray-600">{t('event.no_waitlist')}</div>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {players.filter((p:any)=>p.status==='waitlist').map((p:any)=>(
-                        <div key={p.playerId || p.id || p._id} className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl p-4 border border-amber-200/50">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 flex items-center justify-center">
-                                <Clock className="w-4 h-4 text-white" />
-                              </div>
-                              <div>
-                                <div className="font-medium text-gray-900 flex items-center gap-2">
-                                  {p.name || (p.userId ? memberNames[p.userId] : '') || t('user.no_name_display')}
-                                  <Badge className={p.userType === 'member'
-                                    ? 'bg-blue-100 text-blue-800 border border-blue-300'
-                                    : 'bg-gray-100 text-gray-800 border border-gray-300'
-                                  }>
-                                    {p.userType === 'member' ? t('user.member_badge') : t('user.guest_badge')}
-                                  </Badge>
+                    {players.filter((p:any)=>p.status==='waitlist').length === 0 ? (
+                      <div className="text-center py-8 bg-amber-50/50 rounded-xl border border-amber-200/50">
+                        <Clock className="w-12 h-12 text-amber-300 mx-auto mb-3" />
+                        <div className="text-gray-600">{t('event.no_waitlist')}</div>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {players.filter((p:any)=>p.status==='waitlist').map((p:any)=>(
+                          <div key={p.playerId || p.id || p._id} className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl p-4 border border-amber-200/50">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 flex items-center justify-center">
+                                  <Clock className="w-4 h-4 text-white" />
                                 </div>
-                                <div className="text-sm text-gray-600 flex items-center gap-2">
-                                  <Phone className="w-3 h-3" />
-                                  {p.phoneNumber || (p.userId ? memberPhones[p.userId] : '') || '-'}
-                                </div>
-                                <div className="text-xs text-gray-500 flex items-center gap-1">
-                                  <Timer className="w-3 h-3" />
-                                  {p.startTime || '-'} - {p.endTime || '-'}
+                                <div>
+                                  <div className="font-medium text-gray-900 flex items-center gap-2">
+                                    {p.name || (p.userId ? memberNames[p.userId] : '') || t('user.no_name_display')}
+                                    <Badge className={p.userType === 'member'
+                                      ? 'bg-blue-100 text-blue-800 border border-blue-300'
+                                      : 'bg-gray-100 text-gray-800 border border-gray-300'
+                                    }>
+                                      {p.userType === 'member' ? t('user.member_badge') : t('user.guest_badge')}
+                                    </Badge>
+                                  </div>
+                                  <div className="text-sm text-gray-600 flex items-center gap-2">
+                                    <Phone className="w-3 h-3" />
+                                    {p.phoneNumber || (p.userId ? memberPhones[p.userId] : '') || '-'}
+                                  </div>
+                                  <div className="text-xs text-gray-500 flex items-center gap-1">
+                                    <Timer className="w-3 h-3" />
+                                    {p.startTime || '-'} - {p.endTime || '-'}
+                                  </div>
                                 </div>
                               </div>
+                              {(event.status === 'upcoming' || event.status === 'in_progress') && (
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  onClick={() => cancelPlayer(p.playerId || p.id || p._id)}
+                                  disabled={cancelingPlayerId === (p.playerId || p.id || p._id)}
+                                  className="bg-red-500 hover:bg-red-600"
+                                >
+                                  {cancelingPlayerId === (p.playerId || p.id || p._id) ? (
+                                    <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                                  ) : (
+                                    t('event.cancel_registration')
+                                  )}
+                                </Button>
+                              )}
                             </div>
-                            {(event.status === 'upcoming' || event.status === 'in_progress') && (
-                              <Button
-                                variant="destructive"
-                                size="sm"
-                                onClick={() => cancelPlayer(p.playerId || p.id || p._id)}
-                                disabled={cancelingPlayerId === (p.playerId || p.id || p._id)}
-                                className="bg-red-500 hover:bg-red-600"
-                              >
-                                {cancelingPlayerId === (p.playerId || p.id || p._id) ? (
-                                  <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                                ) : (
-                                  t('event.cancel_registration')
-                                )}
-                              </Button>
-                            )}
                           </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -1104,60 +1229,62 @@ const EventDetail = () => {
                   )}
                 </div>
 
-                {/* Waitlist Players */}
-                <div>
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-6 h-6 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 flex items-center justify-center">
-                      <Clock className="w-3 h-3 text-white" />
+                {/* Waitlist Players - Hidden for awaiting_payment status */}
+                {event.status !== 'awaiting_payment' && (
+                  <div>
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-6 h-6 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 flex items-center justify-center">
+                        <Clock className="w-3 h-3 text-white" />
+                      </div>
+                      <h4 className="font-semibold text-gray-900">{t('event.waitlist')}</h4>
+                      <Badge className="bg-gradient-to-r from-amber-500 to-orange-500 text-white">
+                        {players.filter((p:any)=>p.status==='waitlist').length} {t('event.people')}
+                      </Badge>
                     </div>
-                    <h4 className="font-semibold text-gray-900">{t('event.waitlist')}</h4>
-                    <Badge className="bg-gradient-to-r from-amber-500 to-orange-500 text-white">
-                      {players.filter((p:any)=>p.status==='waitlist').length} {t('event.people')}
-                    </Badge>
-                  </div>
-                  {players.filter((p:any)=>p.status==='waitlist').length === 0 ? (
-                    <div className="text-center py-8 bg-amber-50/50 rounded-xl border border-amber-200/50">
-                      <Clock className="w-12 h-12 text-amber-300 mx-auto mb-3" />
-                      <div className="text-gray-600">{t('event.no_waitlist')}</div>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {players.filter((p:any)=>p.status==='waitlist').map((p:any)=>(
-                        <div key={p.playerId || p.id || p._id} className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl p-4 border border-amber-200/50">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 flex items-center justify-center">
-                              <Clock className="w-4 h-4 text-white" />
-                            </div>
-                            <div className="flex-1">
-                              <div className="font-medium text-gray-900 flex items-center gap-2">
-                                {p.name || (p.userId ? memberNames[p.userId] : '') || t('user.no_name_display')}
-                                <Badge className={p.userType === 'member'
-                                  ? 'bg-blue-100 text-blue-800 border border-blue-300'
-                                  : 'bg-gray-100 text-gray-800 border border-gray-300'
-                                }>
-                                  {p.userType === 'member' ? t('user.member_badge') : t('user.guest_badge')}
-                                </Badge>
-                                {p.userId === user?.id && (
-                                  <Badge className="bg-purple-100 text-purple-800 border border-purple-300">
-                                    👤 {t('user.you_badge')}
+                    {players.filter((p:any)=>p.status==='waitlist').length === 0 ? (
+                      <div className="text-center py-8 bg-amber-50/50 rounded-xl border border-amber-200/50">
+                        <Clock className="w-12 h-12 text-amber-300 mx-auto mb-3" />
+                        <div className="text-gray-600">{t('event.no_waitlist')}</div>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {players.filter((p:any)=>p.status==='waitlist').map((p:any)=>(
+                          <div key={p.playerId || p.id || p._id} className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl p-4 border border-amber-200/50">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 flex items-center justify-center">
+                                <Clock className="w-4 h-4 text-white" />
+                              </div>
+                              <div className="flex-1">
+                                <div className="font-medium text-gray-900 flex items-center gap-2">
+                                  {p.name || (p.userId ? memberNames[p.userId] : '') || t('user.no_name_display')}
+                                  <Badge className={p.userType === 'member'
+                                    ? 'bg-blue-100 text-blue-800 border border-blue-300'
+                                    : 'bg-gray-100 text-gray-800 border border-gray-300'
+                                  }>
+                                    {p.userType === 'member' ? t('user.member_badge') : t('user.guest_badge')}
                                   </Badge>
-                                )}
-                              </div>
-                              <div className="text-sm text-gray-600 flex items-center gap-2">
-                                <Phone className="w-3 h-3" />
-                                {p.phoneNumber || (p.userId ? memberPhones[p.userId] : '') || '-'}
-                              </div>
-                              <div className="text-xs text-gray-500 flex items-center gap-1">
-                                <Timer className="w-3 h-3" />
-                                {p.startTime || '-'} - {p.endTime || '-'}
+                                  {p.userId === user?.id && (
+                                    <Badge className="bg-purple-100 text-purple-800 border border-purple-300">
+                                      👤 {t('user.you_badge')}
+                                    </Badge>
+                                  )}
+                                </div>
+                                <div className="text-sm text-gray-600 flex items-center gap-2">
+                                  <Phone className="w-3 h-3" />
+                                  {p.phoneNumber || (p.userId ? memberPhones[p.userId] : '') || '-'}
+                                </div>
+                                <div className="text-xs text-gray-500 flex items-center gap-1">
+                                  <Timer className="w-3 h-3" />
+                                  {p.startTime || '-'} - {p.endTime || '-'}
+                                </div>
                               </div>
                             </div>
                           </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
