@@ -180,11 +180,10 @@ services:
       - ENABLE_WAITLIST_WORKER=true
       - RABBIT_CONSUMER_DELAY_MS=10000
       - RABBIT_PREFETCH=1
-      - RABBIT_WAITLIST_QUEUE=events.payment
       - RABBIT_AUTOBIND=true
       - RABBIT_AUTOBIND_ON_RETURN=false
-      - RABBIT_BIND_QUEUE=payment.issue
-      - RABBIT_BIND_KEY=event.settlement.issue
+      - RABBIT_PAYMENT_QUEUE=payment.issue
+      - RABBIT_BIND_KEY=payment.settlement.issue
     depends_on:
       mongodb:
         condition: service_started

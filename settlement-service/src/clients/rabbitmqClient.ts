@@ -76,25 +76,17 @@ export class RabbitMQPublisher {
               }
 
               // Declare queues from environment variables
-              const waitlistQueue = process.env.RABBIT_WAITLIST_QUEUE || 'events.payment';
-              const bindQueue = process.env.RABBIT_BIND_QUEUE || 'payment.issue';
+              const paymentQueue = process.env.RABBIT_PAYMENT_QUEUE || 'payment.issue';
+              const bindQueue = process.env.bindQueue || 'payment.bind';
 
-              channel.assertQueue(waitlistQueue, { durable: true }, (error3) => {
+              channel.assertQueue(paymentQueue, { durable: true }, (error3) => {
                 if (error3) {
                   Logger.error('Failed to declare waitlist queue', error3);
                   reject(error3);
                   return;
                 }
 
-                channel.assertQueue(bindQueue, { durable: true }, (error4) => {
-                  if (error4) {
-                    Logger.error('Failed to declare bind queue', error4);
-                    reject(error4);
-                    return;
-                  }
-
-                  // Bind queue to exchange if RABBIT_AUTOBIND is enabled
-                  const autoBind = process.env.RABBIT_AUTOBIND === 'true';
+                              const autoBind = process.env.RABBIT_AUTOBIND === 'true';
                   if (autoBind) {
                     const bindKey = process.env.RABBIT_BIND_KEY || 'event.settlement.issue';
                     channel.bindQueue(bindQueue, this.exchange, bindKey, {}, (error5) => {
@@ -110,7 +102,6 @@ export class RabbitMQPublisher {
                     Logger.success('Connected to RabbitMQ successfully');
                   }
                 });
-              });
 
               // Handle connection events
               connection.on('error', (err) => {

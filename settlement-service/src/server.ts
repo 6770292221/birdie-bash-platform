@@ -99,27 +99,27 @@ rabbitMQPublisher.connect().then(() => {
   Logger.success('RabbitMQ initialized successfully on startup');
 
   // Test publish a message
-  const testMessage = {
-    player_id: 'test-player-startup',
-    amount: 100,
-    currency: 'THB',
-    event_id: 'test-event-startup',
-    description: 'Test message from settlement service startup',
-    metadata: {
-      court_fee: '50',
-      shuttlecock_fee: '30',
-      penalty_fee: '20',
-      hours_played: '1',
-      settlement_type: 'test',
-      event_creator_phone: ''
-    }
-  };
+  // const testMessage = {
+  //   player_id: 'test-player-startup',
+  //   amount: 100,
+  //   currency: 'THB',
+  //   event_id: 'test-event-startup',
+  //   description: 'Test message from settlement service startup',
+  //   metadata: {
+  //     court_fee: '50',
+  //     shuttlecock_fee: '30',
+  //     penalty_fee: '20',
+  //     hours_played: '1',
+  //     settlement_type: 'test',
+  //     event_creator_phone: ''
+  //   }
+  // };
 
-  rabbitMQPublisher.publishPaymentCharge(testMessage).then((result) => {
-    Logger.success('Test message published successfully', result);
-  }).catch((error) => {
-    Logger.error('Failed to publish test message', error);
-  });
+  // rabbitMQPublisher.publishPaymentCharge(testMessage).then((result) => {
+  //   Logger.success('Test message published successfully', result);
+  // }).catch((error) => {
+  //   Logger.error('Failed to publish test message', error);
+  // });
 }).catch(error => {
   Logger.error('Failed to initialize RabbitMQ connection', error);
 });
