@@ -34,6 +34,7 @@ const CreateEventForm = ({ onSubmit, onCancel, editEvent, onUpdateEvent }: Creat
   const [shuttlecockPrice, setShuttlecockPrice] = useState(editEvent?.shuttlecockPrice || 20);
   const [courtHourlyRate, setCourtHourlyRate] = useState(editEvent?.courtHourlyRate || 150);
   const [penaltyFee, setPenaltyFee] = useState((editEvent as any)?.penaltyFee || 0);
+  const [penaltyEnabled, setPenaltyEnabled] = useState((editEvent as any)?.penaltyFee > 0);
   const [courts, setCourts] = useState<Court[]>(
     editEvent?.courts && editEvent.courts.length > 0
       ? editEvent.courts
@@ -170,7 +171,7 @@ const CreateEventForm = ({ onSubmit, onCancel, editEvent, onUpdateEvent }: Creat
         waitlistEnabled,
         shuttlecockPrice,
         courtHourlyRate,
-        penaltyFee,
+        penaltyFee: penaltyEnabled ? penaltyFee : 0,
         courts,
       });
     } else {
@@ -183,7 +184,7 @@ const CreateEventForm = ({ onSubmit, onCancel, editEvent, onUpdateEvent }: Creat
         waitlistEnabled,
         shuttlecockPrice,
         courtHourlyRate,
-        penaltyFee,
+        penaltyFee: penaltyEnabled ? penaltyFee : 0,
         courts,
       } as any);
     }
@@ -368,18 +369,37 @@ const CreateEventForm = ({ onSubmit, onCancel, editEvent, onUpdateEvent }: Creat
               )}
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="penaltyFee" className="text-gray-700 font-medium">ค่าปรับ</Label>
-              <Input
-                id="penaltyFee"
-                type="number"
-                value={penaltyFee}
-                onChange={(e) => setPenaltyFee(Number(e.target.value))}
-                min="0"
-                step="0.01"
-                className="border-blue-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200"
+          </div>
+
+          {/* Penalty Fee Section */}
+          <div className="space-y-4">
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="penaltyEnabled"
+                checked={penaltyEnabled}
+                onCheckedChange={(v: any) => {
+                  setPenaltyEnabled(Boolean(v));
+                  if (!v) setPenaltyFee(0);
+                }}
               />
+              <Label htmlFor="penaltyEnabled" className="text-gray-700 font-medium">มีค่าปรับ</Label>
             </div>
+
+            {penaltyEnabled && (
+              <div className="space-y-2">
+                <Label htmlFor="penaltyFee" className="text-gray-700 font-medium">ค่าปรับ (บาท)</Label>
+                <Input
+                  id="penaltyFee"
+                  type="number"
+                  value={penaltyFee}
+                  onChange={(e) => setPenaltyFee(Number(e.target.value))}
+                  min="0"
+                  step="0.01"
+                  className="border-blue-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200"
+                  placeholder="กรอกจำนวนเงินค่าปรับ"
+                />
+              </div>
+            )}
           </div>
 
           {/* Waitlist Toggle */}
