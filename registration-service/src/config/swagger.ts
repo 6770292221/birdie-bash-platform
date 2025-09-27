@@ -22,6 +22,22 @@ const swaggerDefinition = {
         description: 'JWT Bearer token validated at the API Gateway',
       },
     },
+    parameters: {
+      UserIdHeader: {
+        name: 'x-user-id',
+        in: 'header',
+        required: false,
+        schema: { type: 'string' },
+        description: 'User ID for authentication (optional for direct API calls)',
+      },
+      UserRoleHeader: {
+        name: 'x-user-role',
+        in: 'header',
+        required: false,
+        schema: { type: 'string', enum: ['admin', 'user'] },
+        description: 'User role for authorization (optional, defaults to user)',
+      },
+    },
     schemas: {
       Player: {
         type: 'object',
