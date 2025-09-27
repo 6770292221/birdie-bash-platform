@@ -1,5 +1,11 @@
 // src/services/matching.ts
-import { Court, Event, Game, Player, ParticipantRuntime } from "../models/types";
+import {
+  Court,
+  Event,
+  Game,
+  Player,
+  ParticipantRuntime,
+} from "../models/types";
 import { RuntimeState } from "../models/enums";
 import { GameLog } from "../models/matchingLog";
 import { Store } from "../models/store";
@@ -13,7 +19,40 @@ function isAvailableAt(p: Player, tIso: string) {
   return toMs(p.availableStart) <= t && t < toMs(p.availableEnd);
 }
 
-// ---------- runtime helpers (state แยกจากข้อมูลลงทะเบียน) ----------
+function randomShuffle<T>(arr: T[]): T[] {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function takeById<T extends { id: string }>(ids: string[], pool: T[]): T[] {
+  const set = new Set(ids);
+  return pool.filter((x) => set.has(x.id));
+}
+
+// ---------- uniq + quartet guards ----------
+function uniqueById<T extends { id: string }>(arr: T[]): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const x of arr) {
+    if (!seen.has(x.id)) {
+      seen.add(x.id);
+      out.push(x);
+    }
+  }
+  return out;
+}
+function enforceQuartet(group: Player[] | null): Player[] | null {
+  if (!group) return null;
+  const u = uniqueById(group);
+  if (u.length < 4) return null;
+  return u.slice(0, 4);
+}
+
+// ---------- runtime helpers ----------
 function getRt(e: Event, playerId: string): ParticipantRuntime {
   let rt = e.runtimes[playerId];
   if (!rt) {
@@ -28,8 +67,9 @@ function getRt(e: Event, playerId: string): ParticipantRuntime {
   }
   return rt;
 }
-
-function initRuntimesForPlayers(players: Player[]): Record<string, ParticipantRuntime> {
+function initRuntimesForPlayers(
+  players: Player[]
+): Record<string, ParticipantRuntime> {
   const runtimes: Record<string, ParticipantRuntime> = {};
   for (const p of players) {
     runtimes[p.id] = {
@@ -43,62 +83,104 @@ function initRuntimesForPlayers(players: Player[]): Record<string, ParticipantRu
   return runtimes;
 }
 
-// ---------- queue: สร้างใหม่แบบเรียบง่ายทุกครั้ง ----------
-/**
- * สร้างคิวใหม่จากผู้เล่นที่ "พร้อม ณ at" และ "ไม่ได้กำลัง Playing"
- * เรียงลำดับโดย:
- *  1) gamesPlayed ASC (ใครเล่นน้อยสุดมาก่อน)
- *  2) waitingSince ASC (ใครรอนานกว่ามาก่อน)
- */
-function rebuildQueue(e: Event, at: string) {
-  const ready = e.players.filter((p) => isAvailableAt(p, at) && getRt(e, p.id).state !== RuntimeState.Playing);
+// ---------- queue tools ----------
+function enqueueIfWaiting(e: Event, ps: Player[], at: string) {
+  for (const p of ps) {
+    const rt = getRt(e, p.id);
+    if (rt.state !== RuntimeState.Playing) {
+      rt.state = RuntimeState.Waiting;
+      if (!rt.waitingSince) rt.waitingSince = at;
+      if (!e.queue.includes(p.id)) e.queue.push(p.id);
+    }
+  }
+}
+function purgeQueue(e: Event, at: string) {
+  const seen = new Set<string>();
+  e.queue = e.queue.filter((pid) => {
+    if (seen.has(pid)) return false;
+    seen.add(pid);
+    const p = e.players.find((x) => x.id === pid);
+    const rt = p ? getRt(e, pid) : undefined;
+    return !!p && !!rt && isAvailableAt(p, at) && rt.state !== RuntimeState.Playing;
+  });
+}
+function dequeueUpTo(e: Event, k: number, at: string): Player[] {
+  purgeQueue(e, at);
+  const picked: Player[] = [];
+  while (picked.length < k && e.queue.length) {
+    const pid = e.queue.shift()!;
+    const p = e.players.find((x) => x.id === pid)!;
+    const rt = getRt(e, pid);
+    if (isAvailableAt(p, at) && rt.state !== RuntimeState.Playing) picked.push(p);
+  }
+  return picked;
+}
+function removeFromQueue(e: Event, ids: string[]) {
+  const rm = new Set(ids);
+  e.queue = e.queue.filter((pid) => !rm.has(pid));
+}
 
+// ---------- preferred helpers ----------
+type PreferredItem = { playerId?: string; userId?: string; name?: string };
+
+function moveToFrontQueue(e: Event, playerIds: string[]) {
+  const uniq = Array.from(new Set(playerIds));
+  const rm = new Set(uniq);
+  e.queue = e.queue.filter((pid) => !rm.has(pid));
+  e.queue = [...uniq, ...e.queue];
+}
+function fairnessKey(e: Event, id: string, at: string) {
+  const rt = getRt(e, id);
+  const ws = rt.waitingSince ?? at;
+  const lp = rt.lastPlayedAt ?? at;
+  return [rt.gamesPlayed, toMs(ws), toMs(lp)];
+}
+function reorderQueueByFairness(e: Event, at: string) {
+  const uniq = Array.from(new Set(e.queue));
+  uniq.sort((a, b) => {
+    const ka = fairnessKey(e, a, at);
+    const kb = fairnessKey(e, b, at);
+    if (ka[0] !== kb[0]) return ka[0] - kb[0];
+    if (ka[1] !== kb[1]) return ka[1] - kb[1];
+    return ka[2] - kb[2];
+  });
+  e.queue = uniq;
+}
+function seedQueueIfEmpty(e: Event, at: string) {
+  if (e.queue.length) return;
+  const ready = e.players.filter(
+    (p) => isAvailableAt(p, at) && getRt(e, p.id).state !== RuntimeState.Playing
+  );
+  if (!ready.length) return;
   for (const p of ready) {
     const rt = getRt(e, p.id);
     if (rt.state !== RuntimeState.Waiting) {
       rt.state = RuntimeState.Waiting;
       if (!rt.waitingSince) rt.waitingSince = at;
     }
+    if (!e.queue.includes(p.id)) e.queue.push(p.id);
   }
-
-  // sort ตามกติกา fairness แบบง่าย
-  ready.sort((a, b) => {
-    const ra = getRt(e, a.id);
-    const rb = getRt(e, b.id);
-    if (ra.gamesPlayed !== rb.gamesPlayed) return ra.gamesPlayed - rb.gamesPlayed;
-    const wa = ra.waitingSince ? toMs(ra.waitingSince) : Number.MAX_SAFE_INTEGER;
-    const wb = rb.waitingSince ? toMs(rb.waitingSince) : Number.MAX_SAFE_INTEGER;
-    return wa - wb;
-  });
-
-  e.queue = ready.map((p) => p.id);
+  reorderQueueByFairness(e, at);
 }
 
-/** ดึงคนบนสุด k คนจากคิว (ต้องพร้อม ณ at และไม่กำลังเล่น) */
-function takeTopK(e: Event, k: number, at: string): Player[] {
-  const out: Player[] = [];
-  const keep: string[] = [];
-  for (const pid of e.queue) {
-    if (out.length >= k) {
-      keep.push(pid);
-      continue;
-    }
-    const p = e.players.find((x) => x.id === pid);
-    if (!p) continue;
-    const rt = getRt(e, pid);
-    if (isAvailableAt(p, at) && rt.state !== RuntimeState.Playing) {
-      out.push(p);
-    } else {
-      // ถ้าไม่พร้อมแล้วก็ไม่ต้องเก็บไว้ในคิว
-    }
+// ---------- grouping (no skill) ----------
+function buildGroupNoSkill(
+  anchors: Player[],
+  pool: Player[],
+  at: string,
+  e: Event
+): Player[] | null {
+  const base: Player[] = uniqueById(anchors);
+  const candidates = pool.filter(
+    (p) => isAvailableAt(p, at) && getRt(e, p.id).state !== RuntimeState.Playing
+  );
+  for (const c of randomShuffle(candidates)) {
+    if (base.length >= 4) break;
+    if (!base.find((b) => b.id === c.id)) base.push(c);
   }
-  // ตัดคนที่หยิบไปแล้วออกจากคิว
-  const taken = new Set(out.map((p) => p.id));
-  e.queue = keep.filter((pid) => !taken.has(pid));
-  return out;
+  return enforceQuartet(base);
 }
 
-// ---------- game helpers ----------
 function createGame(court: Court, players: Player[], at: string): Game {
   return {
     id: `g_${court.id}_${Date.now()}`,
@@ -119,14 +201,16 @@ function markPlaying(e: Event, players: Player[], at: string) {
   }
 }
 
-// ---------- logging (Mongo) ----------
+// ---------- logging ----------
 async function logGameStart(
   e: Event,
   courtId: string,
   game: Game,
+  anchors: Player[],
   queueBefore: string[],
   queueAfter: string[],
-  action: "seed" | "advance",
+  action: "seed" | "advance" | "close",
+  at: string
 ) {
   try {
     await GameLog.create({
@@ -134,7 +218,7 @@ async function logGameStart(
       gameId: game.id,
       courtId,
       action,
-      at: nowIso(),
+      at,
       startTime: game.startTime,
       players: game.playerIds.map((id) => {
         const p = e.players.find((x) => x.id === id)!;
@@ -147,7 +231,7 @@ async function logGameStart(
           runtimeState: rt.state,
         };
       }),
-      anchors: [], // เราไม่ใช้คอนเซ็ปต์ anchors แล้วในเวอร์ชันเรียบง่ายนี้
+      anchors: anchors.map((a) => a.id),
       queueBefore,
       queueAfter,
       metrics: { playersCount: game.playerIds.length },
@@ -157,9 +241,11 @@ async function logGameStart(
   }
 }
 
-// ---------- presenter (แปลง games.playerIds -> [{id, name}]) ----------
+// ---------- presenter ----------
 function serializeEventForClient(e: Event) {
-  const findName = (id: string) => e.players.find((p) => p.id === id)?.name ?? null;
+  const findName = (id: string) =>
+    e.players.find((p) => p.id === id)?.name ?? null;
+
   return {
     id: e.id,
     courts: e.courts,
@@ -180,12 +266,15 @@ function serializeEventForClient(e: Event) {
 
 // ---------- service ----------
 export const MatchingService = {
-  defaultCourts: 1,
+  defaultCourts: 2,
 
   createEvent(id: string, courts: number, players: Player[]): Event {
     const e: Event = {
       id,
-      courts: Array.from({ length: courts }, (_, i) => ({ id: `c${i + 1}`, currentGameId: null })),
+      courts: Array.from({ length: courts }, (_, i) => ({
+        id: `c${i + 1}`,
+        currentGameId: null,
+      })),
       createdAt: nowIso(),
       queue: [],
       games: [],
@@ -200,7 +289,6 @@ export const MatchingService = {
     const e = Store.getEvent(eventId);
     if (!e) throw new Error("Event not found");
 
-    // reset all runtime/courts/games/queue
     e.courts = e.courts.map((c) => ({ ...c, currentGameId: null }));
     e.games = [];
     e.queue = [];
@@ -211,107 +299,172 @@ export const MatchingService = {
     return e;
   },
 
-  // จับคู่รอบแรก: เลือก 4 คนต่อคอร์ท โดยเรียง gamesPlayed ASC แล้ว waitingSince ASC
   async seedInitialGames(eventId: string, at: string) {
     const e = Store.getEvent(eventId);
     if (!e) throw new Error("Event not found");
 
-    // สร้างคิวใหม่แบบ simple จากผู้ที่พร้อม ณ at
-    rebuildQueue(e, at);
+    const avail = e.players.filter((p) => isAvailableAt(p, at));
+    enqueueIfWaiting(e, avail, at);
+    purgeQueue(e, at);
+    seedQueueIfEmpty(e, at);
+    reorderQueueByFairness(e, at);
 
     for (const court of e.courts) {
       if (court.currentGameId) continue;
 
-      const group = takeTopK(e, 4, at);
-      if (group.length !== 4) continue; // ต้องครบ 4 เท่านั้น
+      const anchors = dequeueUpTo(e, 2, at);
+      let group: Player[] | null = null;
 
-      const queueBefore = [...e.queue];
-      const game = createGame(court, group, at);
-      e.games.push(game);
-      court.currentGameId = game.id;
-      markPlaying(e, group, at);
+      if (anchors.length) group = buildGroupNoSkill(anchors, e.players, at, e);
+      if (!group) {
+        const candidates = e.players.filter(
+          (p) => isAvailableAt(p, at) && getRt(e, p.id).state !== RuntimeState.Playing
+        );
+        group = enforceQuartet(randomShuffle(candidates).slice(0, 4));
+      }
 
-      await logGameStart(e, court.id, game, queueBefore, [...e.queue], "seed");
+      if (group) {
+        const queueBeforeCourt = [...e.queue];
+        removeFromQueue(e, group.map((p) => p.id));
+
+        const game = createGame(court, group, at);
+        e.games.push(game);
+        court.currentGameId = game.id;
+        markPlaying(e, group, at);
+
+        await logGameStart(e, court.id, game, anchors, queueBeforeCourt, [...e.queue], "seed", at);
+      }
     }
 
     Store.upsertEvent(e);
     return serializeEventForClient(e) as any;
   },
 
-  // จบเกมคอร์ทนี้ แล้วเริ่มเกมใหม่ด้วยกติกาเดียวกัน
   async finishAndRefill(eventId: string, courtId: string, at: string) {
     const e = Store.getEvent(eventId);
     if (!e) throw new Error("Event not found");
     const court = e.courts.find((c) => c.id === courtId);
     if (!court) throw new Error("Court not found");
 
-    // 1) จบเกมเดิม (ถ้ามี)
+    // end current game
     if (court.currentGameId) {
       const g = e.games.find((x) => x.id === court.currentGameId)!;
       g.endTime = at;
 
-      // คืนสถานะผู้เล่นจากเกมเดิม
-      for (const pid of g.playerIds) {
-        const p = e.players.find((x) => x.id === pid);
-        if (!p) continue;
-        const rt = getRt(e, pid);
-        rt.state = RuntimeState.Idle;
-        // ไม่บวก gamesPlayed ที่นี่ เพราะบวกไปแล้วตอนเริ่มเกม (markPlaying)
-      }
+      const prevPlayers = takeById(g.playerIds, e.players);
+      for (const p of prevPlayers) getRt(e, p.id).state = RuntimeState.Idle;
+
+      enqueueIfWaiting(e, prevPlayers, at);
       court.currentGameId = null;
+      purgeQueue(e, at);
     }
 
-    // 2) สร้างคิวใหม่จากทุกคนที่พร้อม ณ at (รวมคนจากเกมก่อนหน้าด้วย ถ้ายังอยู่ในช่วงเวลา)
-    rebuildQueue(e, at);
+    // refill
+    const anchors = dequeueUpTo(e, 2, at);
+    let group: Player[] | null = null;
 
-    // 3) เติมเกมใหม่
-    const group = takeTopK(e, 4, at);
-    if (group.length === 4) {
-      const queueBefore = [...e.queue];
+    if (anchors.length) group = buildGroupNoSkill(anchors, e.players, at, e);
+    if (!group) {
+      const candidates = e.players.filter(
+        (p) => isAvailableAt(p, at) && getRt(e, p.id).state !== RuntimeState.Playing
+      );
+      group = enforceQuartet(randomShuffle(candidates).slice(0, 4));
+    }
+
+    if (group) {
+      const queueBeforeCourt = [...e.queue];
+      removeFromQueue(e, group.map((p) => p.id));
+
       const game = createGame(court, group, at);
       e.games.push(game);
       court.currentGameId = game.id;
       markPlaying(e, group, at);
 
-      await logGameStart(e, court.id, game, queueBefore, [...e.queue], "advance");
+      await logGameStart(e, court.id, game, anchors, queueBeforeCourt, [...e.queue], "advance", at);
     }
 
     Store.upsertEvent(e);
     return serializeEventForClient(e) as any;
   },
 
-  // จบทุกคอร์ท แล้วเริ่มใหม่พร้อมกัน
   async advanceAll(eventId: string, at: string) {
     const e = Store.getEvent(eventId);
     if (!e) throw new Error("Event not found");
 
-    // ปิดทุกเกมที่เปิดอยู่
+    // end all current games
     for (const court of e.courts) {
       if (!court.currentGameId) continue;
       const g = e.games.find((x) => x.id === court.currentGameId)!;
       g.endTime = at;
-      for (const pid of g.playerIds) {
-        const rt = getRt(e, pid);
+
+      const prevPlayers = takeById(g.playerIds, e.players);
+      for (const p of prevPlayers) getRt(e, p.id).state = RuntimeState.Idle;
+
+      enqueueIfWaiting(e, prevPlayers, at);
+      court.currentGameId = null;
+    }
+    purgeQueue(e, at);
+
+    // refill all courts
+    for (const court of e.courts) {
+      const anchors = dequeueUpTo(e, 2, at);
+      let group: Player[] | null = null;
+
+      if (anchors.length) group = buildGroupNoSkill(anchors, e.players, at, e);
+      if (!group) {
+        const candidates = e.players.filter(
+          (p) => isAvailableAt(p, at) && getRt(e, p.id).state !== RuntimeState.Playing
+        );
+        group = enforceQuartet(randomShuffle(candidates).slice(0, 4));
+      }
+
+      if (group) {
+        const queueBeforeCourt = [...e.queue];
+        removeFromQueue(e, group.map((p) => p.id));
+
+        const game = createGame(court, group, at);
+        e.games.push(game);
+        court.currentGameId = game.id;
+        markPlaying(e, group, at);
+
+        await logGameStart(e, court.id, game, anchors, queueBeforeCourt, [...e.queue], "advance", at);
+      }
+    }
+
+    Store.upsertEvent(e);
+    return serializeEventForClient(e) as any;
+  },
+
+  /** ปิดงาน/กลับบ้าน: ปิดทุกเกมที่ยังเล่นอยู่, ล้างคิว, เซ็ตทุกคน Idle */
+  async closeEvent(eventId: string, at: string) {
+    const e = Store.getEvent(eventId);
+    if (!e) throw new Error("Event not found");
+
+    // ปิดทุกคอร์ท (ถ้ามีเกมค้าง)
+    for (const court of e.courts) {
+      if (!court.currentGameId) continue;
+      const g = e.games.find((x) => x.id === court.currentGameId)!;
+      if (!g.endTime) g.endTime = at;
+
+      const players = takeById(g.playerIds, e.players);
+      // เขียน log ปิดเกม
+      await logGameStart(e, court.id, g, [], [...e.queue], [...e.queue], "close", at);
+
+      // reset runtime
+      for (const p of players) {
+        const rt = getRt(e, p.id);
         rt.state = RuntimeState.Idle;
+        rt.waitingSince = null;
       }
       court.currentGameId = null;
     }
 
-    // สร้างคิวใหม่
-    rebuildQueue(e, at);
-
-    // เติมทุกคอร์ท
-    for (const court of e.courts) {
-      const group = takeTopK(e, 4, at);
-      if (group.length !== 4) continue;
-
-      const queueBefore = [...e.queue];
-      const game = createGame(court, group, at);
-      e.games.push(game);
-      court.currentGameId = game.id;
-      markPlaying(e, group, at);
-
-      await logGameStart(e, court.id, game, queueBefore, [...e.queue], "advance");
+    // ล้างคิว และรีเซ็ตทุกคนเป็น Idle
+    e.queue = [];
+    for (const p of e.players) {
+      const rt = getRt(e, p.id);
+      rt.state = RuntimeState.Idle;
+      rt.waitingSince = null;
     }
 
     Store.upsertEvent(e);

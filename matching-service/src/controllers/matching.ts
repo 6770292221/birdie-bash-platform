@@ -86,7 +86,7 @@ async function getUserName(userId: string, auth?: string) {
   }
 }
 
-// ---------- build players for matching ----------
+// ---------- build players ----------
 async function buildPlayers(
   eventDate: string,
   regs: any[],
@@ -99,7 +99,7 @@ async function buildPlayers(
     if (!display) display = r.email || r.phoneNumber || r.playerId;
 
     players.push({
-      id: r.playerId, // ใช้ playerId เป็นคีย์หลัก
+      id: r.playerId,
       name: display,
       email: r.email ?? null,
       phoneNumber: r.phoneNumber ?? null,
@@ -112,7 +112,7 @@ async function buildPlayers(
   return players;
 }
 
-// ---------- ensure event loaded in memory store ----------
+// ---------- ensure loaded ----------
 async function ensureEventLoaded(eventId: string, auth?: string) {
   let e = Store.getEvent(eventId);
   if (e) return e;
@@ -143,17 +143,13 @@ export const MatchingsController = {
         ? String(req.headers.authorization)
         : undefined;
 
-      // โหลด event+players ครั้งแรกเข้าหน่วยความจำ
       await ensureEventLoaded(eventId, auth);
 
-      // คิดเวลา seed = court แรกของวันนั้น (ถ้าไม่มีค่อย fallback เป็น now)
       let atISO: string | undefined;
       try {
         const ev = await getEvent(eventId, auth);
         const startHHmm = ev.courts?.[0]?.startTime;
-        if (ev.eventDate && startHHmm) {
-          atISO = `${ev.eventDate}T${startHHmm}:00+07:00`;
-        }
+        if (ev.eventDate && startHHmm) atISO = `${ev.eventDate}T${startHHmm}:00+07:00`;
       } catch {}
       if (!atISO) atISO = new Date().toISOString();
 
@@ -168,7 +164,7 @@ export const MatchingsController = {
   },
 
   // POST /api/matchings/advance  { eventId, courtId, at? }
-  finishAndRefill: async (req: Request, res: Response) => {
+  async finishAndRefill (req: Request, res: Response) {
     const { eventId, courtId, at } = req.body || {};
     if (!eventId || !courtId) {
       return res.status(400).json({
@@ -182,15 +178,10 @@ export const MatchingsController = {
         ? String(req.headers.authorization)
         : undefined;
 
-      // เผื่อ server เพิ่งรีสตาร์ท
       await ensureEventLoaded(eventId, auth);
 
       const iso = at || new Date().toISOString();
-      const updated = await MatchingService.finishAndRefill(
-        eventId,
-        courtId,
-        iso
-      );
+      const updated = await MatchingService.finishAndRefill(eventId, courtId, iso);
 
       res.json({ success: true, data: { event: updated }, message: "Advanced" });
     } catch (err) {
@@ -201,11 +192,37 @@ export const MatchingsController = {
     }
   },
 
+  // POST /api/matchings/close  { eventId, at? }  // ปิดงาน/กลับบ้าน
+  async close (req: Request, res: Response) {
+    const { eventId, at } = req.body || {};
+    if (!eventId) {
+      return res
+        .status(400)
+        .json({ success: false, message: "eventId is required" });
+    }
+    try {
+      const auth = req.headers.authorization
+        ? String(req.headers.authorization)
+        : undefined;
+
+      await ensureEventLoaded(eventId, auth);
+      const iso = at || new Date().toISOString();
+      const updated = await MatchingService.closeEvent(eventId, iso);
+
+      res.json({ success: true, data: { event: updated }, message: "Closed" });
+    } catch (err) {
+      res.status(400).json({
+        success: false,
+        message: err instanceof Error ? err.message : "Close failed",
+      });
+    }
+  },
+
   // GET /api/matchings/:eventId/status
-  status: (req: Request, res: Response) => {
+  async status (req: Request, res: Response){
     const { eventId } = req.params;
     try {
-      const s = MatchingService.status(eventId);
+      const s = await MatchingService.status(eventId);
       res.json({ success: true, data: s });
     } catch (err) {
       res.status(404).json({

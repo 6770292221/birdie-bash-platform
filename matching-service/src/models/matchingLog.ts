@@ -20,19 +20,6 @@ const GameLogSchema = new Schema({
   createdAt: { type: Date, default: () => new Date() }
 }, { versionKey: false });
 
-const MatchRunSchema = new Schema({
-  eventId: { type: String, index: true, required: true },
-  type: { type: String, enum: ['seed','advance','advance-all'], required: true },
-  at: { type: String, required: true },
-  courtsAffected: [String],
-  queueBefore: [String],
-  queueAfter: [String],
-  gamesStarted: [{ gameId: String, courtId: String }],
-  createdAt: { type: Date, default: () => new Date() }
-}, { versionKey: false });
-
 export type GameLogDoc = InferSchemaType<typeof GameLogSchema>;
-export type MatchRunDoc = InferSchemaType<typeof MatchRunSchema>;
 
 export const GameLog = mongoose.model('game_logs', GameLogSchema);
-export const MatchRun = mongoose.model('match_runs', MatchRunSchema);
