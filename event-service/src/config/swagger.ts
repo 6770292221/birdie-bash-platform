@@ -71,6 +71,8 @@ const swaggerDefinition = {
           },
           shuttlecockPrice: { type: "number" },
           courtHourlyRate: { type: "number" },
+          penaltyFee: { type: "number", minimum: 0, description: "Penalty fee amount" },
+          shuttlecockCount: { type: "number", minimum: 0, description: "Number of shuttlecocks" },
           courts: {
             type: "array",
             items: {
@@ -111,6 +113,8 @@ const swaggerDefinition = {
           },
           shuttlecockPrice: { type: "number" },
           courtHourlyRate: { type: "number" },
+          penaltyFee: { type: "number", minimum: 0, description: "Penalty fee amount (optional)" },
+          shuttlecockCount: { type: "number", minimum: 0, description: "Number of shuttlecocks (optional)" },
           courts: { $ref: "#/components/schemas/Event/properties/courts" },
         },
         example: {
@@ -123,6 +127,8 @@ const swaggerDefinition = {
           },
           shuttlecockPrice: 25,
           courtHourlyRate: 200,
+          penaltyFee: 50,
+          shuttlecockCount: 10,
           courts: [
             {
               courtNumber: 1,
@@ -147,6 +153,8 @@ const swaggerDefinition = {
           capacity: { $ref: "#/components/schemas/Event/properties/capacity" },
           shuttlecockPrice: { type: "number" },
           courtHourlyRate: { type: "number" },
+          penaltyFee: { type: "number", minimum: 0, description: "Penalty fee amount" },
+          shuttlecockCount: { type: "number", minimum: 0, description: "Number of shuttlecocks" },
           courts: { $ref: "#/components/schemas/Event/properties/courts" },
         },
       },
