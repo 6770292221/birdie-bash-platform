@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
@@ -10,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { apiClient } from '@/utils/api';
-import { CheckCircle, Clock, Users, Calculator, Receipt } from 'lucide-react';
+import { CheckCircle, Clock, Users, Calculator, Receipt, Loader2 } from 'lucide-react';
 
 interface CostBreakdownItem {
   playerId: string;
@@ -39,6 +40,7 @@ interface PaymentSummary {
 const CalculatePage = () => {
   const { isAdmin, user } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   const [events, setEvents] = useState<any[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string>('');
@@ -47,7 +49,8 @@ const CalculatePage = () => {
   const [breakdown, setBreakdown] = useState<CostBreakdownItem[]>([]);
   const [isCalculated, setIsCalculated] = useState<boolean>(false);
   const [shuttlecockCount, setShuttlecockCount] = useState<string>('');
-  const [absentPlayers, setAbsentPlayers] = useState<Set<string>>(new Set());
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [isSavingShuttlecock, setIsSavingShuttlecock] = useState<boolean>(false);
 
   useEffect(() => {
     const fetch = async () => {
@@ -87,69 +90,59 @@ const CalculatePage = () => {
       apiClient.getPlayers(eventId, { status: 'registered', limit: 100, offset: 0 }),
       apiClient.getPlayers(eventId, { status: 'waitlist', limit: 100, offset: 0 }),
     ]);
-    if (detail.success) setEventDetail((detail.data as any).event || detail.data);
+    if (detail.success) {
+      const eventData = (detail.data as any).event || detail.data;
+      setEventDetail(eventData);
+    }
     const regList = reg.success ? ((reg.data as any).players || (reg.data as any) || []) : [];
     const waitList = wait.success ? ((wait.data as any).players || (wait.data as any) || []) : [];
     setPlayers([...regList, ...waitList]);
   };
 
 
-  // Validation function to check if inputs are valid
-  const isFormValid = useMemo(() => {
-    const shuttlecockNum = parseInt(shuttlecockCount);
 
-    return (
-      shuttlecockCount.trim() !== '' &&
-      !isNaN(shuttlecockNum) &&
-      shuttlecockNum > 0 &&
-      selectedEventId &&
-      eventDetail
-    );
-  }, [shuttlecockCount, selectedEventId, eventDetail]);
 
-  const handlePlayerAbsentToggle = (playerId: string) => {
-    const newAbsentPlayers = new Set(absentPlayers);
-    if (newAbsentPlayers.has(playerId)) {
-      newAbsentPlayers.delete(playerId);
-    } else {
-      newAbsentPlayers.add(playerId);
+  const saveShuttlecockCount = async () => {
+    if (!selectedEventId || !shuttlecockCount.trim() || isNaN(parseInt(shuttlecockCount)) || parseInt(shuttlecockCount) <= 0) {
+      return;
     }
-    setAbsentPlayers(newAbsentPlayers);
-  };
 
-  const calculate = async () => {
+    setIsSavingShuttlecock(true);
     try {
-      console.log('🚀 Starting settlement calculation...');
+      console.log('🚀 Starting save and calculate process...');
       console.log('Event ID:', selectedEventId);
-      console.log('Event Detail:', eventDetail);
-      console.log('Auth Token exists:', !!localStorage.getItem('authToken'));
+      console.log('Shuttlecock Count:', shuttlecockCount);
 
-      if (!selectedEventId) {
-        throw new Error('กรุณาเลือกอีเวนต์ก่อน');
-      }
-
-      if (!eventDetail) {
-        throw new Error('ไม่พบข้อมูลอีเวนต์ กรุณารีเฟรชหน้า');
-      }
-
-      // Use apiClient settlement method
-      console.log('Calling settlement API...');
-      const response = await apiClient.issueSettlement(selectedEventId, {
-        currency: 'THB',
-        shuttlecockCount: parseInt(shuttlecockCount),
-        absentPlayerIds: Array.from(absentPlayers)
+      // Step 1: Update shuttlecock count in event
+      console.log('Step 1: Updating shuttlecock count...');
+      const patchResponse = await apiClient.updateEvent(selectedEventId, {
+        shuttlecockCount: parseInt(shuttlecockCount)
       });
 
-      console.log('Settlement API response:', response); // Debug log
+      console.log('Update event response:', patchResponse);
 
-      if (!response.success) {
-        console.error('Settlement API failed:', response.error);
-        throw new Error(response.error || 'ไม่สามารถคำนวณค่าใช้จ่ายได้');
+      if (!patchResponse.success) {
+        console.error('Update event failed:', patchResponse.error);
+        throw new Error(patchResponse.error || 'ไม่สามารถบันทึกจำนวนลูกขนไก่ได้');
       }
 
-      if (response.success && response.data && (response.data as any).calculationResults) {
+      console.log('Event update successful');
+
+      // Step 2: Calculate settlement
+      console.log('Step 2: Calculating settlement...');
+      const calculateResponse = await apiClient.calculateSettlement(selectedEventId);
+
+      console.log('Settlement calculation response:', calculateResponse);
+
+      if (!calculateResponse.success) {
+        console.error('Settlement calculation failed:', calculateResponse.error);
+        throw new Error(calculateResponse.error || 'ไม่สามารถคำนวณค่าใช้จ่ายได้');
+      }
+
+      // Step 3: Display calculation results
+      if (calculateResponse.success && calculateResponse.data && (calculateResponse.data as any).calculationResults) {
         // Transform settlement API response to breakdown format
-        const transformedData: CostBreakdownItem[] = (response.data as any).calculationResults.map((item: any) => ({
+        const transformedData: CostBreakdownItem[] = (calculateResponse.data as any).calculationResults.map((item: any) => ({
           playerId: item.playerId,
           name: item.name || 'ไม่ระบุชื่อ',
           userType: item.role === 'member' ? 'member' : 'guest',
@@ -165,22 +158,38 @@ const CalculatePage = () => {
 
         setBreakdown(transformedData);
         setIsCalculated(true);
+
+        const totalAmount = (calculateResponse.data as any).totalCollected || 0;
+
         toast({
-          title: 'คำนวณสำเร็จ',
-          description: `คำนวณค่าใช้จ่ายสำหรับ ${transformedData.length} คน เรียบร้อยแล้ว`
+          title: 'บันทึกและคำนวณสำเร็จ! 🎉',
+          description: `บันทึกลูกขนไก่ ${shuttlecockCount} ลูก และคำนวณค่าใช้จ่ายสำหรับ ${transformedData.length} คน ยอดรวม ฿${totalAmount.toFixed(2)}`,
         });
       } else {
-        throw new Error('Invalid response format from settlement API');
+        // If calculation fails, still show success for shuttlecock save
+        toast({
+          title: 'บันทึกสำเร็จ! 🎉',
+          description: `บันทึกจำนวนลูกขนไก่ ${shuttlecockCount} ลูก เรียบร้อยแล้ว`,
+        });
       }
+
+      // Reload event data to get updated information
+      if (selectedEventId) {
+        await loadEventData(selectedEventId);
+      }
+
     } catch (error) {
-      console.error('Settlement API error:', error);
+      console.error('Save and calculate error:', error);
       toast({
         title: 'เกิดข้อผิดพลาด',
-        description: error instanceof Error ? error.message : 'ไม่สามารถคำนวณค่าใช้จ่ายได้',
+        description: error instanceof Error ? error.message : 'ไม่สามารถดำเนินการได้',
         variant: 'destructive'
       });
+    } finally {
+      setIsSavingShuttlecock(false);
     }
   };
+
 
   const handlePaymentToggle = (playerId: string, isPaid: boolean) => {
     setBreakdown(prev => prev.map(item =>
@@ -217,20 +226,87 @@ const CalculatePage = () => {
   }, [breakdown]);
 
   const submitCalculation = async () => {
-    // This would be the API call to submit calculation results
-    const payload = {
-      eventId: selectedEventId,
-      breakdown: breakdown,
-      summary: paymentSummary,
-      calculatedAt: new Date().toISOString()
-    };
+    if (!selectedEventId || isSubmitting) return;
 
-    console.log('Submitting calculation to API:', payload);
+    setIsSubmitting(true);
+    try {
+      console.log('🚀 Starting calculation and settlement process...');
+      console.log('Event ID:', selectedEventId);
+      console.log('Shuttlecock Count:', shuttlecockCount);
 
-    toast({
-      title: 'ส่งข้อมูลสำเร็จ',
-      description: 'บันทึกการคำนวณค่าใช้จ่ายเรียบร้อยแล้ว',
-    });
+      // Step 1: Update shuttlecock count in event first
+      console.log('Step 1: Updating shuttlecock count...');
+      const patchResponse = await apiClient.updateEvent(selectedEventId, {
+        shuttlecockCount: parseInt(shuttlecockCount)
+      });
+
+      if (!patchResponse.success) {
+        console.error('Event update failed:', patchResponse.error);
+        throw new Error(patchResponse.error || 'ไม่สามารถอัพเดทจำนวนลูกขนไก่ได้');
+      }
+
+      console.log('Event update successful');
+
+      // Step 2: Issue settlement (save to DB and process charges)
+      console.log('Step 2: Issuing settlement...');
+      const issueResponse = await apiClient.issueSettlement(selectedEventId);
+
+      console.log('Settlement issue response:', issueResponse);
+
+      if (!issueResponse.success) {
+        console.error('Settlement issue failed:', issueResponse.error);
+        throw new Error(issueResponse.error || 'ไม่สามารถดำเนินการเก็บเงินได้');
+      }
+
+      // Step 3: Display settlement results
+      if (issueResponse.success && issueResponse.data && (issueResponse.data as any).calculationResults) {
+        // Transform settlement API response to breakdown format
+        const transformedData: CostBreakdownItem[] = (issueResponse.data as any).calculationResults.map((item: any) => ({
+          playerId: item.playerId,
+          name: item.name || 'ไม่ระบุชื่อ',
+          userType: item.role === 'member' ? 'member' : 'guest',
+          startTime: item.startTime || '09:00',
+          endTime: item.endTime || '10:00',
+          playHours: item.breakdown?.hoursPlayed || 0,
+          courtFee: item.courtFee || 0,
+          shuttlecockFee: item.shuttlecockFee || 0,
+          fine: item.penaltyFee || 0,
+          total: item.totalAmount || 0,
+          isPaid: item.paymentStatus === 'completed' || item.paymentStatus === 'paid' || false
+        }));
+
+        setBreakdown(transformedData);
+        setIsCalculated(true);
+
+        const totalAmount = (issueResponse.data as any).totalCollected || 0;
+        const successfulCharges = (issueResponse.data as any).successfulCharges || 0;
+        const failedCharges = (issueResponse.data as any).failedCharges || 0;
+
+        toast({
+          title: 'บันทึกและเก็บเงินสำเร็จ! 🎉',
+          description: `เก็บเงินสำเร็จ ${successfulCharges} คน, ล้มเหลว ${failedCharges} คน, รวมเก็บได้ ฿${totalAmount.toFixed(2)}`,
+        });
+
+        // Redirect to event detail page after successful charge
+        console.log('🔄 Redirecting to event detail page...', selectedEventId);
+        console.log('Navigate function:', navigate);
+        console.log('Target URL:', `/events/${selectedEventId}`);
+
+        navigate(`/events/${selectedEventId}`);
+      } else {
+        throw new Error('Invalid response format from settlement API');
+      }
+
+    } catch (error) {
+      console.error('Calculation and settlement error:', error);
+      toast({
+        title: 'เกิดข้อผิดพลาดในการคำนวณ',
+        description: error instanceof Error ? error.message : 'ไม่สามารถดำเนินการได้',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   useEffect(() => {
@@ -282,78 +358,77 @@ const CalculatePage = () => {
                 </Select>
               </div>
 
-              <div>
+              <div className="space-y-2">
                 <Label htmlFor="shuttlecock-count">จำนวนลูกขนไก่ที่ใช้</Label>
-                <Input
-                  id="shuttlecock-count"
-                  type="number"
-                  min="1"
-                  value={shuttlecockCount}
-                  onChange={(e) => setShuttlecockCount(e.target.value)}
-                  placeholder="เช่น 4"
-                  className={shuttlecockCount.trim() !== '' && (isNaN(parseInt(shuttlecockCount)) || parseInt(shuttlecockCount) <= 0) ? 'border-red-500' : ''}
-                />
+                <div className="flex gap-2">
+                  <Input
+                    id="shuttlecock-count"
+                    type="number"
+                    min="1"
+                    value={shuttlecockCount}
+                    onChange={(e) => setShuttlecockCount(e.target.value)}
+                    placeholder="เช่น 4"
+                    className={`flex-1 ${shuttlecockCount.trim() !== '' && (isNaN(parseInt(shuttlecockCount)) || parseInt(shuttlecockCount) <= 0) ? 'border-red-500' : ''}`}
+                  />
+                  <Button
+                    onClick={saveShuttlecockCount}
+                    disabled={!selectedEventId || !shuttlecockCount.trim() || isNaN(parseInt(shuttlecockCount)) || parseInt(shuttlecockCount) <= 0 || isSavingShuttlecock}
+                    className="bg-green-600 hover:bg-green-700 disabled:bg-gray-400"
+                  >
+                    {isSavingShuttlecock ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        กำลังคำนวณ...
+                      </>
+                    ) : (
+                      <>
+                        บันทึกและคำนวณ
+                      </>
+                    )}
+                  </Button>
+                </div>
                 {shuttlecockCount.trim() !== '' && (isNaN(parseInt(shuttlecockCount)) || parseInt(shuttlecockCount) <= 0) && (
                   <p className="text-red-500 text-xs mt-1">กรุณาใส่จำนวนที่มากกว่า 0</p>
                 )}
               </div>
             </div>
 
-            {/* Player attendance selection */}
+            {/* Player List */}
             {eventDetail && players.length > 0 && !isCalculated && (
               <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200">
                 <CardHeader>
-                  <CardTitle className="text-lg text-blue-800 flex items-center justify-between">
-                    <div className="flex items-center">
-                      <Users className="w-5 h-5 mr-2" />
-                      เช็คการเข้าร่วม ({players.length} คน)
-                    </div>
-                    <div className="flex items-center space-x-4 text-sm">
-                      <span className="text-green-600">
-                        ✅ มาเล่น: {players.length - absentPlayers.size} คน
-                      </span>
-                      <span className="text-red-600">
-                        ❌ ไม่มา: {absentPlayers.size} คน
-                      </span>
-                    </div>
+                  <CardTitle className="text-lg text-blue-800 flex items-center">
+                    <Users className="w-5 h-5 mr-2" />
+                    รายชื่อผู้เล่น ({players.length} คน)
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                    <div className="flex items-start space-x-2">
-                      <div className="text-amber-600 mt-0.5">⚠️</div>
-                      <div className="text-sm text-amber-800">
-                        <strong>วิธีใช้:</strong> กดที่ผู้เล่นที่ <strong>ไม่มาเล่น</strong> เพื่อทำเครื่องหมายเป็นคนไม่มา
-                        คนที่ไม่มาจะถูกเก็บค่าปรับ <strong>฿{eventDetail.absentPenaltyFee || 0}</strong>
-                      </div>
-                    </div>
-                  </div>
-
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                     {players.map((player, index) => {
                       const playerId = player.playerId || player.id || `player-${index}`;
-                      const isAbsent = absentPlayers.has(playerId);
+                      const isPenalty = player.isPenalty === true;
 
                       return (
                         <div
                           key={playerId}
-                          className={`relative p-4 rounded-lg border-2 cursor-pointer transition-all duration-200 hover:shadow-md ${
-                            isAbsent
+                          className={`relative p-4 rounded-lg border-2 transition-all duration-200 ${
+                            isPenalty
                               ? 'bg-red-50 border-red-300 shadow-md'
-                              : 'bg-white border-green-300 hover:border-green-400'
+                              : 'bg-white border-green-300'
                           }`}
-                          onClick={() => handlePlayerAbsentToggle(playerId)}
                         >
                           {/* Status indicator */}
                           <div className={`absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center text-white text-sm font-bold ${
-                            isAbsent ? 'bg-red-500' : 'bg-green-500'
+                            isPenalty ? 'bg-red-500' : 'bg-green-500'
                           }`}>
-                            {isAbsent ? '✗' : '✓'}
+                            {isPenalty ? '⚠' : '✓'}
                           </div>
 
                           <div className="pr-8">
                             <div className="flex items-start justify-between mb-2">
-                              <div className="font-medium text-gray-800">{player.name ?? player.email ?? 'ไม่ระบุ' }</div>
+                              <div className={`font-medium ${isPenalty ? 'text-red-800' : 'text-gray-800'}`}>
+                                {player.name ?? player.email ?? 'ไม่ระบุ'}
+                              </div>
                             </div>
 
                             <div className="flex items-center justify-between mb-2">
@@ -379,12 +454,12 @@ const CalculatePage = () => {
                             <div className="mt-2">
                               <Badge
                                 className={`text-xs ${
-                                  isAbsent
+                                  isPenalty
                                     ? 'bg-red-100 text-red-700 border-red-300'
                                     : 'bg-green-100 text-green-700 border-green-300'
                                 }`}
                               >
-                                {isAbsent ? '❌ ไม่มาเล่น' : '✅ มาเล่น'}
+                                {isPenalty ? '❌ ต้องเสียค่าปรับ' : '✅ ปกติ'}
                               </Badge>
                             </div>
                           </div>
@@ -393,13 +468,15 @@ const CalculatePage = () => {
                     })}
                   </div>
 
-                  {absentPlayers.size > 0 && (
+                  {players.some(p => p.isPenalty) && (
                     <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
                       <div className="flex items-center space-x-2 text-red-800">
                         <div className="text-red-600">💰</div>
                         <div className="text-sm">
-                          <strong>ค่าปรับที่จะเก็บ:</strong> {absentPlayers.size} คน × ฿{eventDetail.absentPenaltyFee || 0} =
-                          <strong className="ml-1">฿{(absentPlayers.size * (eventDetail.absentPenaltyFee || 0)).toLocaleString()}</strong>
+                          <strong>ผู้เล่นที่ต้องเสียค่าปรับ:</strong> {players.filter(p => p.isPenalty).length} คน
+                          <div className="text-xs text-red-600 mt-1">
+                            ค่าปรับจะถูกคำนวณตามที่กำหนดไว้ในอีเวนต์
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -408,19 +485,41 @@ const CalculatePage = () => {
               </Card>
             )}
 
-            <div className="flex justify-center">
-              <Button
-                className={`w-full md:w-auto px-8 ${isFormValid ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-400 cursor-not-allowed'}`}
-                onClick={calculate}
-                disabled={!isFormValid}
-              >
-                <Calculator className="w-4 h-4 mr-2" />
-                คำนวณค่าใช้จ่าย
-              </Button>
-            </div>
+            {/* Calculate Button */}
+            {/* {eventDetail && players.length > 0 && !isCalculated && shuttlecockCount.trim() !== '' && !isNaN(parseInt(shuttlecockCount)) && parseInt(shuttlecockCount) > 0 && (
+              <div className="flex justify-center">
+                <Button
+                  onClick={submitCalculation}
+                  disabled={isSubmitting}
+                  className="w-full md:w-auto px-8 bg-blue-600 hover:bg-blue-700"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      กำลังคำนวณ...
+                    </>
+                  ) : (
+                    <>
+                      <Receipt className="w-4 h-4 mr-2" />
+                      บันทึกและเก็บเงิน
+                    </>
+                  )}
+                </Button>
+              </div>
+            )} */}
+
 
             {isCalculated && breakdown.length > 0 && (
               <div className="space-y-4">
+                {/* Preview Mode Banner */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <div className="flex items-center space-x-2">
+                    <Badge className="bg-blue-600 text-white">โหมดดูตัวอย่าง</Badge>
+                    <span className="text-blue-800 text-sm">
+                      ผลการคำนวณนี้เป็นเพียงการแสดงตัวอย่าง ยังไม่ได้เก็บเงินจากผู้เล่นจริง
+                    </span>
+                  </div>
+                </div>
                 {/* Payment Summary */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
@@ -548,28 +647,37 @@ const CalculatePage = () => {
                   </CardContent>
                 </Card>
 
-                {/* Submit Button */}
-                <div className="flex justify-end space-x-3">
-                  <Button
-                    onClick={() => {
-                      const allPaid = breakdown.map(item => ({ ...item, isPaid: true }));
-                      setBreakdown(allPaid);
-                      toast({ title: 'ทำเครื่องหมายทั้งหมด', description: 'ทำเครื่องหมายทุกคนว่าชำระแล้ว' });
-                    }}
-                    variant="outline"
-                    className="border-green-600 text-green-600 hover:bg-green-50"
-                  >
-                    <CheckCircle className="w-4 h-4 mr-2" />
-                    ทำเครื่องหมายทั้งหมดว่าชำระแล้ว
-                  </Button>
+                {/* Warning and Submit Button */}
+                <div className="space-y-4">
+                  {/* <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                    <div className="flex items-start space-x-2">
+                      <div className="text-amber-600 mt-0.5">⚠️</div>
+                      <div className="text-sm text-amber-800">
+                        <strong>คำเตือน:</strong> การกดปุ่ม "เก็บเงินจริงตามการคำนวณ" จะทำการ<strong>เก็บเงินจริง</strong>จากผู้เล่นทุกคน
+                        และส่งการแจ้งเตือนไปยัง Payment Service เพื่อประมวลผลการชำระเงิน กรุณาตรวจสอบข้อมูลให้ถูกต้องก่อนดำเนินการ
+                      </div>
+                    </div>
+                  </div> */}
 
-                  <Button
-                    onClick={submitCalculation}
-                    className="bg-blue-600 hover:bg-blue-700"
-                  >
-                    <Receipt className="w-4 h-4 mr-2" />
-                    บันทึกการคำนวณ
-                  </Button>
+                  <div className="flex justify-end space-x-3">
+                    <Button
+                      onClick={submitCalculation}
+                      disabled={isSubmitting}
+                      className="bg-blue-600 hover:bg-blue-700"
+                    >
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          กำลังดำเนินการ...
+                        </>
+                      ) : (
+                        <>
+                          <Receipt className="w-4 h-4 mr-2" />
+                          บันทึกและเก็บเงิน
+                        </>
+                      )}
+                    </Button>
+                  </div>
                 </div>
               </div>
             )}
