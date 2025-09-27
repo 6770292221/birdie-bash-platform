@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/table';
 import CreateEventForm from '@/components/CreateEventForm';
 import LanguageToggle from '@/components/LanguageToggle';
-import { Loader2, Calendar, MapPin, Users, Clock, DollarSign, Settings, UserPlus, Edit3, Trash2, Phone, Timer, ArrowLeft } from 'lucide-react';
+import { Loader2, Calendar, MapPin, Users, Clock, DollarSign, Settings, UserPlus, Edit3, Trash2, Phone, Timer, ArrowLeft, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
 
 interface Court { courtNumber: number; startTime: string; endTime: string }
 interface EventApi {
@@ -31,7 +31,7 @@ interface EventApi {
   status: string;
   capacity: { maxParticipants: number; currentParticipants: number; availableSlots?: number, waitlistEnabled?: boolean };
   shuttlecockPrice: number;
-  absentPenaltyFee: number;
+  penaltyFee: number;
   courtHourlyRate: number;
   courts: Court[];
 }
@@ -157,6 +157,7 @@ const EventDetail = () => {
         },
         shuttlecockPrice: updates.shuttlecockPrice,
         courtHourlyRate: updates.courtHourlyRate,
+        penaltyFee: updates.penaltyFee,
         courts: Array.isArray(updates.courts)
           ? updates.courts.map((c: any) => ({ courtNumber: c.courtNumber, startTime: c.startTime, endTime: c.endTime }))
           : undefined,
@@ -360,6 +361,7 @@ const EventDetail = () => {
     waitlistEnabled: event.capacity?.waitlistEnabled,
     shuttlecockPrice: event.shuttlecockPrice,
     courtHourlyRate: event.courtHourlyRate,
+    penaltyFee: event.penaltyFee,
     courts: event.courts,
   } as any;
 
@@ -541,15 +543,33 @@ const EventDetail = () => {
                 ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white px-3 py-1'
                 : 'bg-gradient-to-r from-gray-400 to-gray-500 text-white px-3 py-1'
               }>
-                {event.capacity?.waitlistEnabled ? `✅ ${t('badge.waitlist_open')}` : `❌ ${t('badge.waitlist_closed')}`}
+                {event.capacity?.waitlistEnabled ? (
+                  <>
+                    <CheckCircle className="w-3 h-3 mr-1" />
+                    {t('badge.waitlist_open')}
+                  </>
+                ) : (
+                  <>
+                    <XCircle className="w-3 h-3 mr-1" />
+                    {t('badge.waitlist_closed')}
+                  </>
+                )}
               </Badge>
-              <Badge className={event?.absentPenaltyFee && event.absentPenaltyFee > 0
+              <Badge className={event?.penaltyFee && event.penaltyFee > 0
                 ? 'bg-gradient-to-r from-red-500 to-pink-500 text-white px-3 py-1'
-                : 'bg-gradient-to-r from-gray-400 to-gray-500 text-white px-3 py-1'
+                : 'bg-gradient-to-r from-green-500 to-emerald-500 text-white px-3 py-1'
               }>
-                {event?.absentPenaltyFee && event.absentPenaltyFee > 0
-                  ? `💰 ค่าปรับ ฿${event.absentPenaltyFee}`
-                  : '🚫 ไม่มีค่าปรับ'}
+                {event?.penaltyFee && event.penaltyFee > 0 ? (
+                  <>
+                    <AlertTriangle className="w-3 h-3 mr-1" />
+                    มีค่าปรับ ฿{event.penaltyFee}
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="w-3 h-3 mr-1" />
+                    ไม่มีค่าปรับ
+                  </>
+                )}
               </Badge>
             </div>
           </CardContent>
@@ -885,7 +905,7 @@ const EventDetail = () => {
               {(() => {
                 // Check if registration is disabled due to event status
                 const registrationDisabled = event.status === 'calculating' || event.status === 'awaiting_payment' || event.status === 'completed' || event.status === 'canceled' || event.status === 'in_progress';
-                const mine = players.find((p:any) => p.userId && user && (p.userId === user.userId) && p.status !== 'canceled');
+                const mine = players.find((p:any) => p.userId && user && (p.userId === user.id) && p.status !== 'canceled');
 
                 if (registrationDisabled && !mine) {
                   return (
