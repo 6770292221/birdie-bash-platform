@@ -4,10 +4,10 @@ import { Logger } from '../utils/logger';
 export interface PaymentChargeMessage {
   player_id: string;
   amount: number;
-  currency: string;
+  currency?: string;
   event_id: string;
-  description: string;
-  metadata: {
+  description?: string;
+  metadata?: {
     court_fee: string;
     shuttlecock_fee: string;
     penalty_fee: string;
@@ -77,7 +77,7 @@ export class RabbitMQPublisher {
 
               // Declare queues from environment variables
               const paymentQueue = process.env.RABBIT_PAYMENT_QUEUE || 'payment.issue';
-              const bindQueue = process.env.bindQueue || 'payment.bind';
+              const bindQueue = process.env.RABBIT_PAYMENT_QUEUE || 'payment.issue';
 
               channel.assertQueue(paymentQueue, { durable: true }, (error3) => {
                 if (error3) {
@@ -88,7 +88,7 @@ export class RabbitMQPublisher {
 
                               const autoBind = process.env.RABBIT_AUTOBIND === 'true';
                   if (autoBind) {
-                    const bindKey = process.env.RABBIT_BIND_KEY || 'event.settlement.issue';
+                    const bindKey = process.env.RABBIT_BIND_KEY || 'payment.settlement.issue';
                     channel.bindQueue(bindQueue, this.exchange, bindKey, {}, (error5) => {
                       if (error5) {
                         Logger.error('Failed to bind queue', error5);
@@ -135,7 +135,7 @@ export class RabbitMQPublisher {
         throw new Error('RabbitMQ channel not available');
       }
 
-      const routingKey = process.env.RABBIT_BIND_KEY || 'event.settlement.issue';
+      const routingKey = process.env.RABBIT_BIND_KEY || 'payment.settlement.issue';
       const messageBuffer = Buffer.from(JSON.stringify(message));
 
       // Log payload if enabled

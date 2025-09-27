@@ -78,10 +78,6 @@ const router = Router();
  *                                   type: number
  *                                 totalAmount:
  *                                   type: number
- *                                 paymentId:
- *                                   type: string
- *                                 paymentStatus:
- *                                   type: string
  *                           totalCollected:
  *                             type: number
  *                           successfulCharges:
@@ -170,10 +166,6 @@ router.get('/', getAllSettlements);
  *                                 type: number
  *                               totalAmount:
  *                                 type: number
- *                               paymentId:
- *                                 type: string
- *                               paymentStatus:
- *                                 type: string
  *                               breakdown:
  *                                 type: object
  *                         totalCollected:

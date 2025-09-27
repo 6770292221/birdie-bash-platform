@@ -476,17 +476,17 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
           const chargeRequest = {
             player_id: settlement.playerId,
             amount: settlement.totalAmount,
-            currency: 'THB',
+            // currency: 'THB',
             event_id: finalEventId,
-            description: `Settlement charge for event ${finalEventId} - Court: ${settlement.courtFee}, Shuttlecock: ${settlement.shuttlecockFee}, Penalty: ${settlement.penaltyFee}`,
-            metadata: {
-              court_fee: settlement.courtFee.toString(),
-              shuttlecock_fee: settlement.shuttlecockFee.toString(),
-              penalty_fee: settlement.penaltyFee.toString(),
-              hours_played: settlement.breakdown.hoursPlayed.toString(),
-              settlement_type: 'event_settlement',
-              event_creator_phone: eventCreatorPhoneNumber || ''
-            }
+            // description: `Settlement charge for event ${finalEventId} - Court: ${settlement.courtFee}, Shuttlecock: ${settlement.shuttlecockFee}, Penalty: ${settlement.penaltyFee}`,
+            // metadata: {
+            //   court_fee: settlement.courtFee.toString(),
+            //   shuttlecock_fee: settlement.shuttlecockFee.toString(),
+            //   penalty_fee: settlement.penaltyFee.toString(),
+            //   hours_played: settlement.breakdown.hoursPlayed.toString(),
+            //   settlement_type: 'event_settlement',
+            //   event_creator_phone: eventCreatorPhoneNumber || ''
+            // }
           };
 
           Logger.info('Publishing charge message to RabbitMQ', {
@@ -497,11 +497,12 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
 
           const paymentResponse = await rabbitMQPublisher.publishPaymentCharge(chargeRequest);
 
-          console.log('paymentResponse >>>', paymentResponse);
+          //TODO CHECKING AGAIN
+          // console.log('paymentResponse >>>', paymentResponse);
 
-          // Update Settlement breakdown record with payment info
-          settlementRecord.breakdown[i].paymentId = paymentResponse.id;
-          settlementRecord.breakdown[i].paymentStatus = paymentResponse.status;
+          // // Update Settlement breakdown record with payment info
+          // settlementRecord.breakdown[i].paymentId = paymentResponse.id;
+          // settlementRecord.breakdown[i].paymentStatus = paymentResponse.status;
 
           chargeResults.push({
             playerId: settlement.playerId,
