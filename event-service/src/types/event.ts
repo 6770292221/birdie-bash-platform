@@ -51,6 +51,8 @@ export interface IEvent {
   capacity: CapacityInfo;
   shuttlecockPrice: number;
   courtHourlyRate: number;
+  penaltyFee: number;
+  shuttlecockCount: number;
   courts: ICourtTime[];
   createdBy?: string;
   updatedBy?: string;
@@ -68,6 +70,8 @@ export interface IEventCreate {
   };
   shuttlecockPrice: number;
   courtHourlyRate: number;
+  penaltyFee?: number;
+  shuttlecockCount?: number;
   courts: ICourtTime[];
 }
 
@@ -79,6 +83,8 @@ export interface IEventUpdate {
   status?: EventStatusType;
   shuttlecockPrice?: number;
   courtHourlyRate?: number;
+  penaltyFee?: number;
+  shuttlecockCount?: number;
   courts?: ICourtTime[];
 }
 
