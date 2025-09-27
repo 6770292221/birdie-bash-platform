@@ -5,6 +5,7 @@ import http from "http";
 import https from "https";
 import messageQueueService from "../queue/publisher";
 import { EVENTS } from "../queue/events";
+import { shouldApplyPenalty, getPenaltyConfig } from "../config/penaltyConfig";
 
 // Simple translation helper
 const translations = {
@@ -438,7 +439,14 @@ export const cancelPlayerRegistration = async (
     }
 
     const wasRegistered = player.status === "registered";
+    const cancelTime = new Date();
+
+    // เช็คว่าต้องมีค่าปรับหรือไม่
+    const isPenalty = shouldApplyPenalty(event.eventDate, event.startTime, cancelTime);
+
     player.status = "canceled";
+    player.isPenalty = isPenalty;
+    player.canceledAt = cancelTime;
     await player.save();
     // Capacity updates and waitlist promotion are handled by Event Service in a decoupled architecture.
     // Here we only update player state and emit domain events.
@@ -450,11 +458,14 @@ export const cancelPlayerRegistration = async (
         canceledBy: userId,
         wasRegistered,
         status: player.status,
-        canceledAt: new Date().toISOString(),
+        isPenalty,
+        canceledAt: cancelTime.toISOString(),
       });
     } catch (error) {
       console.error("Failed to publish participant.cancelled event:", error);
     }
+
+    const penaltyConfig = getPenaltyConfig();
 
     res.status(200).json({
       message: "Player registration canceled successfully",
@@ -462,7 +473,13 @@ export const cancelPlayerRegistration = async (
         playerId: player.id,
         eventId: player.eventId.toString(),
         status: player.status,
-        canceledAt: new Date().toISOString(),
+        isPenalty,
+        canceledAt: cancelTime.toISOString(),
+        penaltyInfo: isPenalty ? {
+          amount: penaltyConfig.penaltyAmount,
+          percentage: penaltyConfig.penaltyPercentage,
+          reason: `Canceled within ${penaltyConfig.penaltyHoursBeforeEvent} hour(s) of event start`
+        } : null,
       },
     });
   } catch (error) {

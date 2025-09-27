@@ -54,6 +54,16 @@ const PlayerSchema: Schema = new Schema(
       enum: ['registered', 'waitlist', 'canceled'],
       default: 'registered',
     },
+    isPenalty: {
+      type: Boolean,
+      default: false,
+      description: 'True if cancellation incurred a penalty fee',
+    },
+    canceledAt: {
+      type: Date,
+      required: false,
+      description: 'Timestamp when registration was canceled',
+    },
     userType: {
       type: String,
       enum: ['member', 'guest'],
