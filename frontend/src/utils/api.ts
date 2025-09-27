@@ -346,6 +346,52 @@ class ApiClient {
     });
   }
 
+  // Settlement detail endpoint (mocked for now)
+  async getSettlements(eventId: string): Promise<ApiResponse<any>> {
+    // Mock data for now - replace with real API call later
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        // Mock data - ใช้ player IDs จริงจากข้อมูล API ล่าสุด
+        const mockPayments = [
+          // Guest ไม่มีค่าปรับ (isPenalty: false)
+          { playerId: "68d7b9e9744183cc4927b403", playerName: "mind_guest", amount: 250, status: "paid", paidAt: "2024-01-15T10:30:00Z", hasPenalty: false },
+          // Guest มีค่าปรับ (isPenalty: true)
+          { playerId: "68d7b9f2744183cc4927b40e", playerName: "mind_guest_2", amount: 300, status: "pending", paidAt: null, hasPenalty: true, penaltyAmount: 50 },
+          // Member ยังไม่จ่าย ไม่มีค่าปรับ (isPenalty: false)
+          { playerId: "68d7ba9f744183cc4927b41e", playerName: "mind2@gmail.com", amount: 250, status: "pending", paidAt: null, hasPenalty: false },
+        ];
+        resolve({
+          success: true,
+          data: {
+            eventId,
+            totalAmount: 1000,
+            paidAmount: 500,
+            pendingAmount: 500,
+            payments: mockPayments
+          }
+        });
+      }, 500); // Simulate network delay
+    });
+  }
+
+  // Mark player as paid endpoint (mocked for now)
+  async markPlayerAsPaid(eventId: string, playerId: string): Promise<ApiResponse<any>> {
+    // Mock response for now - replace with real API call later
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        resolve({
+          success: true,
+          data: {
+            playerId,
+            status: "paid",
+            paidAt: new Date().toISOString(),
+            message: "Player marked as paid successfully"
+          }
+        });
+      }, 300);
+    });
+  }
+
   // Venue endpoints
   async getVenues(params?: {
     name?: string;
