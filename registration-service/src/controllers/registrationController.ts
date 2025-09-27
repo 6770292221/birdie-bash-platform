@@ -849,6 +849,60 @@ export const promoteWaitlist = async (
   }
 };
 
+/**
+ * @swagger
+ * /api/registration/events/{id}/guests:
+ *   post:
+ *     summary: Register a guest player for an event
+ *     description: Admin endpoint to register guest players. Requires admin privileges.
+ *     tags: [Registration]
+ *     parameters:
+ *       - $ref: '#/components/parameters/UserIdHeader'
+ *       - $ref: '#/components/parameters/UserRoleHeader'
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Event ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/RegisterGuestRequest'
+ *     responses:
+ *       201:
+ *         description: Guest registered successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Guest registered successfully"
+ *                 player:
+ *                   $ref: '#/components/schemas/Player'
+ *       400:
+ *         description: Bad request (validation error, player already registered, etc.)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       403:
+ *         description: Insufficient permissions (admin required)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
 export const registerGuest = async (
   req: ExtendedRequest,
   res: Response
