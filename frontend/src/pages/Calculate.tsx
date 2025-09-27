@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
@@ -39,6 +40,7 @@ interface PaymentSummary {
 const CalculatePage = () => {
   const { isAdmin, user } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   const [events, setEvents] = useState<any[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string>('');
@@ -284,6 +286,13 @@ const CalculatePage = () => {
           title: 'บันทึกและเก็บเงินสำเร็จ! 🎉',
           description: `เก็บเงินสำเร็จ ${successfulCharges} คน, ล้มเหลว ${failedCharges} คน, รวมเก็บได้ ฿${totalAmount.toFixed(2)}`,
         });
+
+        // Redirect to event detail page after successful charge
+        console.log('🔄 Redirecting to event detail page...', selectedEventId);
+        console.log('Navigate function:', navigate);
+        console.log('Target URL:', `/events/${selectedEventId}`);
+
+        navigate(`/events/${selectedEventId}`);
       } else {
         throw new Error('Invalid response format from settlement API');
       }
