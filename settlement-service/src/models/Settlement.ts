@@ -18,10 +18,28 @@ export enum TransactionType {
   AUTHORIZATION = 'authorization'
 }
 
-// Main Settlement interface - only metadata and references
+// Main Settlement interface - includes player data
 export interface ISettlement extends Document {
   settlementId: string;
   eventId: string; // Reference to Event Service
+  // Player settlement breakdown data
+  breakdown: Array<{
+    playerId: string;
+    courtFee: number;
+    shuttlecockFee: number;
+    penaltyFee: number;
+    totalAmount: number;
+    paymentId?: string;
+    paymentStatus?: string;
+    breakdown: {
+      hoursPlayed: number;
+      courtSessions: Array<{
+        hour: string;
+        playersInSession: number;
+        costPerPlayer: number;
+      }>;
+    };
+  }>;
   // Summary statistics
   totalCollected: number;
   successfulCharges: number;
@@ -89,10 +107,31 @@ const SettlementTransactionSchema: Schema = new Schema({
   metadata: { type: Schema.Types.Mixed }
 });
 
-// Settlement Schema - main settlement metadata
+// Settlement Schema - includes player data
 const SettlementSchema: Schema = new Schema({
   settlementId: { type: String, required: true, unique: true },
   eventId: { type: String, required: true, index: true },
+  // Player settlement breakdown data
+  breakdown: [{
+    playerId: { type: String, required: true },
+    courtFee: { type: Number, required: true },
+    shuttlecockFee: { type: Number, required: true },
+    penaltyFee: { type: Number, required: true },
+    totalAmount: { type: Number, required: true },
+    paymentId: { type: String },
+    paymentStatus: { type: String },
+    breakdown: {
+      hoursPlayed: { type: Number, required: true },
+      courtSessions: [{
+        hour: { type: String, required: true },
+        playersInSession: { type: Number, required: true },
+        costPerPlayer: { type: Number, required: true },
+        _id: false
+      }]
+    },
+    _id: false
+  }],
+  // Summary statistics
   totalCollected: { type: Number, required: true },
   successfulCharges: { type: Number, default: 0 },
   failedCharges: { type: Number, default: 0 },

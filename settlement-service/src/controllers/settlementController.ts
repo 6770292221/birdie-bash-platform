@@ -1,11 +1,11 @@
 import { Request, Response } from 'express';
-import { PaymentServiceClient } from '../clients/paymentClient';
+import { RabbitMQPublisher } from '../clients/rabbitmqClient';
 import { Logger } from '../utils/logger';
 import { SettlementCalculator } from '../services/settlementCalculator';
-import { Settlement, SettlementPlayer, SettlementStatus } from '../models/Settlement';
+import { Settlement, SettlementStatus } from '../models/Settlement';
 import { v4 as uuidv4 } from 'uuid';
 
-const paymentClient = new PaymentServiceClient();
+const rabbitMQPublisher = new RabbitMQPublisher();
 const calculator = new SettlementCalculator();
 
 // Simple in-memory cache for player data (valid for 5 minutes)
@@ -424,12 +424,25 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
       };
     });
 
-    // Create settlement record in database using new schema
+    // Create settlement record in database with player data
     const settlementId = `settlement_${Date.now()}_${uuidv4().split('-')[0]}`;
+
+    // Prepare breakdown data for settlement record
+    const breakdownData = settlements.map(settlement => ({
+      playerId: settlement.playerId,
+      courtFee: settlement.courtFee,
+      shuttlecockFee: settlement.shuttlecockFee,
+      penaltyFee: settlement.penaltyFee,
+      totalAmount: settlement.totalAmount,
+      paymentId: null,
+      paymentStatus: null,
+      breakdown: settlement.breakdown
+    }));
 
     const settlementRecord = new Settlement({
       settlementId,
-      eventId: event_id,
+      eventId: finalEventId,
+      breakdown: breakdownData,
       totalCollected: Math.round(totalCollected * 100) / 100,
       successfulCharges: 0,
       failedCharges: 0,
@@ -445,26 +458,17 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
     // Save settlement record first
     await settlementRecord.save();
 
-    // Create SettlementPlayer records and issue charges
+    // Issue charges and update payment info in Settlement record
     const chargeResults = [];
     let successfulCharges = 0;
     let failedCharges = 0;
 
-    for (const settlement of settlements) {
+    for (let i = 0; i < settlements.length; i++) {
+      const settlement = settlements[i];
       try {
-        // Find corresponding player data
-        const playerData = mergedPlayers.find(p => p.playerId === settlement.playerId);
-
-        // Create SettlementPlayer record
-        const settlementPlayer = new SettlementPlayer({
-          settlementId,
-          playerId: settlement.playerId,
-          courtFee: settlement.courtFee,
-          shuttlecockFee: settlement.shuttlecockFee,
-          penaltyFee: settlement.penaltyFee,
-          totalAmount: settlement.totalAmount,
-          breakdown: settlement.breakdown
-        });
+        // Debug: Log settlement data before charging
+        console.log('🔍 Settlement data for player:', settlement.playerId);
+        console.log('🔍 Settlement breakdown:', JSON.stringify(settlement.breakdown, null, 2));
 
         // Only charge if there's an amount to collect
         console.log('settlement >>>,', settlement);
@@ -485,19 +489,19 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
             }
           };
 
-          Logger.grpc('Issuing charge to Payment Service', {
+          Logger.info('Publishing charge message to RabbitMQ', {
             player_id: settlement.playerId,
             amount: settlement.totalAmount,
             currency: 'THB'
           });
 
-          const paymentResponse = await paymentClient.issueCharges(chargeRequest);
+          const paymentResponse = await rabbitMQPublisher.publishPaymentCharge(chargeRequest);
 
           console.log('paymentResponse >>>', paymentResponse);
 
-          // Update SettlementPlayer with payment info
-          settlementPlayer.paymentId = paymentResponse.id;
-          settlementPlayer.paymentStatus = paymentResponse.status;
+          // Update Settlement breakdown record with payment info
+          settlementRecord.breakdown[i].paymentId = paymentResponse.id;
+          settlementRecord.breakdown[i].paymentStatus = paymentResponse.status;
 
           chargeResults.push({
             playerId: settlement.playerId,
@@ -532,8 +536,7 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
           });
         }
 
-        // Save SettlementPlayer record
-        await settlementPlayer.save();
+        // Note: Settlement record will be saved after all charges are processed
 
       } catch (error) {
         Logger.error('Payment charge failed for player', {
@@ -582,7 +585,8 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
           'Authorization': req.headers.authorization || '',
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ status: 'awaiting_payment' })
+        // body: JSON.stringify({ status: 'awaiting_payment' })
+        body: JSON.stringify({ status: 'calculating' })
       });
 
       if (updateEventResponse.ok) {
@@ -602,15 +606,15 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
       // Don't fail the entire settlement process if event status update fails
     }
 
-    // Fetch SettlementPlayer records to return as calculationResults
-    const settlementPlayers = await SettlementPlayer.find({ settlementId }).exec();
+    // Debug: Log final settlement record
+    console.log('🔍 Final settlement record before save:', JSON.stringify(settlementRecord.toObject(), null, 2));
 
     res.status(201).json({
       success: true,
       data: {
         settlementId,
         event_id: finalEventId,
-        calculationResults: settlementPlayers.map(player => ({
+        calculationResults: settlementRecord.breakdown.map(player => ({
           playerId: player.playerId,
           courtFee: player.courtFee,
           shuttlecockFee: player.shuttlecockFee,
@@ -663,7 +667,7 @@ export const getAllSettlements = async (req: Request, res: Response) => {
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limitNumber)
-        .select('settlementId eventId'),
+        .select('settlementId eventId breakdown totalCollected successfulCharges failedCharges status createdAt updatedAt'),
       Settlement.countDocuments(filter)
     ]);
 
@@ -676,51 +680,43 @@ export const getAllSettlements = async (req: Request, res: Response) => {
       totalPages
     });
 
-    // Get all SettlementPlayer records for the settlements
-    const settlementIds = settlements.map(s => s.settlementId);
-    const settlementPlayers = await SettlementPlayer.find({ settlementId: { $in: settlementIds } }).exec();
+    // Transform settlements to clean format
+    const transformedSettlements = settlements.map(settlement => {
+      const settlementObj = settlement.toObject();
 
-    // Group players by settlementId
-    const playersBySettlement = settlementPlayers.reduce((acc, player) => {
-      if (!acc[player.settlementId]) {
-        acc[player.settlementId] = [];
-      }
-      acc[player.settlementId].push(player);
-      return acc;
-    }, {} as Record<string, any[]>);
-
-    // Transform settlements to clean format with real-time player data
-    const transformedSettlements = await Promise.all(
-      settlements.map(async settlement => {
-        const settlementObj = settlement.toObject();
-        const players = playersBySettlement[settlement.settlementId] || [];
-
-        // Return settlement calculation results with breakdown (no player details, just playerId reference)
-        const calculationResults = players.map((player: any) => {
-          return {
-            playerId: player.playerId,
-            breakdown: {
-              hoursPlayed: player.breakdown?.hoursPlayed,
-              courtSessions: player.breakdown?.courtSessions?.map((session: any) => ({
-                hour: session.hour,
-                playersInSession: session.playersInSession,
-                costPerPlayer: session.costPerPlayer
-              })) || []
-            },
-            courtFee: player.courtFee,
-            shuttlecockFee: player.shuttlecockFee,
-            penaltyFee: player.penaltyFee,
-            totalAmount: player.totalAmount
-          };
-        });
-
+      // Return settlement calculation results with breakdown (no player details, just playerId reference)
+      const calculationResults = (settlementObj.breakdown || []).map((player: any) => {
         return {
-          settlementId: settlementObj.settlementId,
-          eventId: settlementObj.eventId,
-          calculationResults: calculationResults
+          playerId: player.playerId,
+          breakdown: {
+            hoursPlayed: player.breakdown?.hoursPlayed || 0,
+            courtSessions: player.breakdown?.courtSessions?.map((session: any) => ({
+              hour: session.hour,
+              playersInSession: session.playersInSession,
+              costPerPlayer: session.costPerPlayer
+            })) || []
+          },
+          courtFee: player.courtFee,
+          shuttlecockFee: player.shuttlecockFee,
+          penaltyFee: player.penaltyFee,
+          totalAmount: player.totalAmount,
+          paymentId: player.paymentId,
+          paymentStatus: player.paymentStatus
         };
-      })
-    );
+      });
+
+      return {
+        settlementId: settlementObj.settlementId,
+        eventId: settlementObj.eventId,
+        calculationResults: calculationResults,
+        totalCollected: settlementObj.totalCollected,
+        successfulCharges: settlementObj.successfulCharges,
+        failedCharges: settlementObj.failedCharges,
+        status: settlementObj.status,
+        createdAt: settlementObj.createdAt,
+        updatedAt: settlementObj.updatedAt
+      };
+    });
 
     res.status(200).json({
       success: true,
@@ -1095,7 +1091,7 @@ export const getSettlementById = async (req: Request, res: Response) => {
 
     const settlement = await Settlement.findOne({
       settlementId: settlement_id
-    }).select('settlementId eventId');
+    }).select('settlementId eventId breakdown totalCollected successfulCharges failedCharges status createdAt updatedAt');
 
     if (!settlement) {
       return res.status(404).json({
@@ -1106,21 +1102,20 @@ export const getSettlementById = async (req: Request, res: Response) => {
       });
     }
 
-    // Fetch SettlementPlayer records for this settlement
-    const settlementPlayers = await SettlementPlayer.find({ settlementId: settlement_id }).exec();
+    const settlementObj = settlement.toObject();
 
     Logger.success('Settlement retrieved successfully', {
       settlement_id: settlement.settlementId,
       eventId: settlement.eventId,
-      playersCount: settlementPlayers.length
+      playersCount: (settlementObj.breakdown || []).length
     });
 
     // Return settlement calculation results with breakdown (no player details, just playerId reference)
-    const calculationResults = settlementPlayers.map((player: any) => {
+    const calculationResults = (settlementObj.breakdown || []).map((player: any) => {
       return {
         playerId: player.playerId,
         breakdown: {
-          hoursPlayed: player.breakdown?.hoursPlayed,
+          hoursPlayed: player.breakdown?.hoursPlayed || 0,
           courtSessions: player.breakdown?.courtSessions?.map((session: any) => ({
             hour: session.hour,
             playersInSession: session.playersInSession,
@@ -1130,15 +1125,23 @@ export const getSettlementById = async (req: Request, res: Response) => {
         courtFee: player.courtFee,
         shuttlecockFee: player.shuttlecockFee,
         penaltyFee: player.penaltyFee,
-        totalAmount: player.totalAmount
+        totalAmount: player.totalAmount,
+        paymentId: player.paymentId,
+        paymentStatus: player.paymentStatus
       };
     });
 
     // Create clean response with settlement data
     const cleanSettlement = {
-      settlementId: settlement.settlementId,
-      eventId: settlement.eventId,
-      calculationResults: calculationResults
+      settlementId: settlementObj.settlementId,
+      eventId: settlementObj.eventId,
+      calculationResults: calculationResults,
+      totalCollected: settlementObj.totalCollected,
+      successfulCharges: settlementObj.successfulCharges,
+      failedCharges: settlementObj.failedCharges,
+      status: settlementObj.status,
+      createdAt: settlementObj.createdAt,
+      updatedAt: settlementObj.updatedAt
     };
 
     res.status(200).json({

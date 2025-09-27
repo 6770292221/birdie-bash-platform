@@ -10,6 +10,7 @@ import settlementRoutes from "./routes/settlementRoutes";
 import path from "path";
 // Import model to register it with Mongoose
 import { Settlement } from "./models/Settlement";
+import { RabbitMQPublisher } from "./clients/rabbitmqClient";
 
 dotenv.config();
 
@@ -90,8 +91,16 @@ app.use(errorHandler);
 connectSettlementDB();
 
 
+// Initialize RabbitMQ connection
+const rabbitMQPublisher = new RabbitMQPublisher();
+
+// Connect to RabbitMQ on startup to create queues
+rabbitMQPublisher.connect().catch(error => {
+  Logger.error('Failed to initialize RabbitMQ connection', error);
+});
+
 // Start HTTP server
-app.listen(BASE_PORT, () => {
+const server = app.listen(BASE_PORT, () => {
   Logger.displayBanner();
   Logger.server(`Settlement Service HTTP server running on port ${BASE_PORT}`, {
     port: BASE_PORT,
@@ -103,7 +112,43 @@ app.listen(BASE_PORT, () => {
   Logger.info(`Health check available at: http://localhost:${BASE_PORT}/health`);
   Logger.info(`Settlement API available at: http://localhost:${BASE_PORT}/api/settlements`);
   Logger.info(`📘 API Documentation: http://localhost:${BASE_PORT}/api-docs`);
-  Logger.grpc(`Connects to Payment Service gRPC at: localhost:${process.env.GRPC_PORT || '50051'}`);
+  Logger.info(`🐰 RabbitMQ URL: ${process.env.RABBIT_URL || 'amqp://admin:password123@localhost:5672'}`);
+  Logger.info(`🐰 RabbitMQ Exchange: ${process.env.RABBIT_EXCHANGE || 'events'}`);
+});
+
+// Graceful shutdown
+process.on('SIGTERM', async () => {
+  Logger.info('SIGTERM received, shutting down gracefully');
+
+  server.close(() => {
+    Logger.info('HTTP server closed');
+  });
+
+  try {
+    await rabbitMQPublisher.close();
+    Logger.info('RabbitMQ connection closed');
+  } catch (error) {
+    Logger.error('Error closing RabbitMQ connection', error);
+  }
+
+  process.exit(0);
+});
+
+process.on('SIGINT', async () => {
+  Logger.info('SIGINT received, shutting down gracefully');
+
+  server.close(() => {
+    Logger.info('HTTP server closed');
+  });
+
+  try {
+    await rabbitMQPublisher.close();
+    Logger.info('RabbitMQ connection closed');
+  } catch (error) {
+    Logger.error('Error closing RabbitMQ connection', error);
+  }
+
+  process.exit(0);
 });
 
 export default app;
