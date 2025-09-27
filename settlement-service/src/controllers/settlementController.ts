@@ -582,7 +582,7 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
           'Authorization': req.headers.authorization || '',
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ status: 'completed' })
+        body: JSON.stringify({ status: 'awaiting_payment' })
       });
 
       if (updateEventResponse.ok) {

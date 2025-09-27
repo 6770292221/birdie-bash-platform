@@ -245,21 +245,21 @@ const CalculatePage = () => {
 
       console.log('Event update successful');
 
-      // Step 2: Calculate settlement (preview mode)
-      console.log('Step 2: Calculating settlement...');
-      const calculateResponse = await apiClient.calculateSettlement(selectedEventId);
+      // Step 2: Issue settlement (save to DB and process charges)
+      console.log('Step 2: Issuing settlement...');
+      const issueResponse = await apiClient.issueSettlement(selectedEventId);
 
-      console.log('Settlement calculation response:', calculateResponse);
+      console.log('Settlement issue response:', issueResponse);
 
-      if (!calculateResponse.success) {
-        console.error('Settlement calculation failed:', calculateResponse.error);
-        throw new Error(calculateResponse.error || 'ไม่สามารถคำนวณค่าใช้จ่ายได้');
+      if (!issueResponse.success) {
+        console.error('Settlement issue failed:', issueResponse.error);
+        throw new Error(issueResponse.error || 'ไม่สามารถดำเนินการเก็บเงินได้');
       }
 
-      // Step 3: Display calculation results
-      if (calculateResponse.success && calculateResponse.data && (calculateResponse.data as any).calculationResults) {
+      // Step 3: Display settlement results
+      if (issueResponse.success && issueResponse.data && (issueResponse.data as any).calculationResults) {
         // Transform settlement API response to breakdown format
-        const transformedData: CostBreakdownItem[] = (calculateResponse.data as any).calculationResults.map((item: any) => ({
+        const transformedData: CostBreakdownItem[] = (issueResponse.data as any).calculationResults.map((item: any) => ({
           playerId: item.playerId,
           name: item.name || 'ไม่ระบุชื่อ',
           userType: item.role === 'member' ? 'member' : 'guest',
@@ -270,17 +270,19 @@ const CalculatePage = () => {
           shuttlecockFee: item.shuttlecockFee || 0,
           fine: item.penaltyFee || 0,
           total: item.totalAmount || 0,
-          isPaid: item.paymentStatus === 'completed' || false
+          isPaid: item.paymentStatus === 'completed' || item.paymentStatus === 'paid' || false
         }));
 
         setBreakdown(transformedData);
         setIsCalculated(true);
 
-        const totalAmount = (calculateResponse.data as any).totalCollected || 0;
+        const totalAmount = (issueResponse.data as any).totalCollected || 0;
+        const successfulCharges = (issueResponse.data as any).successfulCharges || 0;
+        const failedCharges = (issueResponse.data as any).failedCharges || 0;
 
         toast({
-          title: 'คำนวณสำเร็จ! 🎉',
-          description: `คำนวณค่าใช้จ่ายสำหรับ ${transformedData.length} คน ยอดรวม ฿${totalAmount.toFixed(2)}`,
+          title: 'บันทึกและเก็บเงินสำเร็จ! 🎉',
+          description: `เก็บเงินสำเร็จ ${successfulCharges} คน, ล้มเหลว ${failedCharges} คน, รวมเก็บได้ ฿${totalAmount.toFixed(2)}`,
         });
       } else {
         throw new Error('Invalid response format from settlement API');
@@ -475,7 +477,7 @@ const CalculatePage = () => {
             )}
 
             {/* Calculate Button */}
-            {eventDetail && players.length > 0 && !isCalculated && shuttlecockCount.trim() !== '' && !isNaN(parseInt(shuttlecockCount)) && parseInt(shuttlecockCount) > 0 && (
+            {/* {eventDetail && players.length > 0 && !isCalculated && shuttlecockCount.trim() !== '' && !isNaN(parseInt(shuttlecockCount)) && parseInt(shuttlecockCount) > 0 && (
               <div className="flex justify-center">
                 <Button
                   onClick={submitCalculation}
@@ -485,17 +487,17 @@ const CalculatePage = () => {
                   {isSubmitting ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      กำลังดำเนินการ...
+                      กำลังคำนวณ...
                     </>
                   ) : (
                     <>
                       <Receipt className="w-4 h-4 mr-2" />
-                      คำนวณและเก็บเงิน
+                      บันทึกและเก็บเงิน
                     </>
                   )}
                 </Button>
               </div>
-            )}
+            )} */}
 
 
             {isCalculated && breakdown.length > 0 && (
@@ -662,7 +664,7 @@ const CalculatePage = () => {
                       ) : (
                         <>
                           <Receipt className="w-4 h-4 mr-2" />
-                          คำนวณและเก็บเงิน
+                          บันทึกและเก็บเงิน
                         </>
                       )}
                     </Button>
