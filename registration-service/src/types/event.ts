@@ -61,6 +61,7 @@ export interface IPlayer {
   registrationTime: Date;
   status: PlayerStatus;
   userType: UserType;
+  isPenalty: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
