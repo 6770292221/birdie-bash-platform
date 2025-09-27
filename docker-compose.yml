@@ -127,6 +127,7 @@ services:
       - RABBIT_URL=amqp://admin:password123@rabbitmq:5672
       - RABBIT_EXCHANGE=events
       - ENABLE_CAPACITY_WORKER=true
+      - REGISTRATION_SERVICE_URL=http://registration-service:3005
     depends_on:
       mongodb:
         condition: service_started

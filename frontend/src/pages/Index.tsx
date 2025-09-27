@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import NotificationDropdown from '@/components/NotificationDropdown';
+import LanguageToggle from '@/components/LanguageToggle';
 import { LanguageProvider, useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Link, useNavigate } from 'react-router-dom';
@@ -37,6 +38,7 @@ const IndexContent = () => {
   const [eventsLoading, setEventsLoading] = useState(false);
   const [events, setEvents] = useState<any[]>([]);
   const [completedEvents, setCompletedEvents] = useState<any[]>([]);
+  const [userRegistrations, setUserRegistrations] = useState<any[]>([]);
   const notificationRef = useRef<HTMLDivElement>(null);
 
   // Search state
@@ -50,23 +52,42 @@ const IndexContent = () => {
     if (!user) return; // require auth
     setEventsLoading(true);
 
-    // Build query parameters
-    const params: any = { limit: 50, offset: 0 };
-    if (searchFilters.eventName) params.eventName = searchFilters.eventName;
-    if (searchFilters.date) params.date = searchFilters.date;
-    if (searchFilters.status) params.status = searchFilters.status;
+    if (isAdmin) {
+      // Admin: Get all events
+      const params: any = { limit: 50, offset: 0 };
+      if (searchFilters.eventName) params.eventName = searchFilters.eventName;
+      if (searchFilters.date) params.date = searchFilters.date;
+      if (searchFilters.status) params.status = searchFilters.status;
 
-    const res = await apiClient.getEvents(params);
-    if (res.success) {
-      const data = (res.data as any);
-      const allEvents = data.events || data;
-      // Split events into active and completed/canceled
-      const activeEvents = allEvents.filter((ev: any) => ev.status !== 'completed' && ev.status !== 'canceled');
-      const finishedEvents = allEvents.filter((ev: any) => ev.status === 'completed' || ev.status === 'canceled');
-      setEvents(activeEvents);
-      setCompletedEvents(finishedEvents);
+      const res = await apiClient.getEvents(params);
+      if (res.success) {
+        const data = (res.data as any);
+        const allEvents = data.events || data;
+        // Split events into active and completed/canceled
+        const activeEvents = allEvents.filter((ev: any) => ev.status !== 'completed' && ev.status !== 'canceled');
+        const finishedEvents = allEvents.filter((ev: any) => ev.status === 'completed' || ev.status === 'canceled');
+        setEvents(activeEvents);
+        setCompletedEvents(finishedEvents);
+      } else {
+        toast({ title: 'ดึงรายการอีเวนต์ไม่สำเร็จ', description: res.error, variant: 'destructive' });
+      }
     } else {
-      toast({ title: 'ดึงรายการอีเวนต์ไม่สำเร็จ', description: res.error, variant: 'destructive' });
+      // Regular user: Get events and user registrations
+      const eventsRes = await apiClient.getEvents({ limit: 50, offset: 0 });
+      if (eventsRes.success) {
+        const data = (eventsRes.data as any);
+        const allEvents = data.events || data;
+        const activeEvents = allEvents.filter((ev: any) => ev.status !== 'completed' && ev.status !== 'canceled');
+        setEvents(activeEvents);
+      }
+
+      // Get user registrations for activity count
+      const registrationsRes = await apiClient.getUserRegistrations({ includeCanceled: true });
+      if (registrationsRes.success) {
+        const data = (registrationsRes.data as any);
+        const registrations = data.registrations || [];
+        setUserRegistrations(registrations);
+      }
     }
     setEventsLoading(false);
   };
@@ -74,7 +95,7 @@ const IndexContent = () => {
   useEffect(() => {
     fetchEvents();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, searchFilters]);
+  }, [user, isAdmin, searchFilters]);
 
   const statusCounts = useMemo(() => {
     const base: Record<EventStatusType, number> = {
@@ -137,15 +158,7 @@ const IndexContent = () => {
             <div className="grid grid-cols-3 items-center mb-4">
               <div className="justify-self-start">
                 <div className="flex items-center gap-2">
-                  <Button
-                    onClick={() => setLanguage(language === 'th' ? 'en' : 'th')}
-                    variant="outline"
-                    size="sm"
-                    className="bg-white/80 backdrop-blur-sm border-gray-200 hover:bg-white shadow-md hover:shadow-lg transition-all duration-200 flex items-center gap-2"
-                  >
-                    <span className="text-lg">{language === 'th' ? '🇹🇭' : '🇺🇸'}</span>
-                    <span className="font-medium text-sm">{language === 'th' ? 'ไทย' : 'EN'}</span>
-                  </Button>
+                  <LanguageToggle />
                 </div>
               </div>
 
@@ -163,19 +176,7 @@ const IndexContent = () => {
                 </Button>
               </div>
             </div>
-          ) : (
-            <div className="flex justify-end mb-4">
-              <Button
-                onClick={() => setLanguage(language === 'th' ? 'en' : 'th')}
-                variant="outline"
-                size="sm"
-                className="bg-white/80 backdrop-blur-sm border-gray-200 hover:bg-white shadow-md hover:shadow-lg transition-all duration-200 flex items-center gap-2"
-              >
-                <span className="text-lg">{language === 'th' ? '🇹🇭' : '🇺🇸'}</span>
-                <span className="font-medium text-sm">{language === 'th' ? 'ไทย' : 'EN'}</span>
-              </Button>
-            </div>
-          )}
+          ) : null}
 
           {/* User Info */}
           {user && (
@@ -224,6 +225,10 @@ const IndexContent = () => {
         {/* Guest Hero Section */}
         {!user && (
           <div className="relative mb-8 overflow-hidden rounded-3xl border border-white/20 bg-gradient-to-br from-white/90 via-blue-50/80 to-emerald-50/80 shadow-2xl backdrop-blur-sm">
+            {/* Language Toggle for guests */}
+            <div className="absolute top-4 right-4 z-10">
+              <LanguageToggle />
+            </div>
             <div className="pointer-events-none absolute -left-40 top-10 h-80 w-80 rounded-full bg-emerald-400/20 blur-3xl animate-pulse" />
             <div className="pointer-events-none absolute -right-24 -bottom-24 h-96 w-96 rounded-full bg-indigo-400/20 blur-[140px] animate-pulse" style={{ animationDelay: '1s' }} />
             <div className="pointer-events-none absolute top-20 right-40 h-32 w-32 rounded-full bg-purple-400/15 blur-2xl animate-pulse" style={{ animationDelay: '2s' }} />
@@ -415,7 +420,7 @@ const IndexContent = () => {
                             </span>
                             <div>
                               <p className="font-medium text-gray-800">{item.label}</p>
-                              <p className="text-xs text-gray-500">คิดเป็น {totalEventsCount ? Math.round((item.value / totalEventsCount) * 100) : 0}% ของทั้งหมด</p>
+                              <p className="text-xs text-gray-500">{t('chart.percentage_of_total', { percentage: totalEventsCount ? Math.round((item.value / totalEventsCount) * 100) : 0 })}</p>
                             </div>
                           </div>
                           <span className="text-lg font-semibold text-gray-900">{item.value}</span>
@@ -530,11 +535,11 @@ const IndexContent = () => {
               </CardContent>
             </Card>
 
-            <Card className="bg-white/90 backdrop-blur-md border-0 shadow-lg hover:shadow-2xl cursor-pointer transition-all duration-300 hover:-translate-y-1 overflow-hidden" onClick={() => navigate('/history')} role="button">
+            <Card className="bg-white/90 backdrop-blur-md border-0 shadow-lg hover:shadow-2xl cursor-pointer transition-all duration-300 hover:-translate-y-1 overflow-hidden" onClick={() => navigate('/activity/history')} role="button">
               <CardContent className="p-4 text-center">
                 <History className="h-8 w-8 text-purple-600 mx-auto mb-2" />
                 <p className="font-semibold text-gray-900">{t('nav.activity_history')}</p>
-                <p className="text-sm text-gray-600">{t('nav.activity_history_desc')} ({completedEvents.length})</p>
+                <p className="text-sm text-gray-600">{t('nav.activity_history_desc')} ({userRegistrations.length})</p>
               </CardContent>
             </Card>
           </div>

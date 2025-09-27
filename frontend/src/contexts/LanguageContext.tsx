@@ -1,12 +1,12 @@
 
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 
 type Language = 'th' | 'en';
 
 interface LanguageContextType {
   language: Language;
   setLanguage: (lang: Language) => void;
-  t: (key: string) => string;
+  t: (key: string, variables?: Record<string, string | number>) => string;
 }
 
 const translations = {
@@ -131,6 +131,18 @@ const translations = {
     'nav.activity_history_desc': 'ดูประวัติอีเวนต์',
     'nav.back_home': 'กลับหน้าหลัก',
 
+    // History page
+    'history.title': 'ประวัติอีเวนต์',
+    'history.subtitle': 'ดูประวัติอีเวนต์ที่เสร็จสิ้นและยกเลิกแล้ว',
+    'history.total': 'ทั้งหมด {count} อีเวนต์',
+    'history.loading': 'กำลังโหลดประวัติ...',
+    'history.empty_title': 'ยังไม่มีประวัติอีเวนต์',
+    'history.empty_desc': 'เมื่อมีอีเวนต์ที่เสร็จสิ้นหรือยกเลิก จะแสดงที่นี่',
+    'history.view_current': 'ดูอีเวนต์ปัจจุบัน',
+    'history.view_details': 'ดูรายละเอียด',
+    'history.location': 'สถานที่',
+    'history.participants': 'ผู้เข้าร่วม',
+
     // Login/Register Forms
     'login.title': 'เข้าสู่ระบบ',
     'login.subtitle': 'เข้าสู่ระบบเพื่อจัดการแบดมินตันของคุณ',
@@ -241,7 +253,7 @@ const translations = {
     'event.no_registered_players': 'ไม่มีผู้เล่นที่ลงทะเบียน',
     'event.member': 'สมาชิक',
     'event.guest': 'แขก',
-    'event.cancel_registration': 'ยกเลิกการลงทะเบียน',
+    'event.cancel_registration': 'ยกเลิก',
     'event.waitlist': 'รายชื่อสำรอง',
     'event.no_waitlist': 'ไม่มีรายชื่อสำรอง',
     'event.register_to_join': 'ลงทะเบียนเข้าร่วมกิจกรรม',
@@ -256,9 +268,128 @@ const translations = {
     'event.select_custom_time': 'เลือกเวลาเอง',
     'event.auto_name_info': 'ระบบจะสุ่มชื่อให้อัตโนมัติ',
     'event.select_play_time_instruction': 'กรุณาเลือกเวลาที่ต้องการเล่น',
-    'event.registering': 'กำลังลงทะเบียน...',
+    'event.registering': 'กำลังลงทะเบียน กรุณารอ...',
     'event.register': 'ลงทะเบียน',
-    'event.back_to_home': 'กลับหน้าหลัก'
+    'event.back_to_home': 'กลับหน้าหลัก',
+
+    // TimePicker
+    'timepicker.hour': 'ชั่วโมง',
+    'timepicker.minute': 'นาที',
+
+    // Badge labels
+    'badge.hours': 'ชั่วโมง',
+    'badge.players': 'คน',
+    'badge.canceled': 'ยกเลิก',
+    'badge.estimated': 'ประมาณ',
+    'badge.cannot_calculate': 'คำนวณไม่ได้',
+    'badge.waitlist_open': 'เปิดสำรอง',
+    'badge.waitlist_closed': 'ปิดสำรอง',
+
+    // Placeholders
+    'placeholder.player_name': 'กรุณาระบุชื่อผู้เล่น',
+    'placeholder.phone_number': '0812345678',
+
+    // Chart statistics
+    'chart.percentage_of_total': 'คิดเป็น {percentage}% ของทั้งหมด',
+
+    // History page
+    'history.fetch_failed': 'ดึงประวัติไม่สำเร็จ',
+    'history.fetch_error': 'ไม่สามารถดึงข้อมูลประวัติได้',
+    'history.your_play_time': 'เวลาเล่นของคุณ',
+
+    // Activity History page
+    'activity.title': 'ประวัติกิจกรรมของฉัน',
+    'activity.subtitle': 'ดูประวัติการเข้าร่วมกิจกรรมแบดมินตันของคุณ',
+    'activity.total': 'ทั้งหมด {count} กิจกรรม',
+    'activity.empty_title': 'ยังไม่มีประวัติกิจกรรม',
+    'activity.empty_desc': 'คุณยังไม่ได้เข้าร่วมกิจกรรมใด ๆ',
+    'activity.browse_events': 'เรียกดูกิจกรรม',
+    'activity.location': 'สถานที่',
+    'activity.play_time': 'เวลาเล่นของคุณ',
+    'activity.registration_type': 'ประเภทการลงทะเบียน',
+    'activity.view_event': 'ดูรายละเอียด',
+
+    // Common
+    'common.error': 'เกิดข้อผิดพลาด',
+    'common.loading': 'กำลังโหลด...',
+
+    // Loading messages
+    'loading.cancelling_registration': 'กำลังยกเลิกการลงทะเบียน',
+    'loading.please_wait': 'กรุณารอสักครู่',
+    'loading.page_will_refresh': 'หน้าเว็บจะรีเฟรชหลังเสร็จสิ้น',
+    'loading.registering_player': 'กำลังลงทะเบียนผู้เล่น',
+    'loading.saving_registration_data': 'กำลังบันทึกข้อมูลการลงทะเบียน',
+    'loading.list_will_update_automatically': 'รายชื่อจะอัปเดตอัตโนมัติ',
+    'loading.adding_guest_player': 'กำลังเพิ่มผู้เล่นแขก',
+    'loading.saving_guest_data': 'กำลังบันทึกข้อมูลแขก',
+    'loading.player_list_will_update': 'รายชื่อผู้เล่นจะอัปเดต',
+
+    // Error messages
+    'error.registration_failed': 'การลงทะเบียนไม่สำเร็จ',
+    'error.load_event_failed': 'โหลดข้อมูลอีเวนต์ไม่สำเร็จ',
+    'error.save_failed': 'บันทึกข้อมูลไม่สำเร็จ',
+    'error.delete_event_failed': 'ลบอีเวนต์ไม่สำเร็จ',
+    'error.add_player_failed': 'เพิ่มผู้เล่นไม่สำเร็จ',
+    'error.cancel_player_failed': 'ยกเลิกผู้เล่นไม่สำเร็จ',
+    'error.unknown': 'เกิดข้อผิดพลาดไม่ทราบสาเหตุ',
+
+    // User registration status
+    'user.already_registered': 'คุณลงทะเบียนแล้ว',
+    'user.confirmed_status': 'ยืนยันแล้ว',
+    'user.waitlist_status': 'รอสำรอง',
+    'user.confirmed_registration': 'ยืนยันการลงทะเบียน',
+    'user.on_waitlist': 'อยู่ในรายชื่อสำรอง',
+    'user.play_time_display': 'เวลาเล่น',
+    'user.status_display': 'สถานะ',
+    'user.select_play_time': 'เลือกเวลาเล่น',
+    'user.player_list': 'รายชื่อผู้เล่น',
+    'user.view_participants': 'ดูรายชื่อผู้เข้าร่วมกิจกรรม',
+    'user.you_badge': 'คุณ',
+    'user.member_badge': 'สมาชิก',
+    'user.guest_badge': 'แขก',
+    'user.no_name_display': 'ไม่ระบุชื่อ',
+
+    // Registration closed messages for users
+    'user.registration_closed_calculating': 'ปิดรับลงทะเบียนแล้ว - กำลังคำนวณผล',
+    'user.registration_closed_awaiting_payment': 'ปิดรับลงทะเบียนแล้ว - รอการชำระเงิน',
+    'user.registration_closed_completed': 'ปิดรับลงทะเบียนแล้ว - กิจกรรมเสร็จสิ้น',
+    'user.registration_closed_canceled': 'ปิดรับลงทะเบียนแล้ว - กิจกรรมยกเลิก',
+    'user.registration_closed_in_progress': 'ปิดรับลงทะเบียนแล้ว - กิจกรรมกำลังดำเนินการ',
+    'user.registration_closed_calculating_desc': 'กิจกรรมนี้กำลังคำนวณผลลัพธ์ ไม่สามารถลงทะเบียนได้แล้ว',
+    'user.registration_closed_awaiting_payment_desc': 'กิจกรรมนี้รอการยืนยันการชำระเงิน ไม่สามารถลงทะเบียนได้แล้ว',
+    'user.registration_closed_completed_desc': 'กิจกรรมนี้เสร็จสิ้นแล้ว ไม่สามารถลงทะเบียนได้แล้ว',
+    'user.registration_closed_canceled_desc': 'กิจกรรมนี้ถูกยกเลิก ไม่สามารถลงทะเบียนได้แล้ว',
+    'user.registration_closed_in_progress_desc': 'กิจกรรมนี้กำลังดำเนินการอยู่ ไม่สามารถลงทะเบียนได้แล้ว',
+
+    // Registration closed messages for guests
+    'guest.registration_closed_calculating': 'ปิดรับแขกแล้ว - กำลังคำนวณผล',
+    'guest.registration_closed_awaiting_payment': 'ปิดรับแขกแล้ว - รอการชำระเงิน',
+    'guest.registration_closed_completed': 'ปิดรับแขกแล้ว - กิจกรรมเสร็จสิ้น',
+    'guest.registration_closed_canceled': 'ปิดรับแขกแล้ว - กิจกรรมยกเลิก',
+    'guest.registration_closed_in_progress': 'ปิดรับแขกแล้ว - กิจกรรมกำลังดำเนินการ',
+    'guest.registration_closed_calculating_desc': 'กิจกรรมนี้กำลังคำนวณผลลัพธ์ ไม่สามารถเพิ่มแขกได้แล้ว',
+    'guest.registration_closed_awaiting_payment_desc': 'กิจกรรมนี้รอการยืนยันการชำระเงิน ไม่สามารถเพิ่มแขกได้แล้ว',
+    'guest.registration_closed_completed_desc': 'กิจกรรมนี้เสร็จสิ้นแล้ว ไม่สามารถเพิ่มแขกได้แล้ว',
+    'guest.registration_closed_canceled_desc': 'กิจกรรมนี้ถูกยกเลิก ไม่สามารถเพิ่มแขกได้แล้ว',
+    'guest.registration_closed_in_progress_desc': 'กิจกรรมนี้กำลังดำเนินการอยู่ ไม่สามารถเพิ่มแขกได้แล้ว',
+
+    // Form validation messages
+    'validation.required_event_name': 'กรุณากรอกชื่ออีเวนต์',
+    'validation.required_event_date': 'กรุณาเลือกวันที่จัดงาน',
+    'validation.required_venue': 'กรุณาเลือกสถานที่เล่นแบดมินตัน',
+    'validation.required_court': 'กรุณาเพิ่มอย่างน้อย 1 สนาม',
+    'validation.positive_shuttlecock_price': 'ราคาลูกแบดต้องไม่ติดลบ',
+
+    // Form elements
+    'form.loading_venues': 'กำลังโหลดสถานที่...',
+    'form.select_venue': 'เลือกสถานที่เล่นแบดมินตัน',
+    'form.no_venues_found': 'ไม่พบสถานที่',
+    'form.enable_waitlist': 'เปิดรับ Waitlist (คิวสำรอง)',
+    'form.update_event': 'อัพเดทอีเวนต์',
+
+    // Events
+    'events.edit': 'แก้ไขอีเวนต์',
+    'events.edit_description': 'แก้ไขข้อมูลอีเวนต์'
   },
   en: {
     'app.title': 'Birdie Bash',
@@ -381,6 +512,18 @@ const translations = {
     'nav.activity_history_desc': 'View event history',
     'nav.back_home': 'Back to Home',
 
+    // History page
+    'history.title': 'Event History',
+    'history.subtitle': 'Review completed and canceled events',
+    'history.total': '{count} events in total',
+    'history.loading': 'Loading history...',
+    'history.empty_title': 'No event history yet',
+    'history.empty_desc': 'Completed or canceled events will appear here once available.',
+    'history.view_current': 'View current events',
+    'history.view_details': 'View details',
+    'history.location': 'Location',
+    'history.participants': 'Participants',
+
     // Login/Register Forms
     'login.title': 'Login',
     'login.subtitle': 'Sign in to manage your badminton activities',
@@ -491,7 +634,7 @@ const translations = {
     'event.no_registered_players': 'No registered players',
     'event.member': 'Member',
     'event.guest': 'Guest',
-    'event.cancel_registration': 'Cancel Registration',
+    'event.cancel_registration': 'Cancel',
     'event.waitlist': 'Waitlist',
     'event.no_waitlist': 'No waitlist',
     'event.register_to_join': 'Register for Event',
@@ -506,23 +649,183 @@ const translations = {
     'event.select_custom_time': 'Select Custom Time',
     'event.auto_name_info': 'System will generate name automatically',
     'event.select_play_time_instruction': 'Please select your play time',
-    'event.registering': 'Registering...',
+    'event.registering': 'Registering, please wait...',
     'event.register': 'Register',
-    'event.back_to_home': 'Back to Home'
+    'event.back_to_home': 'Back to Home',
+
+    // TimePicker
+    'timepicker.hour': 'Hour',
+    'timepicker.minute': 'Minute',
+
+    // Badge labels
+    'badge.hours': 'Hours',
+    'badge.players': 'People',
+    'badge.canceled': 'Cancel',
+    'badge.estimated': 'Est.',
+    'badge.cannot_calculate': 'Cannot calculate',
+    'badge.waitlist_open': 'Waitlist Open',
+    'badge.waitlist_closed': 'Waitlist Closed',
+
+    // Placeholders
+    'placeholder.player_name': 'Please enter player name',
+    'placeholder.phone_number': '0812345678',
+
+    // Chart statistics
+    'chart.percentage_of_total': '{percentage}% of total',
+
+    // History page
+    'history.fetch_failed': 'Failed to fetch history',
+    'history.fetch_error': 'Unable to retrieve history data',
+    'history.your_play_time': 'Your Play Time',
+
+    // Activity History page
+    'activity.title': 'My Activity History',
+    'activity.subtitle': 'View your badminton activity participation history',
+    'activity.total': 'Total {count} activities',
+    'activity.empty_title': 'No Activity History',
+    'activity.empty_desc': 'You haven\'t participated in any activities yet',
+    'activity.browse_events': 'Browse Events',
+    'activity.location': 'Location',
+    'activity.play_time': 'Your Play Time',
+    'activity.registration_type': 'Registration Type',
+    'activity.view_event': 'View Details',
+
+    // Common
+    'common.error': 'Error occurred',
+    'common.loading': 'Loading...',
+
+    // Loading messages
+    'loading.cancelling_registration': 'Cancelling Registration',
+    'loading.please_wait': 'Please wait',
+    'loading.page_will_refresh': 'Page will refresh when complete',
+    'loading.registering_player': 'Registering Player',
+    'loading.saving_registration_data': 'Saving Registration Data',
+    'loading.list_will_update_automatically': 'List will update automatically',
+    'loading.adding_guest_player': 'Adding Guest Player',
+    'loading.saving_guest_data': 'Saving Guest Data',
+    'loading.player_list_will_update': 'Player List Will Update',
+
+    // Error messages
+    'error.registration_failed': 'Registration Failed',
+    'error.load_event_failed': 'Failed to Load Event',
+    'error.save_failed': 'Save Failed',
+    'error.delete_event_failed': 'Failed to Delete Event',
+    'error.add_player_failed': 'Failed to Add Player',
+    'error.cancel_player_failed': 'Failed to Cancel Player',
+    'error.unknown': 'Unknown Error',
+
+    // User registration status
+    'user.already_registered': 'You are registered',
+    'user.confirmed_status': 'Confirmed',
+    'user.waitlist_status': 'Waitlist',
+    'user.confirmed_registration': 'Registration Confirmed',
+    'user.on_waitlist': 'On Waitlist',
+    'user.play_time_display': 'Play Time',
+    'user.status_display': 'Status',
+    'user.select_play_time': 'Select Play Time',
+    'user.player_list': 'Player List',
+    'user.view_participants': 'View event participants',
+    'user.you_badge': 'You',
+    'user.member_badge': 'Member',
+    'user.guest_badge': 'Guest',
+    'user.no_name_display': 'No name specified',
+
+    // Registration closed messages for users
+    'user.registration_closed_calculating': 'Registration Closed - Calculating Results',
+    'user.registration_closed_awaiting_payment': 'Registration Closed - Awaiting Payment',
+    'user.registration_closed_completed': 'Registration Closed - Event Completed',
+    'user.registration_closed_canceled': 'Registration Closed - Event Canceled',
+    'user.registration_closed_in_progress': 'Registration Closed - Event In Progress',
+    'user.registration_closed_calculating_desc': 'This event is currently calculating results. Registration is no longer available.',
+    'user.registration_closed_awaiting_payment_desc': 'This event is awaiting payment confirmation. Registration is no longer available.',
+    'user.registration_closed_completed_desc': 'This event has been completed. Registration is no longer available.',
+    'user.registration_closed_canceled_desc': 'This event has been canceled. Registration is no longer available.',
+    'user.registration_closed_in_progress_desc': 'This event is currently in progress. Registration is no longer available.',
+
+    // Registration closed messages for guests
+    'guest.registration_closed_calculating': 'Guest Registration Closed - Calculating Results',
+    'guest.registration_closed_awaiting_payment': 'Guest Registration Closed - Awaiting Payment',
+    'guest.registration_closed_completed': 'Guest Registration Closed - Event Completed',
+    'guest.registration_closed_canceled': 'Guest Registration Closed - Event Canceled',
+    'guest.registration_closed_in_progress': 'Guest Registration Closed - Event In Progress',
+    'guest.registration_closed_calculating_desc': 'This event is currently calculating results. Adding guests is no longer available.',
+    'guest.registration_closed_awaiting_payment_desc': 'This event is awaiting payment confirmation. Adding guests is no longer available.',
+    'guest.registration_closed_completed_desc': 'This event has been completed. Adding guests is no longer available.',
+    'guest.registration_closed_canceled_desc': 'This event has been canceled. Adding guests is no longer available.',
+    'guest.registration_closed_in_progress_desc': 'This event is currently in progress. Adding guests is no longer available.',
+
+    // Form validation messages
+    'validation.required_event_name': 'Please enter event name',
+    'validation.required_event_date': 'Please select event date',
+    'validation.required_venue': 'Please select a badminton venue',
+    'validation.required_court': 'Please add at least 1 court',
+    'validation.positive_shuttlecock_price': 'Shuttlecock price must be positive',
+
+    // Form elements
+    'form.loading_venues': 'Loading venues...',
+    'form.select_venue': 'Select a badminton venue',
+    'form.no_venues_found': 'No venues found',
+    'form.enable_waitlist': 'Enable Waitlist (Queue)',
+    'form.update_event': 'Update Event',
+
+    // Events
+    'events.edit': 'Edit Event',
+    'events.edit_description': 'Edit event information'
   }
 };
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
-export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [language, setLanguage] = useState<Language>('en');
+// Cookie helper functions
+const LANGUAGE_COOKIE_KEY = 'birdie-bash-language';
 
-  const t = (key: string): string => {
-    return translations[language][key] || key;
+const getCookieLanguage = (): Language => {
+  if (typeof document !== 'undefined') {
+    const cookies = document.cookie.split(';');
+    const languageCookie = cookies.find(cookie =>
+      cookie.trim().startsWith(`${LANGUAGE_COOKIE_KEY}=`)
+    );
+    if (languageCookie) {
+      const value = languageCookie.split('=')[1];
+      if (value === 'th' || value === 'en') {
+        return value as Language;
+      }
+    }
+  }
+  return 'en'; // default
+};
+
+const setCookieLanguage = (language: Language) => {
+  if (typeof document !== 'undefined') {
+    // Set cookie to expire in 1 year
+    const expires = new Date();
+    expires.setFullYear(expires.getFullYear() + 1);
+    document.cookie = `${LANGUAGE_COOKIE_KEY}=${language}; expires=${expires.toUTCString()}; path=/`;
+  }
+};
+
+export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [language, setLanguage] = useState<Language>(() => getCookieLanguage());
+
+  const handleSetLanguage = (newLanguage: Language) => {
+    setLanguage(newLanguage);
+    setCookieLanguage(newLanguage);
+  };
+
+  const t = (key: string, variables?: Record<string, string | number>): string => {
+    let text = translations[language][key] || key;
+
+    if (variables) {
+      Object.entries(variables).forEach(([varKey, value]) => {
+        text = text.replace(`{${varKey}}`, String(value));
+      });
+    }
+
+    return text;
   };
 
   return (
-    <LanguageContext.Provider value={{ language, setLanguage, t }}>
+    <LanguageContext.Provider value={{ language, setLanguage: handleSetLanguage, t }}>
       {children}
     </LanguageContext.Provider>
   );

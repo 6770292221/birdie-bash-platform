@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
@@ -6,7 +7,8 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { apiClient } from '@/utils/api';
 import { useAuth } from '@/contexts/AuthContext';
-import { QrCode, CreditCard, Clock, CheckCircle } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { QrCode, CreditCard, Clock, CheckCircle, ArrowLeft } from 'lucide-react';
 
 interface PaymentItem {
   id: string;
@@ -24,6 +26,8 @@ interface PaymentItem {
 const PaymentsPage = () => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { t } = useLanguage();
+  const navigate = useNavigate();
 
   const [events, setEvents] = useState<any[]>([]);
   const [eventId, setEventId] = useState<string>('');
@@ -102,7 +106,20 @@ const PaymentsPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-green-50 py-6 px-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-green-50 py-6 px-4 relative">
+      {/* Back to Home Button */}
+      <div className="absolute top-4 left-4 z-10">
+        <Button
+          onClick={() => navigate('/')}
+          variant="outline"
+          size="sm"
+          className="bg-white/80 hover:bg-white border-gray-300 text-gray-700 hover:text-gray-900 shadow-lg backdrop-blur-sm"
+        >
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          {t('nav.back_home')}
+        </Button>
+      </div>
+
       <div className="max-w-2xl mx-auto space-y-6">
         {/* Header */}
         <div className="text-center">

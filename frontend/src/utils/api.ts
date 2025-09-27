@@ -130,8 +130,41 @@ class ApiClient {
       const statusText = axErr.response?.status
         ? `HTTP ${axErr.response.status}`
         : "Network error";
-      const message = (axErr.response?.data as any)?.message || axErr.message || statusText;
-      return { success: false, error: message };
+
+      const responseData = axErr.response?.data as any;
+      let errorMessage = responseData?.message || axErr.message || statusText;
+
+      // Only use details if there's no message
+      if (!responseData?.message && responseData?.details) {
+        if (typeof responseData.details === 'string') {
+          errorMessage = responseData.details;
+        } else if (typeof responseData.details === 'object') {
+          // Extract specific error messages from details object
+          const detailValues = Object.values(responseData.details);
+          if (detailValues.length > 0) {
+            // Find the first string value in details
+            const firstDetailMessage = detailValues.find(v => typeof v === 'string');
+            if (firstDetailMessage) {
+              errorMessage = firstDetailMessage;
+            } else {
+              // If details contain nested objects, try to extract meaningful messages
+              const nestedMessages = detailValues
+                .filter(v => typeof v === 'object' && v !== null)
+                .map(obj => {
+                  const objValues = Object.values(obj as any);
+                  return objValues.find(val => typeof val === 'string');
+                })
+                .filter(Boolean);
+
+              if (nestedMessages.length > 0) {
+                errorMessage = nestedMessages[0] as string;
+              }
+            }
+          }
+        }
+      }
+
+      return { success: false, error: errorMessage };
     }
   }
 
@@ -251,6 +284,18 @@ class ApiClient {
   ): Promise<ApiResponse<{ players: PlayerItem[] }>> {
     return this.request(`/api/registration/events/${eventId}/players`, {
       params,
+    });
+  }
+
+  async getUserRegistrations(
+    params?: { includeCanceled?: boolean }
+  ): Promise<ApiResponse<{ registrations: PlayerItem[] }>> {
+    const query: Record<string, any> = {};
+    if (typeof params?.includeCanceled === 'boolean') {
+      query.includeCanceled = params.includeCanceled;
+    }
+    return this.request(`/api/registration/users/registrations`, {
+      params: Object.keys(query).length ? query : undefined,
     });
   }
 

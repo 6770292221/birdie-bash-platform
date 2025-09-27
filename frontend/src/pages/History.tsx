@@ -9,9 +9,10 @@ import { useToast } from '@/hooks/use-toast';
 import { apiClient } from '@/utils/api';
 import { EventStatusType, getEventStatusLabel, getEventStatusColor } from '@/types/event';
 import { useLanguage } from '@/contexts/LanguageContext';
+import LanguageToggle from '@/components/LanguageToggle';
 
 const History = () => {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
   const { t } = useLanguage();
@@ -24,23 +25,69 @@ const History = () => {
       if (!user) return;
       setLoading(true);
 
-      const res = await apiClient.getEvents({ limit: 50, offset: 0 });
-      if (res.success) {
-        const data = (res.data as any);
-        const allEvents = data.events || data;
-        // Get only completed and canceled events
-        const finishedEvents = allEvents.filter((ev: any) =>
-          ev.status === 'completed' || ev.status === 'canceled'
-        );
-        // Sort by date (newest first)
-        finishedEvents.sort((a: any, b: any) =>
-          new Date(b.eventDate).getTime() - new Date(a.eventDate).getTime()
-        );
-        setCompletedEvents(finishedEvents);
-      } else {
+      try {
+        if (isAdmin) {
+          // Admin: Get all events
+          const res = await apiClient.getEvents({ limit: 50, offset: 0 });
+          if (res.success) {
+            const data = (res.data as any);
+            const allEvents = data.events || data;
+            // Get only completed and canceled events
+            const finishedEvents = allEvents.filter((ev: any) =>
+              ev.status === 'completed' || ev.status === 'canceled'
+            );
+            // Sort by date (newest first)
+            finishedEvents.sort((a: any, b: any) =>
+              new Date(b.eventDate).getTime() - new Date(a.eventDate).getTime()
+            );
+            setCompletedEvents(finishedEvents);
+          } else {
+            toast({
+              title: t('history.fetch_failed'),
+              description: res.error,
+              variant: 'destructive'
+            });
+          }
+        } else {
+          // Regular user: Get user registrations
+          const res = await apiClient.getUserRegistrations({ includeCanceled: true });
+          if (res.success) {
+            const data = (res.data as any);
+            const registrations = data.registrations || data;
+            // Transform registrations to match event format
+            const userEvents = registrations.map((reg: any) => ({
+              id: reg.eventId || reg._id,
+              eventName: reg.eventName || 'Unknown Event',
+              eventDate: reg.eventDate,
+              location: reg.location || reg.venue,
+              status: reg.status,
+              maxPlayers: reg.maxPlayers || 0,
+              currentParticipants: reg.currentParticipants || 0,
+              // Add user-specific data
+              userRegistration: {
+                playerId: reg.playerId,
+                status: reg.status,
+                startTime: reg.startTime,
+                endTime: reg.endTime
+              }
+            }));
+            // Sort by date (newest first)
+            userEvents.sort((a: any, b: any) =>
+              new Date(b.eventDate).getTime() - new Date(a.eventDate).getTime()
+            );
+            setCompletedEvents(userEvents);
+          } else {
+            toast({
+              title: t('history.fetch_failed'),
+              description: res.error,
+              variant: 'destructive'
+            });
+          }
+        }
+      } catch (error) {
         toast({
-          title: 'ดึงประวัติไม่สำเร็จ',
-          description: res.error,
+          title: t('common.error'),
+          description: t('history.fetch_error'),
           variant: 'destructive'
         });
       }
@@ -48,10 +95,16 @@ const History = () => {
     };
 
     fetchHistory();
-  }, [user, toast]);
+  }, [user, isAdmin, toast, t]);
 
   if (!user) {
     navigate('/login');
+    return null;
+  }
+
+  // Redirect regular users to activity history page
+  if (!isAdmin) {
+    navigate('/activity/history');
     return null;
   }
 
@@ -60,7 +113,7 @@ const History = () => {
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-green-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-lg text-gray-600">กำลังโหลดประวัติ...</p>
+          <p className="text-lg text-gray-600">{t('history.loading')}</p>
         </div>
       </div>
     );
@@ -71,15 +124,19 @@ const History = () => {
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="mb-8">
-          <div className="flex items-center gap-4 mb-6">
-            <Button
-              variant="outline"
-              onClick={() => navigate('/')}
-              className="flex items-center gap-2"
-            >
+          <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+            <div className="flex items-center gap-4">
+              <Button
+                variant="outline"
+                onClick={() => navigate('/')}
+                className="flex items-center gap-2"
+              >
               <ArrowLeft className="w-4 h-4" />
-              กลับหน้าหลัก
+              {t('nav.back_home')}
             </Button>
+          </div>
+
+          <LanguageToggle />
           </div>
 
           <div className="text-center">
@@ -88,14 +145,14 @@ const History = () => {
                 <HistoryIcon className="w-6 h-6 text-blue-600" />
               </div>
               <h1 className="text-3xl lg:text-4xl font-bold text-gray-900">
-                ประวัติอีเวนต์
+                {t('history.title')}
               </h1>
             </div>
             <p className="text-lg text-gray-600 mb-2">
-              ดูประวัติอีเวนต์ที่เสร็จสิ้นและยกเลิกแล้ว
+              {t('history.subtitle')}
             </p>
             <p className="text-sm text-gray-500">
-              ทั้งหมด {completedEvents.length} อีเวนต์
+              {t('history.total', { count: completedEvents.length })}
             </p>
           </div>
         </div>
@@ -106,14 +163,14 @@ const History = () => {
             <CardContent className="text-center py-16">
               <HistoryIcon className="w-16 h-16 mx-auto mb-6 text-gray-400" />
               <h3 className="text-xl font-semibold text-gray-700 mb-2">
-                ยังไม่มีประวัติอีเวนต์
+                {t('history.empty_title')}
               </h3>
               <p className="text-gray-500 mb-6">
-                เมื่อมีอีเวนต์ที่เสร็จสิ้นหรือยกเลิก จะแสดงที่นี่
+                {t('history.empty_desc')}
               </p>
               <Link to="/">
                 <Button className="bg-blue-600 hover:bg-blue-700">
-                  ดูอีเวนต์ปัจจุบัน
+                  {t('history.view_current')}
                 </Button>
               </Link>
             </CardContent>
@@ -160,42 +217,50 @@ const History = () => {
                         }`} />
                       </div>
                       <div className="flex-1">
-                        <p className="text-sm text-gray-500 mb-1">สถานที่</p>
+                        <p className="text-sm text-gray-500 mb-1">{t('history.location')}</p>
                         <p className="text-gray-800 font-medium">{ev.location}</p>
                       </div>
                     </div>
 
-                    {/* Participants */}
-                    <div className="flex items-start gap-3">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                        ev.status === 'completed' ? 'bg-blue-100' : 'bg-gray-200'
-                      }`}>
-                        <Users className={`w-4 h-4 ${
-                          ev.status === 'completed' ? 'text-blue-600' : 'text-gray-600'
-                        }`} />
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-sm text-gray-500 mb-1">ผู้เข้าร่วม</p>
-                        <div className="flex items-center justify-between gap-2">
+                    {/* Participants or User Play Time */}
+                    {isAdmin ? (
+                      <div className="flex items-start gap-3">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                          ev.status === 'completed' ? 'bg-blue-100' : 'bg-gray-200'
+                        }`}>
+                          <Users className={`w-4 h-4 ${
+                            ev.status === 'completed' ? 'text-blue-600' : 'text-gray-600'
+                          }`} />
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-sm text-gray-500 mb-1">{t('history.participants')}</p>
                           <p className="text-gray-800 font-medium">
                             {ev?.capacity?.currentParticipants ?? 0} / {ev?.capacity?.maxParticipants ?? 0}
                           </p>
-                          <Badge
-                            variant="outline"
-                            className={`text-xs ${
-                              ev.status === 'completed'
-                                ? 'text-green-600 border-green-300 bg-green-50'
-                                : 'text-red-600 border-red-300 bg-red-50'
-                            }`}
-                          >
-                            {ev.status === 'completed' ? 'สำเร็จ' : 'ยกเลิก'}
-                          </Badge>
                         </div>
                       </div>
-                    </div>
+                    ) : (
+                      ev.userRegistration && (
+                        <div className="flex items-start gap-3">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                            ev.status === 'completed' ? 'bg-purple-100' : 'bg-gray-200'
+                          }`}>
+                            <Calendar className={`w-4 h-4 ${
+                              ev.status === 'completed' ? 'text-purple-600' : 'text-gray-600'
+                            }`} />
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-sm text-gray-500 mb-1">{t('history.your_play_time')}</p>
+                            <p className="text-gray-800 font-medium">
+                              {ev.userRegistration.startTime || '-'} - {ev.userRegistration.endTime || '-'}
+                            </p>
+                          </div>
+                        </div>
+                      )
+                    )}
 
                     {/* Action Button */}
-                    <div className="pt-2">
+                    <div className="pt-2 space-y-3">
                       <Link to={`/events/${ev.id}`} className="block">
                         <Button
                           className={`w-full shadow-md hover:shadow-lg transition-all duration-200 text-white ${
@@ -206,7 +271,7 @@ const History = () => {
                           size="sm"
                         >
                           <span className="flex items-center justify-center gap-2">
-                            ดูรายละเอียด
+                            {t('history.view_details')}
                             {ev.status === 'completed' ? (
                               <CheckCircle className="w-4 h-4" />
                             ) : (
@@ -215,6 +280,17 @@ const History = () => {
                           </span>
                         </Button>
                       </Link>
+
+                      {ev.status === 'upcoming' && (
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          className="w-full"
+                          onClick={() => {/* cancel handler to implement */}}
+                        >
+                          {t('event.cancel')}
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </CardContent>

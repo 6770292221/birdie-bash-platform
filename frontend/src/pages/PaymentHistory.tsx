@@ -5,11 +5,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { mockPaymentHistory, mockNextPayoutNotice } from '@/data/mockPaymentHistory';
 
 const PaymentHistory = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { t } = useLanguage();
 
   useEffect(() => {
     if (!user) navigate('/login');
@@ -26,7 +28,7 @@ const PaymentHistory = () => {
         <div className="flex items-center justify-between">
           <Button variant="outline" onClick={() => navigate('/')} className="flex items-center gap-2">
             <ArrowLeft className="w-4 h-4" />
-            กลับหน้าหลัก
+            {t('nav.back_home')}
           </Button>
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center">

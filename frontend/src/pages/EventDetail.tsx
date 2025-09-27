@@ -19,7 +19,8 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import CreateEventForm from '@/components/CreateEventForm';
-import { Loader2, Calendar, MapPin, Users, Clock, DollarSign, Settings, UserPlus, Edit3, Trash2, Phone, Timer } from 'lucide-react';
+import LanguageToggle from '@/components/LanguageToggle';
+import { Loader2, Calendar, MapPin, Users, Clock, DollarSign, Settings, UserPlus, Edit3, Trash2, Phone, Timer, ArrowLeft } from 'lucide-react';
 
 interface Court { courtNumber: number; startTime: string; endTime: string }
 interface EventApi {
@@ -34,6 +35,39 @@ interface EventApi {
   courtHourlyRate: number;
   courts: Court[];
 }
+
+// Helper function to get available hours from court schedule
+const getAvailableHours = (courts: Court[], isStartTime: boolean = true): number[] => {
+  if (!courts || courts.length === 0) return [];
+
+  const allHours = new Set<number>();
+
+  courts.forEach(court => {
+    if (court.startTime && court.endTime) {
+      const startHour = parseInt(court.startTime.split(':')[0]);
+      let endHour = parseInt(court.endTime.split(':')[0]);
+
+      // รองรับกรณีเวลาข้ามวัน เช่น 23:00 -> 00:45
+      if (Number.isFinite(startHour) && Number.isFinite(endHour) && endHour <= startHour) {
+        endHour += 24;
+      }
+
+      if (isStartTime) {
+        // For start time: include all hours from start to end-1
+        for (let h = startHour; h < endHour; h++) {
+          allHours.add((h + 24) % 24);
+        }
+      } else {
+        // For end time: include all hours from start+1 to end
+        for (let h = startHour + 1; h <= endHour; h++) {
+          allHours.add((h + 24) % 24);
+        }
+      }
+    }
+  });
+
+  return Array.from(allHours).sort((a, b) => a - b);
+};
 
 const EventDetail = () => {
   const { id } = useParams();
@@ -179,23 +213,39 @@ const EventDetail = () => {
         endTime: guestForm.endTime,
       };
       const res = await apiClient.addGuest(id, payload);
+
       if (res.success) {
+        // Update players list immediately after successful add guest
+        await fetchPlayersFiltered();
+
+        // Add 1-second delay for loading effect after updating state
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
         toast({ title: t('success.player_added') });
         setGuestForm({ name: '', phoneNumber: '', startTime: '', endTime: '' });
-        await fetchPlayersFiltered();
-        setTimeout(() => {
-          setIsAddingGuest(false);
-          window.location.reload();
-        }, 1200);
+        setIsAddingGuest(false);
+        setOverlayAction(null);
+        // Refresh page immediately after loading completes
+        window.location.reload();
       } else {
+        // Add 1-second delay for loading effect
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
         toast({ title: t('error.add_player_failed'), description: res.error, variant: 'destructive' });
         setIsAddingGuest(false);
         setOverlayAction(null);
+        // Refresh page after error
+        window.location.reload();
       }
     } catch (err: any) {
+      // Add 1-second delay for loading effect
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
       toast({ title: t('error.add_player_failed'), description: err?.message || t('error.unknown'), variant: 'destructive' });
       setIsAddingGuest(false);
       setOverlayAction(null);
+      // Refresh page after error
+      window.location.reload();
     }
   };
 
@@ -207,17 +257,28 @@ const EventDetail = () => {
     setOverlayAction('cancel');
 
     const res = await apiClient.cancelPlayer(id, playerId);
-    if (res.success) {
-      toast({ title: t('success.player_cancelled') });
 
-      // Wait 2 seconds then refresh the page
-      setTimeout(() => {
-        window.location.reload();
-      }, 2000);
+    if (res.success) {
+      // Update players list immediately after successful cancellation
+      await fetchPlayersFiltered();
+
+      // Add 1-second delay for loading effect after updating state
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      toast({ title: t('success.player_cancelled') });
+      setCancelingPlayerId(null);
+      setOverlayAction(null);
+      // Refresh page immediately after loading completes
+      window.location.reload();
     } else {
+      // Add 2-second delay for loading effect
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
       toast({ title: t('error.cancel_player_failed'), description: res.error, variant: 'destructive' });
       setCancelingPlayerId(null);
       setOverlayAction(null);
+      // Refresh page after error
+      window.location.reload();
     }
   };
 
@@ -239,22 +300,39 @@ const EventDetail = () => {
         startTime: memberTime.startTime,
         endTime: memberTime.endTime,
       });
+
       if (res.success) {
-        toast({ title: t('success.registered') });
+        // Update players list immediately after successful registration
         await fetchPlayersFiltered();
-        setTimeout(() => {
-          setIsRegisteringMember(false);
-          window.location.reload();
-        }, 1200);
+
+        // Add 1-second delay for loading effect after updating state
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        toast({ title: t('success.registered') });
+        setIsRegisteringMember(false);
+        setOverlayAction(null);
+        // Refresh page immediately after loading completes
+        window.location.reload();
       } else {
+        // Add 1-second delay for loading effect
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
         toast({ title: t('error.registration_failed'), description: res.error, variant: 'destructive' });
         setIsRegisteringMember(false);
         setOverlayAction(null);
+        // Refresh page even on error to reset state
+        setTimeout(() => {
+          window.location.reload();
+        }, 1500);
       }
     } catch (err: any) {
       toast({ title: t('error.registration_failed'), description: err?.message || t('error.unknown'), variant: 'destructive' });
       setIsRegisteringMember(false);
       setOverlayAction(null);
+      // Refresh page even on error to reset state
+      setTimeout(() => {
+        window.location.reload();
+      }, 1500);
     }
   };
 
@@ -331,6 +409,23 @@ const EventDetail = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-green-50 py-6 px-4 relative">
+      {/* Language Toggle */}
+      <div className="absolute top-4 right-4 z-10">
+        <LanguageToggle />
+      </div>
+
+      {/* Back to Home Button */}
+      <div className="absolute top-4 left-4 z-10">
+        <Button
+          onClick={() => navigate('/')}
+          variant="outline"
+          size="sm"
+          className="bg-white/80 hover:bg-white border-gray-300 text-gray-700 hover:text-gray-900 shadow-lg backdrop-blur-sm"
+        >
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          {t('nav.back_home')}
+        </Button>
+      </div>
       {/* Beautiful loading overlay */}
       {showOverlay && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
@@ -373,39 +468,20 @@ const EventDetail = () => {
                 </CardDescription>
               </div>
               <div className="flex items-center gap-2">
-                {/* Language Toggle Buttons */}
-                <div className="flex items-center bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl shadow-lg border-2 border-blue-200 p-1.5">
-                  <button
-                    onClick={() => setLanguage('th')}
-                    className={`px-4 py-2 text-sm font-bold rounded-lg transition-all duration-200 ${
-                      language === 'th'
-                        ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg transform scale-105'
-                        : 'text-gray-700 hover:bg-white/70 hover:shadow-md'
-                    }`}
-                  >
-                    🇹🇭 ไทย
-                  </button>
-                  <button
-                    onClick={() => setLanguage('en')}
-                    className={`px-4 py-2 text-sm font-bold rounded-lg transition-all duration-200 ${
-                      language === 'en'
-                        ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg transform scale-105'
-                        : 'text-gray-700 hover:bg-white/70 hover:shadow-md'
-                    }`}
-                  >
-                    🇺🇸 EN
-                  </button>
-                </div>
-                {isAdmin && (
+                {isAdmin && (event.status === 'calculating' || event.status === 'in_progress' || event.status === 'upcoming') && (
                   <div className="flex gap-2 ml-2">
-                    <Button onClick={() => setEditing((v) => !v)} variant="outline" size="sm" className="bg-white/50 hover:bg-white/80">
-                      <Edit3 className="w-4 h-4 mr-1" />
-                      {editing ? t('event.cancel') : t('event.edit')}
-                    </Button>
-                    <Button onClick={handleDelete} variant="destructive" size="sm">
-                      <Trash2 className="w-4 h-4 mr-1" />
-                      {t('event.delete')}
-                    </Button>
+                    {(event.status === 'calculating' || event.status === 'in_progress' || event.status === 'upcoming') && (
+                      <Button onClick={() => setEditing((v) => !v)} variant="outline" size="sm" className="bg-white/50 hover:bg-white/80">
+                        <Edit3 className="w-4 h-4 mr-1" />
+                        {editing ? t('event.cancel') : t('event.edit')}
+                      </Button>
+                    )}
+                    {event.status === 'upcoming' && (
+                      <Button onClick={handleDelete} variant="destructive" size="sm">
+                        <Trash2 className="w-4 h-4 mr-1" />
+                        {t('event.cancel')}
+                      </Button>
+                    )}
                   </div>
                 )}
               </div>
@@ -455,17 +531,17 @@ const EventDetail = () => {
               </Badge>
               <Badge className="bg-gradient-to-r from-green-500 to-teal-500 text-white px-3 py-1">
                 <DollarSign className="w-3 h-3 mr-1" />
-                ประมาณ ฿{estimatedCourtCost.toFixed(0)}
+                {t('badge.estimated')} ฿{estimatedCourtCost.toFixed(0)}
               </Badge>
               <Badge className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-3 py-1">
                 <Users className="w-3 h-3 mr-1" />
-                {perPlayer !== undefined ? `฿${perPlayer}/คน` : 'คำนวณไม่ได้'}
+                {perPlayer !== undefined ? `฿${perPlayer}/${t('badge.players')}` : t('badge.cannot_calculate')}
               </Badge>
               <Badge className={event.capacity?.waitlistEnabled
                 ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white px-3 py-1'
                 : 'bg-gradient-to-r from-gray-400 to-gray-500 text-white px-3 py-1'
               }>
-                {event.capacity?.waitlistEnabled ? '✅ เปิดสำรอง' : '❌ ปิดสำรอง'}
+                {event.capacity?.waitlistEnabled ? `✅ ${t('badge.waitlist_open')}` : `❌ ${t('badge.waitlist_closed')}`}
               </Badge>
               <Badge className={event?.absentPenaltyFee && event.absentPenaltyFee > 0
                 ? 'bg-gradient-to-r from-red-500 to-pink-500 text-white px-3 py-1'
@@ -513,7 +589,7 @@ const EventDetail = () => {
                         </div>
                       </div>
                       <Badge className="bg-gradient-to-r from-green-500 to-teal-500 text-white">
-                        {calcHours(c.startTime, c.endTime)} ชั่วโมง
+                        {calcHours(c.startTime, c.endTime)} {t('badge.hours')}
                       </Badge>
                     </div>
                   </div>
@@ -545,7 +621,41 @@ const EventDetail = () => {
               <CardDescription>{t('event.add_guest_player')}</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-6 mb-6 border border-blue-200/50">
+              {(() => {
+                const restrictedStatuses = ['awaiting_payment','completed','canceled', 'calculating', 'in_progress'];
+                const disabled = restrictedStatuses.includes(event.status);
+
+                if (disabled) {
+                  return (
+                    <div className="bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl p-6 mb-6 border border-gray-200/50">
+                      <div className="text-center">
+                        <div className="w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center mx-auto mb-4">
+                          <UserPlus className="w-8 h-8 text-gray-400" />
+                        </div>
+                        <h4 className="font-semibold text-gray-700 mb-2">
+                          {event.status === 'calculating' && t('guest.registration_closed_calculating')}
+                          {event.status === 'awaiting_payment' && t('guest.registration_closed_awaiting_payment')}
+                          {event.status === 'completed' && t('guest.registration_closed_completed')}
+                          {event.status === 'canceled' && t('guest.registration_closed_canceled')}
+                          {event.status === 'in_progress' && t('guest.registration_closed_in_progress')}
+                        </h4>
+                        <p className="text-sm text-gray-500">
+                          {event.status === 'calculating' && t('guest.registration_closed_calculating_desc')}
+                          {event.status === 'awaiting_payment' && t('guest.registration_closed_awaiting_payment_desc')}
+                          {event.status === 'completed' && t('guest.registration_closed_completed_desc')}
+                          {event.status === 'canceled' && t('guest.registration_closed_canceled_desc')}
+                          {event.status === 'in_progress' && t('guest.registration_closed_in_progress_desc')}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                }
+
+                const startHours = getAvailableHours(event.courts || [], true);
+                const endHours = getAvailableHours(event.courts || [], false);
+
+                return (
+                  <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-6 mb-6 border border-blue-200/50">
                 <h4 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
                   <UserPlus className="w-4 h-4 text-blue-600" />
                   {t('event.add_new_guest')}
@@ -560,13 +670,13 @@ const EventDetail = () => {
                         onChange={(e) => setGuestForm({ ...guestForm, name: e.target.value })}
                         required
                         className="bg-white/80 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                        placeholder="กรุณาระบุชื่อผู้เล่น"
+                        placeholder={t('placeholder.player_name')}
                       />
                     </div>
                     <div>
                       <Label htmlFor="gphone" className="text-sm font-medium text-gray-700 flex items-center gap-1">
                         <Phone className="w-3 h-3" />
-                        เบอร์โทรศัพท์
+                        {t('event.phone_number')}
                       </Label>
                       <Input
                         id="gphone"
@@ -576,7 +686,7 @@ const EventDetail = () => {
                         maxLength={10}
                         inputMode="numeric"
                         className="bg-white/80 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                        placeholder="0812345678"
+                        placeholder={t('placeholder.phone_number')}
                       />
                     </div>
                   </div>
@@ -584,21 +694,23 @@ const EventDetail = () => {
                     <div>
                       <Label htmlFor="gstart" className="text-sm font-medium text-gray-700 flex items-center gap-1">
                         <Timer className="w-3 h-3" />
-                        เวลาเริ่มเล่น
+                        {t('event.start_time')}
                       </Label>
                       <TimePicker
                         value={guestForm.startTime}
                         onChange={(v) => setGuestForm({ ...guestForm, startTime: v })}
+                        availableHours={startHours}
                       />
                     </div>
                     <div>
                       <Label htmlFor="gend" className="text-sm font-medium text-gray-700 flex items-center gap-1">
                         <Timer className="w-3 h-3" />
-                        เวลาสิ้นสุดเล่น
+                        {t('event.end_time')}
                       </Label>
                       <TimePicker
                         value={guestForm.endTime}
                         onChange={(v) => setGuestForm({ ...guestForm, endTime: v })}
+                        availableHours={endHours}
                       />
                     </div>
                   </div>
@@ -608,10 +720,12 @@ const EventDetail = () => {
                     disabled={isAddingGuest}
                   >
                     <UserPlus className="w-4 h-4 mr-2" />
-                    เพิ่มผู้เล่นแขก
+                    {t('event.add_guest')}
                   </Button>
                 </form>
-              </div>
+                  </div>
+                );
+              })()}
 
               {/* Players List */}
               <div className="space-y-6">
@@ -621,15 +735,15 @@ const EventDetail = () => {
                     <div className="w-6 h-6 rounded-full bg-gradient-to-r from-green-500 to-teal-500 flex items-center justify-center">
                       <Users className="w-3 h-3 text-white" />
                     </div>
-                    <h4 className="font-semibold text-gray-900">ผู้เล่นที่ลงทะเบียน</h4>
+                    <h4 className="font-semibold text-gray-900">{t('event.registered_players')}</h4>
                     <Badge className="bg-gradient-to-r from-green-500 to-teal-500 text-white">
-                      {players.filter((p:any)=>p.status==='registered').length} คน
+                      {players.filter((p:any)=>p.status==='registered').length} {t('event.people')}
                     </Badge>
                   </div>
                   {players.filter((p:any)=>p.status==='registered').length === 0 ? (
                     <div className="text-center py-8 bg-gray-50/50 rounded-xl border border-gray-200/50">
                       <Users className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                      <div className="text-gray-600">ไม่มีผู้เล่นที่ลงทะเบียน</div>
+                      <div className="text-gray-600">{t('event.no_registered_players')}</div>
                     </div>
                   ) : (
                     <div className="space-y-3">
@@ -642,12 +756,12 @@ const EventDetail = () => {
                               </div>
                               <div>
                                 <div className="font-medium text-gray-900 flex items-center gap-2">
-                                  {p.name || (p.userId ? memberNames[p.userId] : '') || 'ไม่ระบุชื่อ'}
+                                  {p.name || (p.userId ? memberNames[p.userId] : '') || t('user.no_name_display')}
                                   <Badge className={p.userType === 'member'
                                     ? 'bg-blue-100 text-blue-800 border border-blue-300'
                                     : 'bg-gray-100 text-gray-800 border border-gray-300'
                                   }>
-                                    {p.userType === 'member' ? 'สมาชิก' : 'แขก'}
+                                    {p.userType === 'member' ? t('user.member_badge') : t('user.guest_badge')}
                                   </Badge>
                                 </div>
                                 <div className="text-sm text-gray-600 flex items-center gap-2">
@@ -660,19 +774,21 @@ const EventDetail = () => {
                                 </div>
                               </div>
                             </div>
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              onClick={() => cancelPlayer(p.playerId || p.id || p._id)}
-                              disabled={cancelingPlayerId === (p.playerId || p.id || p._id)}
-                              className="bg-red-500 hover:bg-red-600"
-                            >
-                              {cancelingPlayerId === (p.playerId || p.id || p._id) ? (
-                                <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                              ) : (
-                                <>ยกเลิก</>
-                              )}
-                            </Button>
+                            {(event.status === 'upcoming' || event.status === 'in_progress') && (
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => cancelPlayer(p.playerId || p.id || p._id)}
+                                disabled={cancelingPlayerId === (p.playerId || p.id || p._id)}
+                                className="bg-red-500 hover:bg-red-600"
+                              >
+                                {cancelingPlayerId === (p.playerId || p.id || p._id) ? (
+                                  <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                                ) : (
+                                  t('event.cancel_registration')
+                                )}
+                              </Button>
+                            )}
                           </div>
                         </div>
                       ))}
@@ -686,15 +802,15 @@ const EventDetail = () => {
                     <div className="w-6 h-6 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 flex items-center justify-center">
                       <Clock className="w-3 h-3 text-white" />
                     </div>
-                    <h4 className="font-semibold text-gray-900">รายชื่อสำรอง</h4>
+                    <h4 className="font-semibold text-gray-900">{t('event.waitlist')}</h4>
                     <Badge className="bg-gradient-to-r from-amber-500 to-orange-500 text-white">
-                      {players.filter((p:any)=>p.status==='waitlist').length} คน
+                      {players.filter((p:any)=>p.status==='waitlist').length} {t('event.people')}
                     </Badge>
                   </div>
                   {players.filter((p:any)=>p.status==='waitlist').length === 0 ? (
                     <div className="text-center py-8 bg-amber-50/50 rounded-xl border border-amber-200/50">
                       <Clock className="w-12 h-12 text-amber-300 mx-auto mb-3" />
-                      <div className="text-gray-600">ไม่มีรายชื่อสำรอง</div>
+                      <div className="text-gray-600">{t('event.no_waitlist')}</div>
                     </div>
                   ) : (
                     <div className="space-y-3">
@@ -707,12 +823,12 @@ const EventDetail = () => {
                               </div>
                               <div>
                                 <div className="font-medium text-gray-900 flex items-center gap-2">
-                                  {p.name || (p.userId ? memberNames[p.userId] : '') || 'ไม่ระบุชื่อ'}
+                                  {p.name || (p.userId ? memberNames[p.userId] : '') || t('user.no_name_display')}
                                   <Badge className={p.userType === 'member'
                                     ? 'bg-blue-100 text-blue-800 border border-blue-300'
                                     : 'bg-gray-100 text-gray-800 border border-gray-300'
                                   }>
-                                    {p.userType === 'member' ? 'สมาชิก' : 'แขก'}
+                                    {p.userType === 'member' ? t('user.member_badge') : t('user.guest_badge')}
                                   </Badge>
                                 </div>
                                 <div className="text-sm text-gray-600 flex items-center gap-2">
@@ -725,19 +841,21 @@ const EventDetail = () => {
                                 </div>
                               </div>
                             </div>
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              onClick={() => cancelPlayer(p.playerId || p.id || p._id)}
-                              disabled={cancelingPlayerId === (p.playerId || p.id || p._id)}
-                              className="bg-red-500 hover:bg-red-600"
-                            >
-                              {cancelingPlayerId === (p.playerId || p.id || p._id) ? (
-                                <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                              ) : (
-                                <>ยกเลิก</>
-                              )}
-                            </Button>
+                            {(event.status === 'upcoming' || event.status === 'in_progress') && (
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => cancelPlayer(p.playerId || p.id || p._id)}
+                                disabled={cancelingPlayerId === (p.playerId || p.id || p._id)}
+                                className="bg-red-500 hover:bg-red-600"
+                              >
+                                {cancelingPlayerId === (p.playerId || p.id || p._id) ? (
+                                  <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                                ) : (
+                                  t('event.cancel_registration')
+                                )}
+                              </Button>
+                            )}
                           </div>
                         </div>
                       ))}
@@ -759,13 +877,42 @@ const EventDetail = () => {
                 <div className="w-8 h-8 rounded-lg bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center">
                   <UserPlus className="w-4 h-4 text-white" />
                 </div>
-                ลงทะเบียนเข้าร่วมกิจกรรม
+                {t('event.register_to_join')}
               </CardTitle>
-              <CardDescription>ลงทะเบียนเข้าร่วมเล่นแบดมินตัน</CardDescription>
+              <CardDescription>{t('event.register_description')}</CardDescription>
             </CardHeader>
             <CardContent>
               {(() => {
-                const mine = players.find((p:any) => p.userId && user && (p.userId === user.id) && p.status !== 'canceled');
+                // Check if registration is disabled due to event status
+                const registrationDisabled = event.status === 'calculating' || event.status === 'awaiting_payment' || event.status === 'completed' || event.status === 'canceled' || event.status === 'in_progress';
+                const mine = players.find((p:any) => p.userId && user && (p.userId === user.userId) && p.status !== 'canceled');
+
+                if (registrationDisabled && !mine) {
+                  return (
+                    <div className="bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl p-6 border border-gray-200/50">
+                      <div className="text-center">
+                        <div className="w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center mx-auto mb-4">
+                          <UserPlus className="w-8 h-8 text-gray-400" />
+                        </div>
+                        <h4 className="font-semibold text-gray-700 mb-2">
+                          {event.status === 'calculating' && t('user.registration_closed_calculating')}
+                          {event.status === 'awaiting_payment' && t('user.registration_closed_awaiting_payment')}
+                          {event.status === 'completed' && t('user.registration_closed_completed')}
+                          {event.status === 'canceled' && t('user.registration_closed_canceled')}
+                          {event.status === 'in_progress' && t('user.registration_closed_in_progress')}
+                        </h4>
+                        <p className="text-sm text-gray-500">
+                          {event.status === 'calculating' && t('user.registration_closed_calculating_desc')}
+                          {event.status === 'awaiting_payment' && t('user.registration_closed_awaiting_payment_desc')}
+                          {event.status === 'completed' && t('user.registration_closed_completed_desc')}
+                          {event.status === 'canceled' && t('user.registration_closed_canceled_desc')}
+                          {event.status === 'in_progress' && t('user.registration_closed_in_progress_desc')}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                }
+
                 if (mine) {
                   return (
                     <div className="bg-gradient-to-r from-green-50 to-teal-50 rounded-xl p-6 border border-green-200/50">
@@ -776,36 +923,38 @@ const EventDetail = () => {
                           </div>
                           <div>
                             <div className="font-medium text-gray-900 flex items-center gap-2">
-                              คุณลงทะเบียนแล้ว
+                              {t('user.already_registered')}
                               <Badge className={mine.status === 'registered'
                                 ? 'bg-green-100 text-green-800 border border-green-300'
                                 : 'bg-amber-100 text-amber-800 border border-amber-300'
                               }>
-                                {mine.status === 'registered' ? '✅ ยืนยันแล้ว' : '⏳ รอสำรอง'}
+                                {mine.status === 'registered' ? `✅ ${t('user.confirmed_status')}` : `⏳ ${t('user.waitlist_status')}`}
                               </Badge>
                             </div>
                             <div className="text-sm text-gray-600 flex items-center gap-1">
                               <Timer className="w-3 h-3" />
-                              เวลาเล่น: {mine.startTime || '-'} - {mine.endTime || '-'}
+                              {t('user.play_time_display')}: {mine.startTime || '-'} - {mine.endTime || '-'}
                             </div>
-                            <div className="text-xs text-gray-500">สถานะ: {mine.status === 'registered' ? 'ยืนยันการลงทะเบียน' : 'อยู่ในรายชื่อสำรอง'}</div>
+                            <div className="text-xs text-gray-500">{t('user.status_display')}: {mine.status === 'registered' ? t('user.confirmed_registration') : t('user.on_waitlist')}</div>
                           </div>
                         </div>
-                        <Button
-                          variant="destructive"
-                          onClick={() => cancelPlayer(mine.playerId)}
-                          disabled={cancelingPlayerId === mine.playerId}
-                          className="bg-red-500 hover:bg-red-600"
-                        >
-                          {cancelingPlayerId === mine.playerId ? (
-                            <>
-                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                              ยกเลิก...
-                            </>
-                          ) : (
-                            'ยกเลิก'
-                          )}
-                        </Button>
+                        {(event.status === 'upcoming' || event.status === 'in_progress') && (
+                          <Button
+                            variant="destructive"
+                            onClick={() => cancelPlayer(mine.playerId)}
+                            disabled={cancelingPlayerId === mine.playerId}
+                            className="bg-red-500 hover:bg-red-600"
+                          >
+                            {cancelingPlayerId === mine.playerId ? (
+                              <>
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                {t('event.canceling')}
+                              </>
+                            ) : (
+                              t('event.cancel')
+                            )}
+                          </Button>
+                        )}
                       </div>
                     </div>
                   );
@@ -814,23 +963,31 @@ const EventDetail = () => {
                   <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-6 border border-blue-200/50">
                     <h4 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
                       <Timer className="w-4 h-4 text-blue-600" />
-                      เลือกเวลาเล่น
+                      {t('user.select_play_time')}
                     </h4>
                     <form onSubmit={registerAsMember} className="space-y-4">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                           <Label htmlFor="mstart" className="text-sm font-medium text-gray-700 flex items-center gap-1">
                             <Timer className="w-3 h-3" />
-                            เวลาเริ่มเล่น
+                            {t('event.start_time')}
                           </Label>
-                          <TimePicker value={memberTime.startTime} onChange={(v)=>setMemberTime({...memberTime,startTime:v})} />
+                          <TimePicker
+                            value={memberTime.startTime}
+                            onChange={(v)=>setMemberTime({...memberTime,startTime:v})}
+                            availableHours={event?.courts ? getAvailableHours(event.courts, true) : undefined}
+                          />
                         </div>
                         <div>
                           <Label htmlFor="mend" className="text-sm font-medium text-gray-700 flex items-center gap-1">
                             <Timer className="w-3 h-3" />
-                            เวลาสิ้นสุดเล่น
+                            {t('event.end_time')}
                           </Label>
-                          <TimePicker value={memberTime.endTime} onChange={(v)=>setMemberTime({...memberTime,endTime:v})} />
+                          <TimePicker
+                            value={memberTime.endTime}
+                            onChange={(v)=>setMemberTime({...memberTime,endTime:v})}
+                            availableHours={event?.courts ? getAvailableHours(event.courts, false) : undefined}
+                          />
                         </div>
                       </div>
                       <Button
@@ -841,12 +998,12 @@ const EventDetail = () => {
                         {isRegisteringMember ? (
                           <>
                             <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            กำลังลงทะเบียน...
+                            {t('event.registering')}
                           </>
                         ) : (
                           <>
                             <UserPlus className="w-4 h-4 mr-2" />
-                            ลงทะเบียน
+                            {t('event.register')}
                           </>
                         )}
                       </Button>
@@ -866,9 +1023,9 @@ const EventDetail = () => {
                 <div className="w-8 h-8 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center">
                   <Users className="w-4 h-4 text-white" />
                 </div>
-                รายชื่อผู้เล่น
+                {t('user.player_list')}
               </CardTitle>
-              <CardDescription>ดูรายชื่อผู้เข้าร่วมกิจกรรม</CardDescription>
+              <CardDescription>{t('user.view_participants')}</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-6">
@@ -878,15 +1035,15 @@ const EventDetail = () => {
                     <div className="w-6 h-6 rounded-full bg-gradient-to-r from-green-500 to-teal-500 flex items-center justify-center">
                       <Users className="w-3 h-3 text-white" />
                     </div>
-                    <h4 className="font-semibold text-gray-900">ผู้เล่นที่ลงทะเบียน</h4>
+                    <h4 className="font-semibold text-gray-900">{t('event.registered_players')}</h4>
                     <Badge className="bg-gradient-to-r from-green-500 to-teal-500 text-white">
-                      {players.filter((p:any)=>p.status==='registered').length} คน
+                      {players.filter((p:any)=>p.status==='registered').length} {t('event.people')}
                     </Badge>
                   </div>
                   {players.filter((p:any)=>p.status==='registered').length === 0 ? (
                     <div className="text-center py-8 bg-gray-50/50 rounded-xl border border-gray-200/50">
                       <Users className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                      <div className="text-gray-600">ไม่มีผู้เล่นที่ลงทะเบียน</div>
+                      <div className="text-gray-600">{t('event.no_registered_players')}</div>
                     </div>
                   ) : (
                     <div className="space-y-3">
@@ -898,16 +1055,16 @@ const EventDetail = () => {
                             </div>
                             <div className="flex-1">
                               <div className="font-medium text-gray-900 flex items-center gap-2">
-                                {p.name || (p.userId ? memberNames[p.userId] : '') || 'ไม่ระบุชื่อ'}
+                                {p.name || (p.userId ? memberNames[p.userId] : '') || t('user.no_name_display')}
                                 <Badge className={p.userType === 'member'
                                   ? 'bg-blue-100 text-blue-800 border border-blue-300'
                                   : 'bg-gray-100 text-gray-800 border border-gray-300'
                                 }>
-                                  {p.userType === 'member' ? 'สมาชิก' : 'แขก'}
+                                  {p.userType === 'member' ? t('user.member_badge') : t('user.guest_badge')}
                                 </Badge>
                                 {p.userId === user?.id && (
                                   <Badge className="bg-purple-100 text-purple-800 border border-purple-300">
-                                    👤 คุณ
+                                    👤 {t('user.you_badge')}
                                   </Badge>
                                 )}
                               </div>
@@ -933,15 +1090,15 @@ const EventDetail = () => {
                     <div className="w-6 h-6 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 flex items-center justify-center">
                       <Clock className="w-3 h-3 text-white" />
                     </div>
-                    <h4 className="font-semibold text-gray-900">รายชื่อสำรอง</h4>
+                    <h4 className="font-semibold text-gray-900">{t('event.waitlist')}</h4>
                     <Badge className="bg-gradient-to-r from-amber-500 to-orange-500 text-white">
-                      {players.filter((p:any)=>p.status==='waitlist').length} คน
+                      {players.filter((p:any)=>p.status==='waitlist').length} {t('event.people')}
                     </Badge>
                   </div>
                   {players.filter((p:any)=>p.status==='waitlist').length === 0 ? (
                     <div className="text-center py-8 bg-amber-50/50 rounded-xl border border-amber-200/50">
                       <Clock className="w-12 h-12 text-amber-300 mx-auto mb-3" />
-                      <div className="text-gray-600">ไม่มีรายชื่อสำรอง</div>
+                      <div className="text-gray-600">{t('event.no_waitlist')}</div>
                     </div>
                   ) : (
                     <div className="space-y-3">
@@ -953,16 +1110,16 @@ const EventDetail = () => {
                             </div>
                             <div className="flex-1">
                               <div className="font-medium text-gray-900 flex items-center gap-2">
-                                {p.name || (p.userId ? memberNames[p.userId] : '') || 'ไม่ระบุชื่อ'}
+                                {p.name || (p.userId ? memberNames[p.userId] : '') || t('user.no_name_display')}
                                 <Badge className={p.userType === 'member'
                                   ? 'bg-blue-100 text-blue-800 border border-blue-300'
                                   : 'bg-gray-100 text-gray-800 border border-gray-300'
                                 }>
-                                  {p.userType === 'member' ? 'สมาชิก' : 'แขก'}
+                                  {p.userType === 'member' ? t('user.member_badge') : t('user.guest_badge')}
                                 </Badge>
                                 {p.userId === user?.id && (
                                   <Badge className="bg-purple-100 text-purple-800 border border-purple-300">
-                                    👤 คุณ
+                                    👤 {t('user.you_badge')}
                                   </Badge>
                                 )}
                               </div>
