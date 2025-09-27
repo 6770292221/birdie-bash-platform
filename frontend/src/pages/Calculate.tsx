@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { apiClient } from '@/utils/api';
-import { CheckCircle, Clock, Users, Calculator, Receipt } from 'lucide-react';
+import { CheckCircle, Clock, Users, Calculator, Receipt, Loader2 } from 'lucide-react';
 
 interface CostBreakdownItem {
   playerId: string;
@@ -47,7 +47,9 @@ const CalculatePage = () => {
   const [breakdown, setBreakdown] = useState<CostBreakdownItem[]>([]);
   const [isCalculated, setIsCalculated] = useState<boolean>(false);
   const [shuttlecockCount, setShuttlecockCount] = useState<string>('');
+  const [penaltyFee, setPenaltyFee] = useState<string>('');
   const [absentPlayers, setAbsentPlayers] = useState<Set<string>>(new Set());
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   useEffect(() => {
     const fetch = async () => {
@@ -87,7 +89,14 @@ const CalculatePage = () => {
       apiClient.getPlayers(eventId, { status: 'registered', limit: 100, offset: 0 }),
       apiClient.getPlayers(eventId, { status: 'waitlist', limit: 100, offset: 0 }),
     ]);
-    if (detail.success) setEventDetail((detail.data as any).event || detail.data);
+    if (detail.success) {
+      const eventData = (detail.data as any).event || detail.data;
+      setEventDetail(eventData);
+      // Set penalty fee from event data if not already set
+      if (penaltyFee === '' && eventData.absentPenaltyFee !== undefined) {
+        setPenaltyFee(eventData.absentPenaltyFee.toString());
+      }
+    }
     const regList = reg.success ? ((reg.data as any).players || (reg.data as any) || []) : [];
     const waitList = wait.success ? ((wait.data as any).players || (wait.data as any) || []) : [];
     setPlayers([...regList, ...waitList]);
@@ -97,15 +106,19 @@ const CalculatePage = () => {
   // Validation function to check if inputs are valid
   const isFormValid = useMemo(() => {
     const shuttlecockNum = parseInt(shuttlecockCount);
+    const penaltyFeeNum = parseFloat(penaltyFee);
 
     return (
       shuttlecockCount.trim() !== '' &&
       !isNaN(shuttlecockNum) &&
       shuttlecockNum > 0 &&
+      penaltyFee.trim() !== '' &&
+      !isNaN(penaltyFeeNum) &&
+      penaltyFeeNum >= 0 &&
       selectedEventId &&
       eventDetail
     );
-  }, [shuttlecockCount, selectedEventId, eventDetail]);
+  }, [shuttlecockCount, penaltyFee, selectedEventId, eventDetail]);
 
   const handlePlayerAbsentToggle = (playerId: string) => {
     const newAbsentPlayers = new Set(absentPlayers);
@@ -132,12 +145,13 @@ const CalculatePage = () => {
         throw new Error('ไม่พบข้อมูลอีเวนต์ กรุณารีเฟรชหน้า');
       }
 
-      // Use apiClient settlement method
-      console.log('Calling settlement API...');
-      const response = await apiClient.issueSettlement(selectedEventId, {
+      // Use apiClient settlement calculation method (preview mode)
+      console.log('Calling settlement calculation API...');
+      const response = await apiClient.calculateSettlement(selectedEventId, {
         currency: 'THB',
         shuttlecockCount: parseInt(shuttlecockCount),
-        absentPlayerIds: Array.from(absentPlayers)
+        absentPlayerIds: Array.from(absentPlayers),
+        penaltyFee: parseFloat(penaltyFee) || 0
       });
 
       console.log('Settlement API response:', response); // Debug log
@@ -166,8 +180,8 @@ const CalculatePage = () => {
         setBreakdown(transformedData);
         setIsCalculated(true);
         toast({
-          title: 'คำนวณสำเร็จ',
-          description: `คำนวณค่าใช้จ่ายสำหรับ ${transformedData.length} คน เรียบร้อยแล้ว`
+          title: 'คำนวณสำเร็จ (โหมดดูตัวอย่าง)',
+          description: `คำนวณค่าใช้จ่ายสำหรับ ${transformedData.length} คน เรียบร้อยแล้ว - ยังไม่ได้เก็บเงินจริง`
         });
       } else {
         throw new Error('Invalid response format from settlement API');
@@ -217,20 +231,70 @@ const CalculatePage = () => {
   }, [breakdown]);
 
   const submitCalculation = async () => {
-    // This would be the API call to submit calculation results
-    const payload = {
-      eventId: selectedEventId,
-      breakdown: breakdown,
-      summary: paymentSummary,
-      calculatedAt: new Date().toISOString()
-    };
+    if (!selectedEventId || isSubmitting) return;
 
-    console.log('Submitting calculation to API:', payload);
+    setIsSubmitting(true);
+    try {
+      console.log('🚀 Starting actual settlement issue...');
+      console.log('Event ID:', selectedEventId);
+      console.log('Absent Players:', Array.from(absentPlayers));
+      console.log('Shuttlecock Count:', shuttlecockCount);
+      console.log('Penalty Fee:', penaltyFee);
 
-    toast({
-      title: 'ส่งข้อมูลสำเร็จ',
-      description: 'บันทึกการคำนวณค่าใช้จ่ายเรียบร้อยแล้ว',
-    });
+      // Use apiClient issueSettlement method to actually charge players
+      const response = await apiClient.issueSettlement(selectedEventId, {
+        currency: 'THB',
+        shuttlecockCount: parseInt(shuttlecockCount),
+        absentPlayerIds: Array.from(absentPlayers),
+        penaltyFee: parseFloat(penaltyFee) || 0
+      });
+
+      console.log('Settlement issue response:', response);
+
+      if (!response.success) {
+        console.error('Settlement issue failed:', response.error);
+        throw new Error(response.error || 'ไม่สามารถดำเนินการเก็บเงินได้');
+      }
+
+      // Show success message with settlement details
+      const settlementData = response.data as any;
+      const successfulCharges = settlementData.successfulCharges || 0;
+      const failedCharges = settlementData.failedCharges || 0;
+      const totalCollected = settlementData.totalCollected || 0;
+
+      toast({
+        title: 'ดำเนินการเก็บเงินสำเร็จ! 🎉',
+        description: `เก็บเงินสำเร็จ ${successfulCharges} คน, ล้มเหลว ${failedCharges} คน, รวมเก็บได้ ฿${totalCollected.toFixed(2)}`,
+      });
+
+      // Update breakdown with actual payment results if available
+      if (settlementData.calculationResults) {
+        const updatedBreakdown: CostBreakdownItem[] = settlementData.calculationResults.map((item: any) => ({
+          playerId: item.playerId,
+          name: item.name || 'ไม่ระบุชื่อ',
+          userType: item.role === 'member' ? 'member' : 'guest',
+          startTime: item.startTime || '09:00',
+          endTime: item.endTime || '10:00',
+          playHours: item.breakdown?.hoursPlayed || 0,
+          courtFee: item.courtFee || 0,
+          shuttlecockFee: item.shuttlecockFee || 0,
+          fine: item.penaltyFee || 0,
+          total: item.totalAmount || 0,
+          isPaid: item.paymentStatus === 'completed' || item.paymentStatus === 'paid' || false
+        }));
+        setBreakdown(updatedBreakdown);
+      }
+
+    } catch (error) {
+      console.error('Settlement issue error:', error);
+      toast({
+        title: 'เกิดข้อผิดพลาดในการเก็บเงิน',
+        description: error instanceof Error ? error.message : 'ไม่สามารถดำเนินการเก็บเงินได้',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   useEffect(() => {
@@ -267,7 +331,7 @@ const CalculatePage = () => {
             <CardTitle className="text-xl">คำนวณค่าใช้จ่าย</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <Label htmlFor="event-select">เลือกอีเวนต์</Label>
                 <Select value={selectedEventId} onValueChange={setSelectedEventId}>
@@ -297,6 +361,23 @@ const CalculatePage = () => {
                   <p className="text-red-500 text-xs mt-1">กรุณาใส่จำนวนที่มากกว่า 0</p>
                 )}
               </div>
+
+              <div>
+                <Label htmlFor="penalty-fee">ค่าปรับ (บาท)</Label>
+                <Input
+                  id="penalty-fee"
+                  type="number"
+                  min="0"
+                  value={penaltyFee}
+                  onChange={(e) => setPenaltyFee(e.target.value)}
+                  placeholder="เช่น 50"
+                  className={penaltyFee.trim() !== '' && (isNaN(parseFloat(penaltyFee)) || parseFloat(penaltyFee) < 0) ? 'border-red-500' : ''}
+                />
+                {penaltyFee.trim() !== '' && (isNaN(parseFloat(penaltyFee)) || parseFloat(penaltyFee) < 0) && (
+                  <p className="text-red-500 text-xs mt-1">กรุณาใส่จำนวนที่มากกว่าหรือเท่ากับ 0</p>
+                )}
+                <p className="text-xs text-gray-500 mt-1">ค่าปรับสำหรับผู้เล่นที่ไม่มาเล่น</p>
+              </div>
             </div>
 
             {/* Player attendance selection */}
@@ -324,7 +405,7 @@ const CalculatePage = () => {
                       <div className="text-amber-600 mt-0.5">⚠️</div>
                       <div className="text-sm text-amber-800">
                         <strong>วิธีใช้:</strong> กดที่ผู้เล่นที่ <strong>ไม่มาเล่น</strong> เพื่อทำเครื่องหมายเป็นคนไม่มา
-                        คนที่ไม่มาจะถูกเก็บค่าปรับ <strong>฿{eventDetail.absentPenaltyFee || 0}</strong>
+                        คนที่ไม่มาจะถูกเก็บค่าปรับ <strong>฿{parseFloat(penaltyFee) || 0}</strong>
                       </div>
                     </div>
                   </div>
@@ -398,8 +479,8 @@ const CalculatePage = () => {
                       <div className="flex items-center space-x-2 text-red-800">
                         <div className="text-red-600">💰</div>
                         <div className="text-sm">
-                          <strong>ค่าปรับที่จะเก็บ:</strong> {absentPlayers.size} คน × ฿{eventDetail.absentPenaltyFee || 0} =
-                          <strong className="ml-1">฿{(absentPlayers.size * (eventDetail.absentPenaltyFee || 0)).toLocaleString()}</strong>
+                          <strong>ค่าปรับที่จะเก็บ:</strong> {absentPlayers.size} คน × ฿{parseFloat(penaltyFee) || 0} =
+                          <strong className="ml-1">฿{(absentPlayers.size * (parseFloat(penaltyFee) || 0)).toLocaleString()}</strong>
                         </div>
                       </div>
                     </div>
@@ -415,12 +496,21 @@ const CalculatePage = () => {
                 disabled={!isFormValid}
               >
                 <Calculator className="w-4 h-4 mr-2" />
-                คำนวณค่าใช้จ่าย
+                คำนวณค่าใช้จ่าย (โหมดดูตัวอย่าง)
               </Button>
             </div>
 
             {isCalculated && breakdown.length > 0 && (
               <div className="space-y-4">
+                {/* Preview Mode Banner */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <div className="flex items-center space-x-2">
+                    <Badge className="bg-blue-600 text-white">โหมดดูตัวอย่าง</Badge>
+                    <span className="text-blue-800 text-sm">
+                      ผลการคำนวณนี้เป็นเพียงการแสดงตัวอย่าง ยังไม่ได้เก็บเงินจากผู้เล่นจริง
+                    </span>
+                  </div>
+                </div>
                 {/* Payment Summary */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
@@ -548,28 +638,37 @@ const CalculatePage = () => {
                   </CardContent>
                 </Card>
 
-                {/* Submit Button */}
-                <div className="flex justify-end space-x-3">
-                  <Button
-                    onClick={() => {
-                      const allPaid = breakdown.map(item => ({ ...item, isPaid: true }));
-                      setBreakdown(allPaid);
-                      toast({ title: 'ทำเครื่องหมายทั้งหมด', description: 'ทำเครื่องหมายทุกคนว่าชำระแล้ว' });
-                    }}
-                    variant="outline"
-                    className="border-green-600 text-green-600 hover:bg-green-50"
-                  >
-                    <CheckCircle className="w-4 h-4 mr-2" />
-                    ทำเครื่องหมายทั้งหมดว่าชำระแล้ว
-                  </Button>
+                {/* Warning and Submit Button */}
+                <div className="space-y-4">
+                  {/* <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                    <div className="flex items-start space-x-2">
+                      <div className="text-amber-600 mt-0.5">⚠️</div>
+                      <div className="text-sm text-amber-800">
+                        <strong>คำเตือน:</strong> การกดปุ่ม "เก็บเงินจริงตามการคำนวณ" จะทำการ<strong>เก็บเงินจริง</strong>จากผู้เล่นทุกคน
+                        และส่งการแจ้งเตือนไปยัง Payment Service เพื่อประมวลผลการชำระเงิน กรุณาตรวจสอบข้อมูลให้ถูกต้องก่อนดำเนินการ
+                      </div>
+                    </div>
+                  </div> */}
 
-                  <Button
-                    onClick={submitCalculation}
-                    className="bg-blue-600 hover:bg-blue-700"
-                  >
-                    <Receipt className="w-4 h-4 mr-2" />
-                    บันทึกการคำนวณ
-                  </Button>
+                  <div className="flex justify-end space-x-3">
+                    <Button
+                      onClick={submitCalculation}
+                      disabled={isSubmitting}
+                      className="bg-blue-600 hover:bg-blue-700"
+                    >
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          บันทึกการคำนวณ...
+                        </>
+                      ) : (
+                        <>
+                          <Receipt className="w-4 h-4 mr-2" />
+                          บันทึกการคำนวณ
+                        </>
+                      )}
+                    </Button>
+                  </div>
                 </div>
               </div>
             )}

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import {
   calculateAndCharge,
+  calculateSettlements,
   getAllSettlements,
   getSettlementById
 } from '../controllers/settlementController';
@@ -299,6 +300,164 @@ router.get('/:settlement_id', getSettlementById);
  *         description: Settlement calculation or charging failed
  */
 router.post('/issue', calculateAndCharge);
+
+/**
+ * @swagger
+ * /api/settlements/calculate:
+ *   post:
+ *     summary: Calculate settlements without issuing charges (Preview Mode)
+ *     description: |
+ *       Calculates settlement amounts for an event without charging players or saving to database.
+ *       This endpoint provides a preview of what the settlement would look like.
+ *
+ *       **Data Sources:**
+ *       - Event details from Event Service (port 3003)
+ *       - Players/participants from Registration Service (port 3005)
+ *       - Court and cost information from event configuration
+ *
+ *       **Preview Mode Features:**
+ *       - No charges are issued to Payment Service
+ *       - No settlement records are saved to database
+ *       - Returns detailed breakdown of calculations
+ *       - Shows summary statistics
+ *     tags: [Settlements]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [event_id]
+ *             properties:
+ *               event_id:
+ *                 type: string
+ *                 description: Event ID for the settlement calculation
+ *                 example: "68caed4a19d4dfc0aaba9de9"
+ *               currency:
+ *                 type: string
+ *                 description: Currency code
+ *                 default: "THB"
+ *                 example: "THB"
+ *               shuttlecockCount:
+ *                 type: number
+ *                 description: Number of shuttlecocks used during the event
+ *                 example: 4
+ *               absentPlayerIds:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 description: Array of player IDs who were absent from the event
+ *                 example: ["player123", "player456"]
+ *     responses:
+ *       200:
+ *         description: Settlement calculation completed successfully (preview mode)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     event_id:
+ *                       type: string
+ *                     eventData:
+ *                       type: object
+ *                       properties:
+ *                         courts:
+ *                           type: array
+ *                           items:
+ *                             type: object
+ *                             properties:
+ *                               courtNumber:
+ *                                 type: number
+ *                               startTime:
+ *                                 type: string
+ *                               endTime:
+ *                                 type: string
+ *                               hourlyRate:
+ *                                 type: number
+ *                         costs:
+ *                           type: object
+ *                           properties:
+ *                             shuttlecockPrice:
+ *                               type: number
+ *                             shuttlecockCount:
+ *                               type: number
+ *                             penaltyFee:
+ *                               type: number
+ *                         currency:
+ *                           type: string
+ *                     calculationResults:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           playerId:
+ *                             type: string
+ *                           userId:
+ *                             type: string
+ *                           name:
+ *                             type: string
+ *                           phoneNumber:
+ *                             type: string
+ *                           status:
+ *                             type: string
+ *                             enum: [played, absent, canceled, waitlist]
+ *                           role:
+ *                             type: string
+ *                             enum: [member, guest]
+ *                           courtFee:
+ *                             type: number
+ *                           shuttlecockFee:
+ *                             type: number
+ *                           penaltyFee:
+ *                             type: number
+ *                           totalAmount:
+ *                             type: number
+ *                           breakdown:
+ *                             type: object
+ *                             properties:
+ *                               hoursPlayed:
+ *                                 type: number
+ *                               courtSessions:
+ *                                 type: array
+ *                                 items:
+ *                                   type: object
+ *                                   properties:
+ *                                     hour:
+ *                                       type: string
+ *                                     playersInSession:
+ *                                       type: number
+ *                                     costPerPlayer:
+ *                                       type: number
+ *                     totalCollected:
+ *                       type: number
+ *                     summary:
+ *                       type: object
+ *                       properties:
+ *                         totalPlayers:
+ *                           type: number
+ *                         playedPlayers:
+ *                           type: number
+ *                         absentPlayers:
+ *                           type: number
+ *                         canceledPlayers:
+ *                           type: number
+ *                         waitlistPlayers:
+ *                           type: number
+ *                 message:
+ *                   type: string
+ *       400:
+ *         description: Invalid request data
+ *       404:
+ *         description: Event or players not found
+ *       500:
+ *         description: Settlement calculation failed
+ */
+router.post('/calculate', calculateSettlements);
 
 export default router;
 
