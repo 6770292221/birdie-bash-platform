@@ -177,6 +177,37 @@ services:
     networks:
       - birdie-network
 
+  matching-service:
+    build: ./matching-service
+    container_name: birdie-matching-service
+    restart: unless-stopped
+    ports:
+      - "3008:3008"
+    environment:
+      - NODE_ENV=development
+      - PORT=3008
+      - MATCHING_DB_URI=mongodb+srv://birdie_admin:AppUser%232025%21@birdie-bash-cluster.lwadyko.mongodb.net/settlement?retryWrites=true&w=majority&appName=birdie-bash-cluster
+      - GRPC_PORT=50051
+      - GATEWAY_URL=http://birdie-gateway:3000
+      - retryWrites=true&w=majority&appName=birdie-bash-cluster
+      - RABBIT_URL=amqp://admin:password123@localhost:5672
+      - RABBIT_EXCHANGE=events
+      - RABBIT_RETRY_MS=2000
+      - RABBIT_AUTOBIND=true
+      - RABBIT_BIND_QUEUE=events.debug
+      - RABBIT_BIND_KEY=event.#
+      - RABBIT_LOG_PAYLOADS=true
+      - RABBIT_MAX_LOG_BYTES=1000
+      - RABBIT_AUTO_BIND_ON_RETURN=true
+      - AUTH_SERVICE_URL=http://localhost:3001
+      - EVENT_SERVICE_URL=http://localhost:3003
+      - REGISTER_SERVICE_URL=http://localhost:3005
+
+    depends_on:
+      - mongodb
+    networks:
+      - birdie-network
+
 volumes:
   mongodb_data:
     driver: local

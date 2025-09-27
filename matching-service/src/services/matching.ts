@@ -13,20 +13,6 @@ function isAvailableAt(p: Player, tIso: string) {
   return toMs(p.availableStart) <= t && t < toMs(p.availableEnd);
 }
 
-function randomShuffle<T>(arr: T[]): T[] {
-  const a = arr.slice();
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
-
-function takeById<T extends { id: string }>(ids: string[], pool: T[]): T[] {
-  const set = new Set(ids);
-  return pool.filter((x) => set.has(x.id));
-}
-
 // ---------- runtime helpers (state แยกจากข้อมูลลงทะเบียน) ----------
 function getRt(e: Event, playerId: string): ParticipantRuntime {
   let rt = e.runtimes[playerId];
@@ -57,77 +43,62 @@ function initRuntimesForPlayers(players: Player[]): Record<string, ParticipantRu
   return runtimes;
 }
 
-// ---------- queue tools ----------
-function enqueueIfWaiting(e: Event, ps: Player[], at: string) {
-  for (const p of ps) {
+// ---------- queue: สร้างใหม่แบบเรียบง่ายทุกครั้ง ----------
+/**
+ * สร้างคิวใหม่จากผู้เล่นที่ "พร้อม ณ at" และ "ไม่ได้กำลัง Playing"
+ * เรียงลำดับโดย:
+ *  1) gamesPlayed ASC (ใครเล่นน้อยสุดมาก่อน)
+ *  2) waitingSince ASC (ใครรอนานกว่ามาก่อน)
+ */
+function rebuildQueue(e: Event, at: string) {
+  const ready = e.players.filter((p) => isAvailableAt(p, at) && getRt(e, p.id).state !== RuntimeState.Playing);
+
+  for (const p of ready) {
     const rt = getRt(e, p.id);
-    if (rt.state !== RuntimeState.Playing) {
+    if (rt.state !== RuntimeState.Waiting) {
       rt.state = RuntimeState.Waiting;
       if (!rt.waitingSince) rt.waitingSince = at;
-      if (!e.queue.includes(p.id)) e.queue.push(p.id);
     }
   }
-}
 
-function purgeQueue(e: Event, at: string) {
-  // unique + ready + not playing
-  const seen = new Set<string>();
-  e.queue = e.queue.filter((pid) => {
-    if (seen.has(pid)) return false;
-    seen.add(pid);
-    const p = e.players.find((x) => x.id === pid);
-    const rt = p ? getRt(e, pid) : undefined;
-    return !!p && !!rt && isAvailableAt(p, at) && rt.state !== RuntimeState.Playing;
+  // sort ตามกติกา fairness แบบง่าย
+  ready.sort((a, b) => {
+    const ra = getRt(e, a.id);
+    const rb = getRt(e, b.id);
+    if (ra.gamesPlayed !== rb.gamesPlayed) return ra.gamesPlayed - rb.gamesPlayed;
+    const wa = ra.waitingSince ? toMs(ra.waitingSince) : Number.MAX_SAFE_INTEGER;
+    const wb = rb.waitingSince ? toMs(rb.waitingSince) : Number.MAX_SAFE_INTEGER;
+    return wa - wb;
   });
+
+  e.queue = ready.map((p) => p.id);
 }
 
-function dequeueUpTo(e: Event, k: number, at: string): Player[] {
-  purgeQueue(e, at);
-  const picked: Player[] = [];
-  while (picked.length < k && e.queue.length) {
-    const pid = e.queue.shift()!;
-    const p = e.players.find((x) => x.id === pid)!;
+/** ดึงคนบนสุด k คนจากคิว (ต้องพร้อม ณ at และไม่กำลังเล่น) */
+function takeTopK(e: Event, k: number, at: string): Player[] {
+  const out: Player[] = [];
+  const keep: string[] = [];
+  for (const pid of e.queue) {
+    if (out.length >= k) {
+      keep.push(pid);
+      continue;
+    }
+    const p = e.players.find((x) => x.id === pid);
+    if (!p) continue;
     const rt = getRt(e, pid);
-    if (isAvailableAt(p, at) && rt.state !== RuntimeState.Playing) picked.push(p);
-  }
-  return picked;
-}
-
-function removeFromQueue(e: Event, ids: string[]) {
-  const rm = new Set(ids);
-  e.queue = e.queue.filter((pid) => !rm.has(pid));
-}
-
-// ---------- grouping (no skill): anchors + fill available to 4 ----------
-function buildGroupNoSkill(
-  anchors: Player[],
-  pool: Player[],
-  at: string,
-  e: Event
-): Player[] | null {
-  // 1) anchors unique
-  const base: Player[] = [];
-  const seen = new Set<string>();
-  for (const a of anchors) {
-    if (!seen.has(a.id)) {
-      base.push(a);
-      seen.add(a.id);
+    if (isAvailableAt(p, at) && rt.state !== RuntimeState.Playing) {
+      out.push(p);
+    } else {
+      // ถ้าไม่พร้อมแล้วก็ไม่ต้องเก็บไว้ในคิว
     }
   }
-  // 2) fill by available & not playing
-  const candidates = pool.filter(
-    (p) => isAvailableAt(p, at) && getRt(e, p.id).state !== RuntimeState.Playing
-  );
-  for (const c of randomShuffle(candidates)) {
-    if (base.length >= 4) break;
-    if (!seen.has(c.id)) {
-      base.push(c);
-      seen.add(c.id);
-    }
-  }
-  return base.length === 4 ? base : null;
+  // ตัดคนที่หยิบไปแล้วออกจากคิว
+  const taken = new Set(out.map((p) => p.id));
+  e.queue = keep.filter((pid) => !taken.has(pid));
+  return out;
 }
 
+// ---------- game helpers ----------
 function createGame(court: Court, players: Player[], at: string): Game {
   return {
     id: `g_${court.id}_${Date.now()}`,
@@ -153,11 +124,9 @@ async function logGameStart(
   e: Event,
   courtId: string,
   game: Game,
-  anchors: Player[],
   queueBefore: string[],
   queueAfter: string[],
   action: "seed" | "advance",
-  at: string
 ) {
   try {
     await GameLog.create({
@@ -165,19 +134,20 @@ async function logGameStart(
       gameId: game.id,
       courtId,
       action,
-      at,
+      at: nowIso(),
       startTime: game.startTime,
       players: game.playerIds.map((id) => {
         const p = e.players.find((x) => x.id === id)!;
         const rt = getRt(e, id);
         return {
           id: p.id,
+          userId: (p as any).userId ?? undefined,
           name: p.name,
           registrationStatus: (p as any).registrationStatus ?? undefined,
           runtimeState: rt.state,
         };
       }),
-      anchors: anchors.map((a) => a.id),
+      anchors: [], // เราไม่ใช้คอนเซ็ปต์ anchors แล้วในเวอร์ชันเรียบง่ายนี้
       queueBefore,
       queueAfter,
       metrics: { playersCount: game.playerIds.length },
@@ -187,21 +157,39 @@ async function logGameStart(
   }
 }
 
+// ---------- presenter (แปลง games.playerIds -> [{id, name}]) ----------
+function serializeEventForClient(e: Event) {
+  const findName = (id: string) => e.players.find((p) => p.id === id)?.name ?? null;
+  return {
+    id: e.id,
+    courts: e.courts,
+    createdAt: e.createdAt,
+    queue: e.queue
+      .map((pid) => {
+        const p = e.players.find((x) => x.id === pid);
+        return p ? { ...p, runtime: getRt(e, pid) } : undefined;
+      })
+      .filter(Boolean),
+    players: e.players.map((p) => ({ ...p, runtime: getRt(e, p.id) })),
+    games: e.games.map((g) => ({
+      ...g,
+      playerIds: g.playerIds.map((id) => ({ id, name: findName(id) })),
+    })),
+  };
+}
+
 // ---------- service ----------
 export const MatchingService = {
-  defaultCourts: 2,
+  defaultCourts: 1,
 
   createEvent(id: string, courts: number, players: Player[]): Event {
     const e: Event = {
       id,
-      courts: Array.from({ length: courts }, (_, i) => ({
-        id: `c${i + 1}`,
-        currentGameId: null,
-      })),
+      courts: Array.from({ length: courts }, (_, i) => ({ id: `c${i + 1}`, currentGameId: null })),
       createdAt: nowIso(),
       queue: [],
       games: [],
-      players: players.slice(),          // ไม่แก้/ลบ players ระหว่างรัน
+      players: players.slice(),
       runtimes: initRuntimesForPlayers(players),
     };
     Store.upsertEvent(e);
@@ -223,164 +211,116 @@ export const MatchingService = {
     return e;
   },
 
+  // จับคู่รอบแรก: เลือก 4 คนต่อคอร์ท โดยเรียง gamesPlayed ASC แล้ว waitingSince ASC
   async seedInitialGames(eventId: string, at: string) {
     const e = Store.getEvent(eventId);
     if (!e) throw new Error("Event not found");
 
-    // enqueue available at 'at'
-    const avail = e.players.filter((p) => isAvailableAt(p, at));
-    enqueueIfWaiting(e, avail, at);
-    purgeQueue(e, at);
+    // สร้างคิวใหม่แบบ simple จากผู้ที่พร้อม ณ at
+    rebuildQueue(e, at);
 
     for (const court of e.courts) {
       if (court.currentGameId) continue;
 
-      const anchors = dequeueUpTo(e, 2, at);
-      let group: Player[] | null = null;
+      const group = takeTopK(e, 4, at);
+      if (group.length !== 4) continue; // ต้องครบ 4 เท่านั้น
 
-      if (anchors.length) group = buildGroupNoSkill(anchors, e.players, at, e);
+      const queueBefore = [...e.queue];
+      const game = createGame(court, group, at);
+      e.games.push(game);
+      court.currentGameId = game.id;
+      markPlaying(e, group, at);
 
-      if (!group) {
-        const candidates = e.players.filter(
-          (p) => isAvailableAt(p, at) && getRt(e, p.id).state !== RuntimeState.Playing
-        );
-        const g = randomShuffle(candidates).slice(0, 4);
-        group = g.length === 4 ? g : null;
-      }
-
-      if (group) {
-        const queueBeforeCourt = [...e.queue];
-        removeFromQueue(e, group.map((p) => p.id));
-
-        const game = createGame(court, group, at);
-        e.games.push(game);
-        court.currentGameId = game.id;
-        markPlaying(e, group, at);
-
-        await logGameStart(e, court.id, game, anchors, queueBeforeCourt, [...e.queue], "seed", at);
-      }
+      await logGameStart(e, court.id, game, queueBefore, [...e.queue], "seed");
     }
 
     Store.upsertEvent(e);
-    return e;
+    return serializeEventForClient(e) as any;
   },
 
+  // จบเกมคอร์ทนี้ แล้วเริ่มเกมใหม่ด้วยกติกาเดียวกัน
   async finishAndRefill(eventId: string, courtId: string, at: string) {
     const e = Store.getEvent(eventId);
     if (!e) throw new Error("Event not found");
     const court = e.courts.find((c) => c.id === courtId);
     if (!court) throw new Error("Court not found");
 
-    // 1) end current game (if any)
+    // 1) จบเกมเดิม (ถ้ามี)
     if (court.currentGameId) {
       const g = e.games.find((x) => x.id === court.currentGameId)!;
       g.endTime = at;
 
-      // return previous players to Idle runtime, then enqueue if still available
-      const prevPlayers = takeById(g.playerIds, e.players);
-      for (const p of prevPlayers) getRt(e, p.id).state = RuntimeState.Idle;
-
-      enqueueIfWaiting(e, prevPlayers, at);
+      // คืนสถานะผู้เล่นจากเกมเดิม
+      for (const pid of g.playerIds) {
+        const p = e.players.find((x) => x.id === pid);
+        if (!p) continue;
+        const rt = getRt(e, pid);
+        rt.state = RuntimeState.Idle;
+        // ไม่บวก gamesPlayed ที่นี่ เพราะบวกไปแล้วตอนเริ่มเกม (markPlaying)
+      }
       court.currentGameId = null;
-      purgeQueue(e, at);
     }
 
-    // 2) refill new game
-    const anchors = dequeueUpTo(e, 2, at);
-    let group: Player[] | null = null;
+    // 2) สร้างคิวใหม่จากทุกคนที่พร้อม ณ at (รวมคนจากเกมก่อนหน้าด้วย ถ้ายังอยู่ในช่วงเวลา)
+    rebuildQueue(e, at);
 
-    if (anchors.length) group = buildGroupNoSkill(anchors, e.players, at, e);
-
-    if (!group) {
-      const candidates = e.players.filter(
-        (p) => isAvailableAt(p, at) && getRt(e, p.id).state !== RuntimeState.Playing
-      );
-      const g = randomShuffle(candidates).slice(0, 4);
-      group = g.length === 4 ? g : null;
-    }
-
-    if (group) {
-      const queueBeforeCourt = [...e.queue];
-      removeFromQueue(e, group.map((p) => p.id));
-
+    // 3) เติมเกมใหม่
+    const group = takeTopK(e, 4, at);
+    if (group.length === 4) {
+      const queueBefore = [...e.queue];
       const game = createGame(court, group, at);
       e.games.push(game);
       court.currentGameId = game.id;
       markPlaying(e, group, at);
 
-      await logGameStart(e, court.id, game, anchors, queueBeforeCourt, [...e.queue], "advance", at);
+      await logGameStart(e, court.id, game, queueBefore, [...e.queue], "advance");
     }
 
     Store.upsertEvent(e);
-    return e;
+    return serializeEventForClient(e) as any;
   },
 
+  // จบทุกคอร์ท แล้วเริ่มใหม่พร้อมกัน
   async advanceAll(eventId: string, at: string) {
     const e = Store.getEvent(eventId);
     if (!e) throw new Error("Event not found");
 
-    // end all current games
+    // ปิดทุกเกมที่เปิดอยู่
     for (const court of e.courts) {
       if (!court.currentGameId) continue;
       const g = e.games.find((x) => x.id === court.currentGameId)!;
       g.endTime = at;
-
-      const prevPlayers = takeById(g.playerIds, e.players);
-      for (const p of prevPlayers) getRt(e, p.id).state = RuntimeState.Idle;
-
-      enqueueIfWaiting(e, prevPlayers, at);
+      for (const pid of g.playerIds) {
+        const rt = getRt(e, pid);
+        rt.state = RuntimeState.Idle;
+      }
       court.currentGameId = null;
     }
-    purgeQueue(e, at);
 
-    // refill all courts
+    // สร้างคิวใหม่
+    rebuildQueue(e, at);
+
+    // เติมทุกคอร์ท
     for (const court of e.courts) {
-      const anchors = dequeueUpTo(e, 2, at);
-      let group: Player[] | null = null;
+      const group = takeTopK(e, 4, at);
+      if (group.length !== 4) continue;
 
-      if (anchors.length) group = buildGroupNoSkill(anchors, e.players, at, e);
-      if (!group) {
-        const candidates = e.players.filter(
-          (p) => isAvailableAt(p, at) && getRt(e, p.id).state !== RuntimeState.Playing
-        );
-        const g = randomShuffle(candidates).slice(0, 4);
-        group = g.length === 4 ? g : null;
-      }
+      const queueBefore = [...e.queue];
+      const game = createGame(court, group, at);
+      e.games.push(game);
+      court.currentGameId = game.id;
+      markPlaying(e, group, at);
 
-      if (group) {
-        const queueBeforeCourt = [...e.queue];
-        removeFromQueue(e, group.map((p) => p.id));
-
-        const game = createGame(court, group, at);
-        e.games.push(game);
-        court.currentGameId = game.id;
-        markPlaying(e, group, at);
-
-        await logGameStart(e, court.id, game, anchors, queueBeforeCourt, [...e.queue], "advance", at);
-      }
+      await logGameStart(e, court.id, game, queueBefore, [...e.queue], "advance");
     }
 
     Store.upsertEvent(e);
-    return e;
+    return serializeEventForClient(e) as any;
   },
 
   status(eventId: string) {
     const e = Store.getEvent(eventId);
     if (!e) throw new Error("Event not found");
-    return {
-      id: e.id,
-      courts: e.courts.map((c) => ({
-        id: c.id,
-        currentGame: c.currentGameId ? e.games.find((g) => g.id === c.currentGameId) : null,
-      })),
-      queue: e.queue
-        .map((pid) => {
-          const p = e.players.find((x) => x.id === pid);
-          return p ? { ...p, runtime: getRt(e, pid) } : undefined;
-        })
-        .filter(Boolean),
-      players: e.players.map((p) => ({ ...p, runtime: getRt(e, p.id) })),
-      games: e.games,
-    };
+    return serializeEventForClient(e);
   },
 };
