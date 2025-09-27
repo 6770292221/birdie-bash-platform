@@ -47,9 +47,8 @@ const CalculatePage = () => {
   const [breakdown, setBreakdown] = useState<CostBreakdownItem[]>([]);
   const [isCalculated, setIsCalculated] = useState<boolean>(false);
   const [shuttlecockCount, setShuttlecockCount] = useState<string>('');
-  const [penaltyFee, setPenaltyFee] = useState<string>('');
-  const [absentPlayers, setAbsentPlayers] = useState<Set<string>>(new Set());
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [isSavingShuttlecock, setIsSavingShuttlecock] = useState<boolean>(false);
 
   useEffect(() => {
     const fetch = async () => {
@@ -92,10 +91,6 @@ const CalculatePage = () => {
     if (detail.success) {
       const eventData = (detail.data as any).event || detail.data;
       setEventDetail(eventData);
-      // Set penalty fee from event data if not already set
-      if (penaltyFee === '' && eventData.absentPenaltyFee !== undefined) {
-        setPenaltyFee(eventData.absentPenaltyFee.toString());
-      }
     }
     const regList = reg.success ? ((reg.data as any).players || (reg.data as any) || []) : [];
     const waitList = wait.success ? ((wait.data as any).players || (wait.data as any) || []) : [];
@@ -106,28 +101,59 @@ const CalculatePage = () => {
   // Validation function to check if inputs are valid
   const isFormValid = useMemo(() => {
     const shuttlecockNum = parseInt(shuttlecockCount);
-    const penaltyFeeNum = parseFloat(penaltyFee);
 
     return (
       shuttlecockCount.trim() !== '' &&
       !isNaN(shuttlecockNum) &&
       shuttlecockNum > 0 &&
-      penaltyFee.trim() !== '' &&
-      !isNaN(penaltyFeeNum) &&
-      penaltyFeeNum >= 0 &&
       selectedEventId &&
       eventDetail
     );
-  }, [shuttlecockCount, penaltyFee, selectedEventId, eventDetail]);
+  }, [shuttlecockCount, selectedEventId, eventDetail]);
 
-  const handlePlayerAbsentToggle = (playerId: string) => {
-    const newAbsentPlayers = new Set(absentPlayers);
-    if (newAbsentPlayers.has(playerId)) {
-      newAbsentPlayers.delete(playerId);
-    } else {
-      newAbsentPlayers.add(playerId);
+
+  const saveShuttlecockCount = async () => {
+    if (!selectedEventId || !shuttlecockCount.trim() || isNaN(parseInt(shuttlecockCount)) || parseInt(shuttlecockCount) <= 0) {
+      return;
     }
-    setAbsentPlayers(newAbsentPlayers);
+
+    setIsSavingShuttlecock(true);
+    try {
+      console.log('🚀 Saving shuttlecock count to event...');
+      console.log('Event ID:', selectedEventId);
+      console.log('Shuttlecock Count:', shuttlecockCount);
+
+      const response = await apiClient.updateEvent(selectedEventId, {
+        shuttlecockCount: parseInt(shuttlecockCount)
+      });
+
+      console.log('Update event response:', response);
+
+      if (!response.success) {
+        console.error('Update event failed:', response.error);
+        throw new Error(response.error || 'ไม่สามารถบันทึกจำนวนลูกขนไก่ได้');
+      }
+
+      toast({
+        title: 'บันทึกสำเร็จ! 🎉',
+        description: `บันทึกจำนวนลูกขนไก่ ${shuttlecockCount} ลูก เรียบร้อยแล้ว`,
+      });
+
+      // Reload event data to get updated information
+      if (selectedEventId) {
+        await loadEventData(selectedEventId);
+      }
+
+    } catch (error) {
+      console.error('Save shuttlecock count error:', error);
+      toast({
+        title: 'เกิดข้อผิดพลาดในการบันทึก',
+        description: error instanceof Error ? error.message : 'ไม่สามารถบันทึกจำนวนลูกขนไก่ได้',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsSavingShuttlecock(false);
+    }
   };
 
   const calculate = async () => {
@@ -150,8 +176,7 @@ const CalculatePage = () => {
       const response = await apiClient.calculateSettlement(selectedEventId, {
         currency: 'THB',
         shuttlecockCount: parseInt(shuttlecockCount),
-        absentPlayerIds: Array.from(absentPlayers),
-        penaltyFee: parseFloat(penaltyFee) || 0
+        absentPlayerIds: []
       });
 
       console.log('Settlement API response:', response); // Debug log
@@ -237,16 +262,13 @@ const CalculatePage = () => {
     try {
       console.log('🚀 Starting actual settlement issue...');
       console.log('Event ID:', selectedEventId);
-      console.log('Absent Players:', Array.from(absentPlayers));
       console.log('Shuttlecock Count:', shuttlecockCount);
-      console.log('Penalty Fee:', penaltyFee);
 
       // Use apiClient issueSettlement method to actually charge players
       const response = await apiClient.issueSettlement(selectedEventId, {
         currency: 'THB',
         shuttlecockCount: parseInt(shuttlecockCount),
-        absentPlayerIds: Array.from(absentPlayers),
-        penaltyFee: parseFloat(penaltyFee) || 0
+        absentPlayerIds: []
       });
 
       console.log('Settlement issue response:', response);
@@ -331,7 +353,7 @@ const CalculatePage = () => {
             <CardTitle className="text-xl">คำนวณค่าใช้จ่าย</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="event-select">เลือกอีเวนต์</Label>
                 <Select value={selectedEventId} onValueChange={setSelectedEventId}>
@@ -346,95 +368,77 @@ const CalculatePage = () => {
                 </Select>
               </div>
 
-              <div>
+              <div className="space-y-2">
                 <Label htmlFor="shuttlecock-count">จำนวนลูกขนไก่ที่ใช้</Label>
-                <Input
-                  id="shuttlecock-count"
-                  type="number"
-                  min="1"
-                  value={shuttlecockCount}
-                  onChange={(e) => setShuttlecockCount(e.target.value)}
-                  placeholder="เช่น 4"
-                  className={shuttlecockCount.trim() !== '' && (isNaN(parseInt(shuttlecockCount)) || parseInt(shuttlecockCount) <= 0) ? 'border-red-500' : ''}
-                />
+                <div className="flex gap-2">
+                  <Input
+                    id="shuttlecock-count"
+                    type="number"
+                    min="1"
+                    value={shuttlecockCount}
+                    onChange={(e) => setShuttlecockCount(e.target.value)}
+                    placeholder="เช่น 4"
+                    className={`flex-1 ${shuttlecockCount.trim() !== '' && (isNaN(parseInt(shuttlecockCount)) || parseInt(shuttlecockCount) <= 0) ? 'border-red-500' : ''}`}
+                  />
+                  <Button
+                    onClick={saveShuttlecockCount}
+                    disabled={!selectedEventId || !shuttlecockCount.trim() || isNaN(parseInt(shuttlecockCount)) || parseInt(shuttlecockCount) <= 0 || isSavingShuttlecock}
+                    className="bg-green-600 hover:bg-green-700 disabled:bg-gray-400"
+                  >
+                    {isSavingShuttlecock ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        บันทึก...
+                      </>
+                    ) : (
+                      <>
+                        บันทึก
+                      </>
+                    )}
+                  </Button>
+                </div>
                 {shuttlecockCount.trim() !== '' && (isNaN(parseInt(shuttlecockCount)) || parseInt(shuttlecockCount) <= 0) && (
                   <p className="text-red-500 text-xs mt-1">กรุณาใส่จำนวนที่มากกว่า 0</p>
                 )}
               </div>
-
-              <div>
-                <Label htmlFor="penalty-fee">ค่าปรับ (บาท)</Label>
-                <Input
-                  id="penalty-fee"
-                  type="number"
-                  min="0"
-                  value={penaltyFee}
-                  onChange={(e) => setPenaltyFee(e.target.value)}
-                  placeholder="เช่น 50"
-                  className={penaltyFee.trim() !== '' && (isNaN(parseFloat(penaltyFee)) || parseFloat(penaltyFee) < 0) ? 'border-red-500' : ''}
-                />
-                {penaltyFee.trim() !== '' && (isNaN(parseFloat(penaltyFee)) || parseFloat(penaltyFee) < 0) && (
-                  <p className="text-red-500 text-xs mt-1">กรุณาใส่จำนวนที่มากกว่าหรือเท่ากับ 0</p>
-                )}
-                <p className="text-xs text-gray-500 mt-1">ค่าปรับสำหรับผู้เล่นที่ไม่มาเล่น</p>
-              </div>
             </div>
 
-            {/* Player attendance selection */}
+            {/* Player List */}
             {eventDetail && players.length > 0 && !isCalculated && (
               <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200">
                 <CardHeader>
-                  <CardTitle className="text-lg text-blue-800 flex items-center justify-between">
-                    <div className="flex items-center">
-                      <Users className="w-5 h-5 mr-2" />
-                      เช็คการเข้าร่วม ({players.length} คน)
-                    </div>
-                    <div className="flex items-center space-x-4 text-sm">
-                      <span className="text-green-600">
-                        ✅ มาเล่น: {players.length - absentPlayers.size} คน
-                      </span>
-                      <span className="text-red-600">
-                        ❌ ไม่มา: {absentPlayers.size} คน
-                      </span>
-                    </div>
+                  <CardTitle className="text-lg text-blue-800 flex items-center">
+                    <Users className="w-5 h-5 mr-2" />
+                    รายชื่อผู้เล่น ({players.length} คน)
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                    <div className="flex items-start space-x-2">
-                      <div className="text-amber-600 mt-0.5">⚠️</div>
-                      <div className="text-sm text-amber-800">
-                        <strong>วิธีใช้:</strong> กดที่ผู้เล่นที่ <strong>ไม่มาเล่น</strong> เพื่อทำเครื่องหมายเป็นคนไม่มา
-                        คนที่ไม่มาจะถูกเก็บค่าปรับ <strong>฿{parseFloat(penaltyFee) || 0}</strong>
-                      </div>
-                    </div>
-                  </div>
-
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                     {players.map((player, index) => {
                       const playerId = player.playerId || player.id || `player-${index}`;
-                      const isAbsent = absentPlayers.has(playerId);
+                      const isPenalty = player.isPenalty === true;
 
                       return (
                         <div
                           key={playerId}
-                          className={`relative p-4 rounded-lg border-2 cursor-pointer transition-all duration-200 hover:shadow-md ${
-                            isAbsent
+                          className={`relative p-4 rounded-lg border-2 transition-all duration-200 ${
+                            isPenalty
                               ? 'bg-red-50 border-red-300 shadow-md'
-                              : 'bg-white border-green-300 hover:border-green-400'
+                              : 'bg-white border-green-300'
                           }`}
-                          onClick={() => handlePlayerAbsentToggle(playerId)}
                         >
                           {/* Status indicator */}
                           <div className={`absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center text-white text-sm font-bold ${
-                            isAbsent ? 'bg-red-500' : 'bg-green-500'
+                            isPenalty ? 'bg-red-500' : 'bg-green-500'
                           }`}>
-                            {isAbsent ? '✗' : '✓'}
+                            {isPenalty ? '⚠' : '✓'}
                           </div>
 
                           <div className="pr-8">
                             <div className="flex items-start justify-between mb-2">
-                              <div className="font-medium text-gray-800">{player.name ?? player.email ?? 'ไม่ระบุ' }</div>
+                              <div className={`font-medium ${isPenalty ? 'text-red-800' : 'text-gray-800'}`}>
+                                {player.name ?? player.email ?? 'ไม่ระบุ'}
+                              </div>
                             </div>
 
                             <div className="flex items-center justify-between mb-2">
@@ -460,12 +464,12 @@ const CalculatePage = () => {
                             <div className="mt-2">
                               <Badge
                                 className={`text-xs ${
-                                  isAbsent
+                                  isPenalty
                                     ? 'bg-red-100 text-red-700 border-red-300'
                                     : 'bg-green-100 text-green-700 border-green-300'
                                 }`}
                               >
-                                {isAbsent ? '❌ ไม่มาเล่น' : '✅ มาเล่น'}
+                                {isPenalty ? '❌ ต้องเสียค่าปรับ' : '✅ ปกติ'}
                               </Badge>
                             </div>
                           </div>
@@ -474,13 +478,15 @@ const CalculatePage = () => {
                     })}
                   </div>
 
-                  {absentPlayers.size > 0 && (
+                  {players.some(p => p.isPenalty) && (
                     <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
                       <div className="flex items-center space-x-2 text-red-800">
                         <div className="text-red-600">💰</div>
                         <div className="text-sm">
-                          <strong>ค่าปรับที่จะเก็บ:</strong> {absentPlayers.size} คน × ฿{parseFloat(penaltyFee) || 0} =
-                          <strong className="ml-1">฿{(absentPlayers.size * (parseFloat(penaltyFee) || 0)).toLocaleString()}</strong>
+                          <strong>ผู้เล่นที่ต้องเสียค่าปรับ:</strong> {players.filter(p => p.isPenalty).length} คน
+                          <div className="text-xs text-red-600 mt-1">
+                            ค่าปรับจะถูกคำนวณตามที่กำหนดไว้ในอีเวนต์
+                          </div>
                         </div>
                       </div>
                     </div>

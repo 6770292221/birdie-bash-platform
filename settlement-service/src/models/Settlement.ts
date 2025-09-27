@@ -22,14 +22,6 @@ export enum TransactionType {
 export interface ISettlement extends Document {
   settlementId: string;
   eventId: string; // Reference to Event Service
-  // Settlement configuration (snapshot at time of calculation)
-  settlementConfig: {
-    shuttlecockPrice: number;
-    shuttlecockCount: number;
-    penaltyFee: number;
-    courtHourlyRate: number;
-    currency: string;
-  };
   // Summary statistics
   totalCollected: number;
   successfulCharges: number;
@@ -44,13 +36,6 @@ export interface ISettlement extends Document {
 export interface ISettlementPlayer extends Document {
   settlementId: string; // Reference to Settlement
   playerId: string; // Reference to Registration Service player
-  userId?: string; // Reference to Auth Service user (for members only)
-
-  // Player session details
-  startTime: string;
-  endTime: string;
-  status: 'played' | 'canceled' | 'waitlist' | 'absent';
-  role: 'member' | 'admin' | 'guest';
 
   // Calculation results
   courtFee: number;
@@ -108,13 +93,6 @@ const SettlementTransactionSchema: Schema = new Schema({
 const SettlementSchema: Schema = new Schema({
   settlementId: { type: String, required: true, unique: true },
   eventId: { type: String, required: true, index: true },
-  settlementConfig: {
-    shuttlecockPrice: { type: Number, required: true },
-    shuttlecockCount: { type: Number, required: true },
-    penaltyFee: { type: Number, required: true },
-    courtHourlyRate: { type: Number, required: true },
-    currency: { type: String, required: true, default: 'THB' }
-  },
   totalCollected: { type: Number, required: true },
   successfulCharges: { type: Number, default: 0 },
   failedCharges: { type: Number, default: 0 },
@@ -134,23 +112,6 @@ const SettlementSchema: Schema = new Schema({
 const SettlementPlayerSchema: Schema = new Schema({
   settlementId: { type: String, required: true, index: true },
   playerId: { type: String, required: true, index: true },
-  userId: { type: String, index: true }, // Only for members
-
-  // Player session details
-  startTime: { type: String, required: true },
-  endTime: { type: String, required: true },
-  status: {
-    type: String,
-    required: true,
-    enum: ['played', 'canceled', 'waitlist', 'absent'],
-    index: true
-  },
-  role: {
-    type: String,
-    required: true,
-    enum: ['member', 'admin', 'guest'],
-    index: true
-  },
 
   // Calculation results
   courtFee: { type: Number, required: true },
@@ -181,7 +142,6 @@ SettlementSchema.index({ settlementId: 1 });
 SettlementSchema.index({ createdAt: -1 });
 
 SettlementPlayerSchema.index({ settlementId: 1, playerId: 1 }, { unique: true });
-SettlementPlayerSchema.index({ userId: 1 });
 SettlementPlayerSchema.index({ paymentId: 1 });
 SettlementPlayerSchema.index({ createdAt: -1 });
 

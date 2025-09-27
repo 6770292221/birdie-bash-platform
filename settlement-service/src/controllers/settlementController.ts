@@ -15,8 +15,8 @@ const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 // Helper function to fetch real-time player data with caching
 async function fetchPlayerDisplayData(player: any, authHeader: string, eventId?: string): Promise<{ name: string; phoneNumber: string }> {
   try {
-    // Check cache first (prioritize userId for members, playerId for guests)
-    const cacheKey = player.userId || player.playerId;
+    // Check cache first using playerId
+    const cacheKey = player.playerId;
     const cached = playerDataCache.get(cacheKey);
     const now = Date.now();
 
@@ -26,37 +26,7 @@ async function fetchPlayerDisplayData(player: any, authHeader: string, eventId?:
 
     const gatewayUrl = process.env.GATEWAY_URL || 'http://localhost:3000';
 
-    // For members, fetch from Auth Service first
-    if (player.role === 'member' && player.userId) {
-      try {
-        const userResponse = await fetch(`${gatewayUrl}/api/auth/user/${player.userId}`, {
-          headers: {
-            'Authorization': authHeader,
-            'Content-Type': 'application/json'
-          }
-        });
-
-        if (userResponse.ok) {
-          const userData = await userResponse.json() as any;
-          if (userData.user && userData.user.name) {
-            const result = {
-              name: userData.user.name,
-              phoneNumber: userData.user.phoneNumber || 'N/A'
-            };
-            // Cache the result
-            playerDataCache.set(cacheKey, { data: result, timestamp: now });
-            return result;
-          }
-        }
-      } catch (error) {
-        Logger.warn('Failed to fetch user data from Auth Service', {
-          userId: player.userId,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        });
-      }
-    }
-
-    // For guests or fallback, try to fetch from Registration Service
+    // Try to fetch from Registration Service
     if (eventId) {
       try {
         const playersResponse = await fetch(`${gatewayUrl}/api/registration/events/${eventId}/players?limit=100`, {
@@ -82,7 +52,7 @@ async function fetchPlayerDisplayData(player: any, authHeader: string, eventId?:
           }
         }
       } catch (error) {
-        Logger.warn('Failed to fetch player data from Registration Service', {
+        Logger.info('Failed to fetch player data from Registration Service', {
           playerId: player.playerId,
           eventId,
           error: error instanceof Error ? error.message : 'Unknown error'
@@ -416,20 +386,12 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
       Logger.info('Merging player data with settlement calculation', {
         playerId: settlement.playerId,
         playerName: player?.name,
-        hasUserId: !!player?.userId,
-        role: player?.role,
-        userId: player?.userId,
         phoneNumber: player?.phoneNumber
       });
 
       return {
         // Player info
         playerId: settlement.playerId,
-        userId: player?.userId || null,
-        startTime: player?.startTime || null,
-        endTime: player?.endTime || null,
-        status: player?.status || 'played',
-        role: player?.role || 'guest',
         name: player?.name || null,
         phoneNumber: player?.phoneNumber || null,
         // Settlement calculation results
@@ -449,13 +411,6 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
     const settlementRecord = new Settlement({
       settlementId,
       eventId: event_id,
-      settlementConfig: {
-        shuttlecockPrice: costs.shuttlecockPrice,
-        shuttlecockCount: costs.shuttlecockCount,
-        penaltyFee: costs.penaltyFee,
-        courtHourlyRate: eventData.courtHourlyRate,
-        currency
-      },
       totalCollected: Math.round(totalCollected * 100) / 100,
       successfulCharges: 0,
       failedCharges: 0,
@@ -485,11 +440,6 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
         const settlementPlayer = new SettlementPlayer({
           settlementId,
           playerId: settlement.playerId,
-          userId: playerData?.userId || null,
-          startTime: playerData?.startTime || '09:00',
-          endTime: playerData?.endTime || '10:00',
-          status: playerData?.status || 'played',
-          role: playerData?.role || 'guest',
           courtFee: settlement.courtFee,
           shuttlecockFee: settlement.shuttlecockFee,
           penaltyFee: settlement.penaltyFee,
@@ -643,11 +593,6 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
         event_id,
         calculationResults: settlementPlayers.map(player => ({
           playerId: player.playerId,
-          userId: player.userId,
-          startTime: player.startTime,
-          endTime: player.endTime,
-          status: player.status,
-          role: player.role,
           courtFee: player.courtFee,
           shuttlecockFee: player.shuttlecockFee,
           penaltyFee: player.penaltyFee,
@@ -739,7 +684,6 @@ export const getAllSettlements = async (req: Request, res: Response) => {
             return {
               playerDetails: {
                 playerId: player.playerId,
-                userId: player.userId,
                 name: displayData.name,
                 phoneNumber: displayData.phoneNumber
               },
@@ -1070,20 +1014,12 @@ export const calculateSettlements = async (req: Request, res: Response) => {
       Logger.info('Merging player data with settlement calculation', {
         playerId: settlement.playerId,
         playerName: player?.name,
-        hasUserId: !!player?.userId,
-        role: player?.role,
-        userId: player?.userId,
         phoneNumber: player?.phoneNumber
       });
 
       return {
         // Player info
         playerId: settlement.playerId,
-        userId: player?.userId || null,
-        startTime: player?.startTime || null,
-        endTime: player?.endTime || null,
-        status: player?.status || 'played',
-        role: player?.role || 'guest',
         name: player?.name || null,
         phoneNumber: player?.phoneNumber || null,
         // Settlement calculation results
@@ -1171,7 +1107,6 @@ export const getSettlementById = async (req: Request, res: Response) => {
         return {
           playerDetails: {
             playerId: player.playerId,
-            userId: player.userId,
             name: displayData.name,
             phoneNumber: displayData.phoneNumber
           },
