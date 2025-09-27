@@ -226,9 +226,13 @@ router.get('/:settlement_id', getSettlementById);
  *       Automatically fetches event details and participants, then calculates settlement amounts and issues charges via gRPC to Payment Service.
  *
  *       **Data Sources:**
- *       - Event details from Event Service (port 3003)
- *       - Players/participants from Registration Service (port 3005)
+ *       - Event details from Event Service (including shuttlecockCount, absentPenaltyFee)
+ *       - Players/participants from Registration Service (uses isPenalty flag)
  *       - Court and cost information from event configuration
+ *
+ *       **Penalty Logic:**
+ *       - Players with isPenalty=true are charged penalty fee only
+ *       - Other players are charged court fee + shuttlecock fee (split among played players)
  *
  *       **Automatic Actions:**
  *       - Reads penalty fee from event configuration (absentPenaltyFee)
@@ -244,23 +248,8 @@ router.get('/:settlement_id', getSettlementById);
  *             properties:
  *               event_id:
  *                 type: string
- *                 description: Event ID for the settlement - all other data will be fetched automatically
+ *                 description: Event ID for the settlement - all other data will be fetched automatically from Event and Registration services
  *                 example: "68caed4a19d4dfc0aaba9de9"
- *               currency:
- *                 type: string
- *                 description: Currency code
- *                 default: "THB"
- *                 example: "THB"
- *               shuttlecockCount:
- *                 type: number
- *                 description: Number of shuttlecocks used during the event
- *                 example: 4
- *               absentPlayerIds:
- *                 type: array
- *                 items:
- *                   type: string
- *                 description: Array of player IDs who were absent from the event
- *                 example: ["player123", "player456"]
  *     responses:
  *       201:
  *         description: Settlements calculated and charges issued successfully
@@ -311,9 +300,13 @@ router.post('/issue', calculateAndCharge);
  *       This endpoint provides a preview of what the settlement would look like.
  *
  *       **Data Sources:**
- *       - Event details from Event Service (port 3003)
- *       - Players/participants from Registration Service (port 3005)
+ *       - Event details from Event Service (including shuttlecockCount, absentPenaltyFee)
+ *       - Players/participants from Registration Service (uses isPenalty flag)
  *       - Court and cost information from event configuration
+ *
+ *       **Penalty Logic:**
+ *       - Players with isPenalty=true are charged penalty fee only
+ *       - Other players are charged court fee + shuttlecock fee (split among played players)
  *
  *       **Preview Mode Features:**
  *       - No charges are issued to Payment Service
@@ -331,23 +324,8 @@ router.post('/issue', calculateAndCharge);
  *             properties:
  *               event_id:
  *                 type: string
- *                 description: Event ID for the settlement calculation
+ *                 description: Event ID for the settlement calculation - all other data will be fetched automatically from Event and Registration services
  *                 example: "68caed4a19d4dfc0aaba9de9"
- *               currency:
- *                 type: string
- *                 description: Currency code
- *                 default: "THB"
- *                 example: "THB"
- *               shuttlecockCount:
- *                 type: number
- *                 description: Number of shuttlecocks used during the event
- *                 example: 4
- *               absentPlayerIds:
- *                 type: array
- *                 items:
- *                   type: string
- *                 description: Array of player IDs who were absent from the event
- *                 example: ["player123", "player456"]
  *     responses:
  *       200:
  *         description: Settlement calculation completed successfully (preview mode)
@@ -397,18 +375,10 @@ router.post('/issue', calculateAndCharge);
  *                         properties:
  *                           playerId:
  *                             type: string
- *                           userId:
- *                             type: string
  *                           name:
  *                             type: string
  *                           phoneNumber:
  *                             type: string
- *                           status:
- *                             type: string
- *                             enum: [played, absent, canceled, waitlist]
- *                           role:
- *                             type: string
- *                             enum: [member, guest]
  *                           courtFee:
  *                             type: number
  *                           shuttlecockFee:

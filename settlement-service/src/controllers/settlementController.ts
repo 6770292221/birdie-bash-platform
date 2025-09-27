@@ -76,22 +76,21 @@ async function fetchPlayerDisplayData(player: any, authHeader: string, eventId?:
 
 export const calculateAndCharge = async (req: Request, res: Response) => {
   try {
-    const { event_id, shuttlecockCount, absentPlayerIds = [], currency = 'THB' } = req.body;
+    const { event_id, eventId } = req.body;
+    const finalEventId = event_id || eventId;
 
     Logger.info('Settlement issue request received', {
-      event_id,
-      currency,
-      absentPlayersCount: absentPlayerIds.length,
+      event_id: finalEventId,
       timestamp: new Date().toISOString()
     });
 
     // Validate required fields
-    if (!event_id) {
+    if (!finalEventId) {
       return res.status(400).json({
         success: false,
         code: 'INVALID_REQUEST',
-        message: 'Missing required field: event_id is required',
-        details: { required_fields: ['event_id'] }
+        message: 'Missing required field: event_id or eventId is required',
+        details: { required_fields: ['event_id', 'eventId'] }
       });
     }
 
@@ -99,11 +98,11 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
     let eventData: any;
     try {
       const gatewayUrl = process.env.GATEWAY_URL || 'http://localhost:3000';
-      const fullUrl = `${gatewayUrl}/api/events/${event_id}`;
+      const fullUrl = `${gatewayUrl}/api/events/${finalEventId}`;
       const authHeader = req.headers.authorization || '';
 
       Logger.info('Fetching event details', {
-        event_id,
+        event_id: finalEventId,
         gatewayUrl,
         fullUrl,
         hasAuth: !!authHeader,
@@ -118,7 +117,7 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
       });
 
       Logger.info('Event API response received', {
-        event_id,
+        event_id: finalEventId,
         status: eventResponse.status,
         statusText: eventResponse.statusText,
         headers: Object.fromEntries(eventResponse.headers.entries())
@@ -126,7 +125,7 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
 
       if (!eventResponse.ok) {
         Logger.error('Failed to fetch event details', {
-          event_id,
+          event_id: finalEventId,
           status: eventResponse.status
         });
         return res.status(404).json({
@@ -134,7 +133,7 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
           code: 'EVENT_NOT_FOUND',
           message: `Event with ID ${event_id} not found`,
           details: {
-            event_id,
+            event_id: finalEventId,
             status: eventResponse.status
           }
         });
@@ -155,7 +154,7 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
 
     } catch (error) {
       Logger.error('Error fetching event details', {
-        event_id,
+        event_id: finalEventId,
         gatewayUrl: process.env.GATEWAY_URL || 'http://localhost:3000',
         error: error instanceof Error ? error.message : 'Unknown error',
         stack: error instanceof Error ? error.stack : 'No stack trace'
@@ -165,7 +164,7 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
         code: 'FETCH_EVENT_ERROR',
         message: 'Failed to fetch event information',
         details: {
-          event_id,
+          event_id: finalEventId,
           error: error instanceof Error ? error.message : 'Unknown error'
         }
       });
@@ -176,14 +175,14 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
     try {
       Logger.info('Fetching event players', { event_id });
       const gatewayUrl = process.env.GATEWAY_URL || 'http://localhost:3000';
-      const playersResponse = await fetch(`${gatewayUrl}/api/registration/events/${event_id}/players`, {
+      const playersResponse = await fetch(`${gatewayUrl}/api/registration/events/${finalEventId}/players`, {
         headers: {
           'Authorization': req.headers.authorization || ''
         }
       });
       if (!playersResponse.ok) {
         Logger.error('Failed to fetch event players', {
-          event_id,
+          event_id: finalEventId,
           status: playersResponse.status
         });
         return res.status(404).json({
@@ -191,7 +190,7 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
           code: 'PLAYERS_NOT_FOUND',
           message: `Players for event ${event_id} not found`,
           details: {
-            event_id,
+            event_id: finalEventId,
             status: playersResponse.status
           }
         });
@@ -212,13 +211,13 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
 
       // Transform players to settlement format
       players = await Promise.all(players.map(async (player: any) => {
-        // Check if player is marked as absent
-        const isAbsent = absentPlayerIds.includes(player.playerId || player.id);
+        // Check if player is marked as penalty (absent/late)
+        const isPenalty = player.isPenalty === true;
 
         // Map registration status to settlement status
         let settlementStatus = "played"; // Default
-        if (isAbsent) {
-          settlementStatus = "absent"; // Override to absent if marked
+        if (isPenalty) {
+          settlementStatus = "absent"; // Override to absent if penalty is true
         } else if (player.status === "registered") {
           settlementStatus = "played";
         } else if (player.status === "canceled") {
@@ -230,7 +229,7 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
         Logger.info('Player status determination', {
           playerId: player.playerId || player.id,
           originalStatus: player.status,
-          isAbsent,
+          isPenalty,
           finalStatus: settlementStatus
         });
 
@@ -293,8 +292,8 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
         return {
           playerId: player.playerId || player.id,
           userId: player.userId || null,
-          startTime: player.startTime || null,
-          endTime: player.endTime || null,
+          startTime: settlementStatus === 'absent' ? '00:00' : (player.startTime || '09:00'),
+          endTime: settlementStatus === 'absent' ? '00:00' : (player.endTime || '10:00'),
           status: settlementStatus,
           role: playerRole,
           name: playerName,
@@ -304,7 +303,7 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
 
     } catch (error) {
       Logger.error('Error fetching event players', {
-        event_id,
+        event_id: finalEventId,
         error: error instanceof Error ? error.message : 'Unknown error'
       });
       return res.status(500).json({
@@ -312,7 +311,7 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
         code: 'FETCH_PLAYERS_ERROR',
         message: 'Failed to fetch event players',
         details: {
-          event_id,
+          event_id: finalEventId,
           error: error instanceof Error ? error.message : 'Unknown error'
         }
       });
@@ -328,9 +327,16 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
 
     const costs = {
       shuttlecockPrice: eventData.shuttlecockPrice,
-      shuttlecockCount: shuttlecockCount,
-      penaltyFee: eventData.absentPenaltyFee || 0 // Read penalty fee from event data
+      shuttlecockCount: eventData.shuttlecockCount || 0,
+      penaltyFee: eventData.penaltyFee || eventData.absentPenaltyFee || 0 // Read penalty fee from event data
     };
+
+    Logger.info('Event penalty fee check', {
+      event_id,
+      absentPenaltyFee: eventData.penaltyFee || eventData.absentPenaltyFee,
+      finalPenaltyFee: costs.penaltyFee,
+      eventDataKeys: Object.keys(eventData)
+    });
 
     Logger.info('Event data transformed for settlement', {
       event_id,
@@ -376,8 +382,21 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
     }
 
     // Calculate settlements
+    Logger.info('Starting settlement calculation', {
+      playersCount: players.length,
+      absentPlayersCount: players.filter(p => p.status === 'absent').length,
+      playedPlayersCount: players.filter(p => p.status === 'played').length,
+      penaltyFee: costs.penaltyFee
+    });
+
     const settlements = calculator.calculateSettlements(players, courts, costs);
     const totalCollected = settlements.reduce((sum, s) => sum + s.totalAmount, 0);
+
+    Logger.info('Settlement calculation results', {
+      settlementsCount: settlements.length,
+      totalCollected,
+      penaltyOnlySettlements: settlements.filter(s => s.penaltyFee > 0 && s.courtFee === 0).length
+    });
 
     // Merge player data with settlement calculations
     const mergedPlayers = settlements.map((settlement) => {
@@ -453,9 +472,9 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
           const chargeRequest = {
             player_id: settlement.playerId,
             amount: settlement.totalAmount,
-            currency: currency,
-            event_id: event_id,
-            description: `Settlement charge for event ${event_id} - Court: ${settlement.courtFee}, Shuttlecock: ${settlement.shuttlecockFee}, Penalty: ${settlement.penaltyFee}`,
+            currency: 'THB',
+            event_id: finalEventId,
+            description: `Settlement charge for event ${finalEventId} - Court: ${settlement.courtFee}, Shuttlecock: ${settlement.shuttlecockFee}, Penalty: ${settlement.penaltyFee}`,
             metadata: {
               court_fee: settlement.courtFee.toString(),
               shuttlecock_fee: settlement.shuttlecockFee.toString(),
@@ -469,7 +488,7 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
           Logger.grpc('Issuing charge to Payment Service', {
             player_id: settlement.playerId,
             amount: settlement.totalAmount,
-            currency
+            currency: 'THB'
           });
 
           const paymentResponse = await paymentClient.issueCharges(chargeRequest);
@@ -557,7 +576,7 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
     // Update event status to completed after successful settlement
     try {
       const gatewayUrl = process.env.GATEWAY_URL || 'http://localhost:3000';
-      const updateEventResponse = await fetch(`${gatewayUrl}/api/events/${event_id}`, {
+      const updateEventResponse = await fetch(`${gatewayUrl}/api/events/${finalEventId}`, {
         method: 'PATCH',
         headers: {
           'Authorization': req.headers.authorization || '',
@@ -570,14 +589,14 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
         Logger.success('Event status updated to completed', { event_id });
       } else {
         Logger.error('Failed to update event status', {
-          event_id,
+          event_id: finalEventId,
           status: updateEventResponse.status,
           statusText: updateEventResponse.statusText
         });
       }
     } catch (error) {
       Logger.error('Error updating event status', {
-        event_id,
+        event_id: finalEventId,
         error: error instanceof Error ? error.message : 'Unknown error'
       });
       // Don't fail the entire settlement process if event status update fails
@@ -590,7 +609,7 @@ export const calculateAndCharge = async (req: Request, res: Response) => {
       success: true,
       data: {
         settlementId,
-        event_id,
+        event_id: finalEventId,
         calculationResults: settlementPlayers.map(player => ({
           playerId: player.playerId,
           courtFee: player.courtFee,
@@ -676,38 +695,29 @@ export const getAllSettlements = async (req: Request, res: Response) => {
         const settlementObj = settlement.toObject();
         const players = playersBySettlement[settlement.settlementId] || [];
 
-        // Fetch real-time display data for all players in this settlement
-        const calculationResultsWithNames = await Promise.all(
-          players.map(async (player: any) => {
-            const displayData = await fetchPlayerDisplayData(player, req.headers.authorization || '', settlement.eventId);
-
-            return {
-              playerDetails: {
-                playerId: player.playerId,
-                name: displayData.name,
-                phoneNumber: displayData.phoneNumber
-              },
-              breakdown: {
-                hoursPlayed: player.breakdown?.hoursPlayed,
-                courtSessions: player.breakdown?.courtSessions?.map((session: any) => ({
-                  hour: session.hour,
-                  playersInSession: session.playersInSession,
-                  costPerPlayer: session.costPerPlayer
-                })) || []
-              },
-              playerId: player.playerId,
-              courtFee: player.courtFee,
-              shuttlecockFee: player.shuttlecockFee,
-              penaltyFee: player.penaltyFee,
-              totalAmount: player.totalAmount
-            };
-          })
-        );
+        // Return settlement calculation results with breakdown (no player details, just playerId reference)
+        const calculationResults = players.map((player: any) => {
+          return {
+            playerId: player.playerId,
+            breakdown: {
+              hoursPlayed: player.breakdown?.hoursPlayed,
+              courtSessions: player.breakdown?.courtSessions?.map((session: any) => ({
+                hour: session.hour,
+                playersInSession: session.playersInSession,
+                costPerPlayer: session.costPerPlayer
+              })) || []
+            },
+            courtFee: player.courtFee,
+            shuttlecockFee: player.shuttlecockFee,
+            penaltyFee: player.penaltyFee,
+            totalAmount: player.totalAmount
+          };
+        });
 
         return {
           settlementId: settlementObj.settlementId,
           eventId: settlementObj.eventId,
-          calculationResults: calculationResultsWithNames
+          calculationResults: calculationResults
         };
       })
     );
@@ -742,22 +752,21 @@ export const getAllSettlements = async (req: Request, res: Response) => {
 
 export const calculateSettlements = async (req: Request, res: Response) => {
   try {
-    const { event_id, shuttlecockCount, absentPlayerIds = [], currency = 'THB' } = req.body;
+    const { event_id, eventId } = req.body;
+    const finalEventId = event_id || eventId;
 
     Logger.info('Settlement calculate request received', {
-      event_id,
-      currency,
-      absentPlayersCount: absentPlayerIds.length,
+      event_id: finalEventId,
       timestamp: new Date().toISOString()
     });
 
     // Validate required fields
-    if (!event_id) {
+    if (!finalEventId) {
       return res.status(400).json({
         success: false,
         code: 'INVALID_REQUEST',
-        message: 'Missing required field: event_id is required',
-        details: { required_fields: ['event_id'] }
+        message: 'Missing required field: event_id or eventId is required',
+        details: { required_fields: ['event_id', 'eventId'] }
       });
     }
 
@@ -765,11 +774,11 @@ export const calculateSettlements = async (req: Request, res: Response) => {
     let eventData: any;
     try {
       const gatewayUrl = process.env.GATEWAY_URL || 'http://localhost:3000';
-      const fullUrl = `${gatewayUrl}/api/events/${event_id}`;
+      const fullUrl = `${gatewayUrl}/api/events/${finalEventId}`;
       const authHeader = req.headers.authorization || '';
 
       Logger.info('Fetching event details', {
-        event_id,
+        event_id: finalEventId,
         gatewayUrl,
         fullUrl,
         hasAuth: !!authHeader,
@@ -784,7 +793,7 @@ export const calculateSettlements = async (req: Request, res: Response) => {
       });
 
       Logger.info('Event API response received', {
-        event_id,
+        event_id: finalEventId,
         status: eventResponse.status,
         statusText: eventResponse.statusText,
         headers: Object.fromEntries(eventResponse.headers.entries())
@@ -792,7 +801,7 @@ export const calculateSettlements = async (req: Request, res: Response) => {
 
       if (!eventResponse.ok) {
         Logger.error('Failed to fetch event details', {
-          event_id,
+          event_id: finalEventId,
           status: eventResponse.status
         });
         return res.status(404).json({
@@ -800,7 +809,7 @@ export const calculateSettlements = async (req: Request, res: Response) => {
           code: 'EVENT_NOT_FOUND',
           message: `Event with ID ${event_id} not found`,
           details: {
-            event_id,
+            event_id: finalEventId,
             status: eventResponse.status
           }
         });
@@ -821,7 +830,7 @@ export const calculateSettlements = async (req: Request, res: Response) => {
 
     } catch (error) {
       Logger.error('Error fetching event details', {
-        event_id,
+        event_id: finalEventId,
         gatewayUrl: process.env.GATEWAY_URL || 'http://localhost:3000',
         error: error instanceof Error ? error.message : 'Unknown error',
         stack: error instanceof Error ? error.stack : 'No stack trace'
@@ -831,7 +840,7 @@ export const calculateSettlements = async (req: Request, res: Response) => {
         code: 'FETCH_EVENT_ERROR',
         message: 'Failed to fetch event information',
         details: {
-          event_id,
+          event_id: finalEventId,
           error: error instanceof Error ? error.message : 'Unknown error'
         }
       });
@@ -842,14 +851,14 @@ export const calculateSettlements = async (req: Request, res: Response) => {
     try {
       Logger.info('Fetching event players', { event_id });
       const gatewayUrl = process.env.GATEWAY_URL || 'http://localhost:3000';
-      const playersResponse = await fetch(`${gatewayUrl}/api/registration/events/${event_id}/players`, {
+      const playersResponse = await fetch(`${gatewayUrl}/api/registration/events/${finalEventId}/players`, {
         headers: {
           'Authorization': req.headers.authorization || ''
         }
       });
       if (!playersResponse.ok) {
         Logger.error('Failed to fetch event players', {
-          event_id,
+          event_id: finalEventId,
           status: playersResponse.status
         });
         return res.status(404).json({
@@ -857,7 +866,7 @@ export const calculateSettlements = async (req: Request, res: Response) => {
           code: 'PLAYERS_NOT_FOUND',
           message: `Players for event ${event_id} not found`,
           details: {
-            event_id,
+            event_id: finalEventId,
             status: playersResponse.status
           }
         });
@@ -877,13 +886,13 @@ export const calculateSettlements = async (req: Request, res: Response) => {
 
       // Transform players to settlement format
       players = await Promise.all(players.map(async (player: any) => {
-        // Check if player is marked as absent
-        const isAbsent = absentPlayerIds.includes(player.playerId || player.id);
+        // Check if player is marked as penalty (absent/late)
+        const isPenalty = player.isPenalty === true;
 
         // Map registration status to settlement status
         let settlementStatus = "played"; // Default
-        if (isAbsent) {
-          settlementStatus = "absent"; // Override to absent if marked
+        if (isPenalty) {
+          settlementStatus = "absent"; // Override to absent if penalty is true
         } else if (player.status === "registered") {
           settlementStatus = "played";
         } else if (player.status === "canceled") {
@@ -895,7 +904,7 @@ export const calculateSettlements = async (req: Request, res: Response) => {
         Logger.info('Player status determination', {
           playerId: player.playerId || player.id,
           originalStatus: player.status,
-          isAbsent,
+          isPenalty,
           finalStatus: settlementStatus
         });
 
@@ -957,8 +966,8 @@ export const calculateSettlements = async (req: Request, res: Response) => {
         return {
           playerId: player.playerId || player.id,
           userId: player.userId || null,
-          startTime: player.startTime || null,
-          endTime: player.endTime || null,
+          startTime: settlementStatus === 'absent' ? '00:00' : (player.startTime || '09:00'),
+          endTime: settlementStatus === 'absent' ? '00:00' : (player.endTime || '10:00'),
           status: settlementStatus,
           role: playerRole,
           name: playerName,
@@ -968,7 +977,7 @@ export const calculateSettlements = async (req: Request, res: Response) => {
 
     } catch (error) {
       Logger.error('Error fetching event players', {
-        event_id,
+        event_id: finalEventId,
         error: error instanceof Error ? error.message : 'Unknown error'
       });
       return res.status(500).json({
@@ -976,7 +985,7 @@ export const calculateSettlements = async (req: Request, res: Response) => {
         code: 'FETCH_PLAYERS_ERROR',
         message: 'Failed to fetch event players',
         details: {
-          event_id,
+          event_id: finalEventId,
           error: error instanceof Error ? error.message : 'Unknown error'
         }
       });
@@ -992,9 +1001,16 @@ export const calculateSettlements = async (req: Request, res: Response) => {
 
     const costs = {
       shuttlecockPrice: eventData.shuttlecockPrice,
-      shuttlecockCount: shuttlecockCount,
-      penaltyFee: eventData.absentPenaltyFee || 0 // Read penalty fee from event data
+      shuttlecockCount: eventData.shuttlecockCount || 0,
+      penaltyFee: eventData.penaltyFee || eventData.absentPenaltyFee || 0 // Read penalty fee from event data
     };
+
+    Logger.info('Event penalty fee check', {
+      event_id,
+      absentPenaltyFee: eventData.penaltyFee || eventData.absentPenaltyFee,
+      finalPenaltyFee: costs.penaltyFee,
+      eventDataKeys: Object.keys(eventData)
+    });
 
     Logger.info('Event data transformed for settlement calculation', {
       event_id,
@@ -1032,7 +1048,7 @@ export const calculateSettlements = async (req: Request, res: Response) => {
     });
 
     Logger.success('Settlement calculation completed (preview mode)', {
-      event_id,
+      event_id: finalEventId,
       settlementsCount: settlements.length,
       totalAmount: totalCollected
     });
@@ -1040,11 +1056,11 @@ export const calculateSettlements = async (req: Request, res: Response) => {
     res.status(200).json({
       success: true,
       data: {
-        event_id,
+        event_id: finalEventId,
         eventData: {
           courts,
           costs,
-          currency
+          currency: 'THB'
         },
         calculationResults: mergedPlayers,
         totalCollected: Math.round(totalCollected * 100) / 100,
@@ -1099,39 +1115,30 @@ export const getSettlementById = async (req: Request, res: Response) => {
       playersCount: settlementPlayers.length
     });
 
-    // Fetch real-time player display data
-    const calculationResultsWithNames = await Promise.all(
-      settlementPlayers.map(async (player: any) => {
-        const displayData = await fetchPlayerDisplayData(player, req.headers.authorization || '', settlement.eventId);
+    // Return settlement calculation results with breakdown (no player details, just playerId reference)
+    const calculationResults = settlementPlayers.map((player: any) => {
+      return {
+        playerId: player.playerId,
+        breakdown: {
+          hoursPlayed: player.breakdown?.hoursPlayed,
+          courtSessions: player.breakdown?.courtSessions?.map((session: any) => ({
+            hour: session.hour,
+            playersInSession: session.playersInSession,
+            costPerPlayer: session.costPerPlayer
+          })) || []
+        },
+        courtFee: player.courtFee,
+        shuttlecockFee: player.shuttlecockFee,
+        penaltyFee: player.penaltyFee,
+        totalAmount: player.totalAmount
+      };
+    });
 
-        return {
-          playerDetails: {
-            playerId: player.playerId,
-            name: displayData.name,
-            phoneNumber: displayData.phoneNumber
-          },
-          breakdown: {
-            hoursPlayed: player.breakdown?.hoursPlayed,
-            courtSessions: player.breakdown?.courtSessions?.map((session: any) => ({
-              hour: session.hour,
-              playersInSession: session.playersInSession,
-              costPerPlayer: session.costPerPlayer
-            })) || []
-          },
-          playerId: player.playerId,
-          courtFee: player.courtFee,
-          shuttlecockFee: player.shuttlecockFee,
-          penaltyFee: player.penaltyFee,
-          totalAmount: player.totalAmount
-        };
-      })
-    );
-
-    // Create clean response with real-time data
+    // Create clean response with settlement data
     const cleanSettlement = {
       settlementId: settlement.settlementId,
       eventId: settlement.eventId,
-      calculationResults: calculationResultsWithNames
+      calculationResults: calculationResults
     };
 
     res.status(200).json({

@@ -98,18 +98,6 @@ const CalculatePage = () => {
   };
 
 
-  // Validation function to check if inputs are valid
-  const isFormValid = useMemo(() => {
-    const shuttlecockNum = parseInt(shuttlecockCount);
-
-    return (
-      shuttlecockCount.trim() !== '' &&
-      !isNaN(shuttlecockNum) &&
-      shuttlecockNum > 0 &&
-      selectedEventId &&
-      eventDetail
-    );
-  }, [shuttlecockCount, selectedEventId, eventDetail]);
 
 
   const saveShuttlecockCount = async () => {
@@ -119,76 +107,40 @@ const CalculatePage = () => {
 
     setIsSavingShuttlecock(true);
     try {
-      console.log('🚀 Saving shuttlecock count to event...');
+      console.log('🚀 Starting save and calculate process...');
       console.log('Event ID:', selectedEventId);
       console.log('Shuttlecock Count:', shuttlecockCount);
 
-      const response = await apiClient.updateEvent(selectedEventId, {
+      // Step 1: Update shuttlecock count in event
+      console.log('Step 1: Updating shuttlecock count...');
+      const patchResponse = await apiClient.updateEvent(selectedEventId, {
         shuttlecockCount: parseInt(shuttlecockCount)
       });
 
-      console.log('Update event response:', response);
+      console.log('Update event response:', patchResponse);
 
-      if (!response.success) {
-        console.error('Update event failed:', response.error);
-        throw new Error(response.error || 'ไม่สามารถบันทึกจำนวนลูกขนไก่ได้');
+      if (!patchResponse.success) {
+        console.error('Update event failed:', patchResponse.error);
+        throw new Error(patchResponse.error || 'ไม่สามารถบันทึกจำนวนลูกขนไก่ได้');
       }
 
-      toast({
-        title: 'บันทึกสำเร็จ! 🎉',
-        description: `บันทึกจำนวนลูกขนไก่ ${shuttlecockCount} ลูก เรียบร้อยแล้ว`,
-      });
+      console.log('Event update successful');
 
-      // Reload event data to get updated information
-      if (selectedEventId) {
-        await loadEventData(selectedEventId);
+      // Step 2: Calculate settlement
+      console.log('Step 2: Calculating settlement...');
+      const calculateResponse = await apiClient.calculateSettlement(selectedEventId);
+
+      console.log('Settlement calculation response:', calculateResponse);
+
+      if (!calculateResponse.success) {
+        console.error('Settlement calculation failed:', calculateResponse.error);
+        throw new Error(calculateResponse.error || 'ไม่สามารถคำนวณค่าใช้จ่ายได้');
       }
 
-    } catch (error) {
-      console.error('Save shuttlecock count error:', error);
-      toast({
-        title: 'เกิดข้อผิดพลาดในการบันทึก',
-        description: error instanceof Error ? error.message : 'ไม่สามารถบันทึกจำนวนลูกขนไก่ได้',
-        variant: 'destructive'
-      });
-    } finally {
-      setIsSavingShuttlecock(false);
-    }
-  };
-
-  const calculate = async () => {
-    try {
-      console.log('🚀 Starting settlement calculation...');
-      console.log('Event ID:', selectedEventId);
-      console.log('Event Detail:', eventDetail);
-      console.log('Auth Token exists:', !!localStorage.getItem('authToken'));
-
-      if (!selectedEventId) {
-        throw new Error('กรุณาเลือกอีเวนต์ก่อน');
-      }
-
-      if (!eventDetail) {
-        throw new Error('ไม่พบข้อมูลอีเวนต์ กรุณารีเฟรชหน้า');
-      }
-
-      // Use apiClient settlement calculation method (preview mode)
-      console.log('Calling settlement calculation API...');
-      const response = await apiClient.calculateSettlement(selectedEventId, {
-        currency: 'THB',
-        shuttlecockCount: parseInt(shuttlecockCount),
-        absentPlayerIds: []
-      });
-
-      console.log('Settlement API response:', response); // Debug log
-
-      if (!response.success) {
-        console.error('Settlement API failed:', response.error);
-        throw new Error(response.error || 'ไม่สามารถคำนวณค่าใช้จ่ายได้');
-      }
-
-      if (response.success && response.data && (response.data as any).calculationResults) {
+      // Step 3: Display calculation results
+      if (calculateResponse.success && calculateResponse.data && (calculateResponse.data as any).calculationResults) {
         // Transform settlement API response to breakdown format
-        const transformedData: CostBreakdownItem[] = (response.data as any).calculationResults.map((item: any) => ({
+        const transformedData: CostBreakdownItem[] = (calculateResponse.data as any).calculationResults.map((item: any) => ({
           playerId: item.playerId,
           name: item.name || 'ไม่ระบุชื่อ',
           userType: item.role === 'member' ? 'member' : 'guest',
@@ -204,22 +156,38 @@ const CalculatePage = () => {
 
         setBreakdown(transformedData);
         setIsCalculated(true);
+
+        const totalAmount = (calculateResponse.data as any).totalCollected || 0;
+
         toast({
-          title: 'คำนวณสำเร็จ (โหมดดูตัวอย่าง)',
-          description: `คำนวณค่าใช้จ่ายสำหรับ ${transformedData.length} คน เรียบร้อยแล้ว - ยังไม่ได้เก็บเงินจริง`
+          title: 'บันทึกและคำนวณสำเร็จ! 🎉',
+          description: `บันทึกลูกขนไก่ ${shuttlecockCount} ลูก และคำนวณค่าใช้จ่ายสำหรับ ${transformedData.length} คน ยอดรวม ฿${totalAmount.toFixed(2)}`,
         });
       } else {
-        throw new Error('Invalid response format from settlement API');
+        // If calculation fails, still show success for shuttlecock save
+        toast({
+          title: 'บันทึกสำเร็จ! 🎉',
+          description: `บันทึกจำนวนลูกขนไก่ ${shuttlecockCount} ลูก เรียบร้อยแล้ว`,
+        });
       }
+
+      // Reload event data to get updated information
+      if (selectedEventId) {
+        await loadEventData(selectedEventId);
+      }
+
     } catch (error) {
-      console.error('Settlement API error:', error);
+      console.error('Save and calculate error:', error);
       toast({
         title: 'เกิดข้อผิดพลาด',
-        description: error instanceof Error ? error.message : 'ไม่สามารถคำนวณค่าใช้จ่ายได้',
+        description: error instanceof Error ? error.message : 'ไม่สามารถดำเนินการได้',
         variant: 'destructive'
       });
+    } finally {
+      setIsSavingShuttlecock(false);
     }
   };
+
 
   const handlePaymentToggle = (playerId: string, isPaid: boolean) => {
     setBreakdown(prev => prev.map(item =>
@@ -260,38 +228,38 @@ const CalculatePage = () => {
 
     setIsSubmitting(true);
     try {
-      console.log('🚀 Starting actual settlement issue...');
+      console.log('🚀 Starting calculation and settlement process...');
       console.log('Event ID:', selectedEventId);
       console.log('Shuttlecock Count:', shuttlecockCount);
 
-      // Use apiClient issueSettlement method to actually charge players
-      const response = await apiClient.issueSettlement(selectedEventId, {
-        currency: 'THB',
-        shuttlecockCount: parseInt(shuttlecockCount),
-        absentPlayerIds: []
+      // Step 1: Update shuttlecock count in event first
+      console.log('Step 1: Updating shuttlecock count...');
+      const patchResponse = await apiClient.updateEvent(selectedEventId, {
+        shuttlecockCount: parseInt(shuttlecockCount)
       });
 
-      console.log('Settlement issue response:', response);
-
-      if (!response.success) {
-        console.error('Settlement issue failed:', response.error);
-        throw new Error(response.error || 'ไม่สามารถดำเนินการเก็บเงินได้');
+      if (!patchResponse.success) {
+        console.error('Event update failed:', patchResponse.error);
+        throw new Error(patchResponse.error || 'ไม่สามารถอัพเดทจำนวนลูกขนไก่ได้');
       }
 
-      // Show success message with settlement details
-      const settlementData = response.data as any;
-      const successfulCharges = settlementData.successfulCharges || 0;
-      const failedCharges = settlementData.failedCharges || 0;
-      const totalCollected = settlementData.totalCollected || 0;
+      console.log('Event update successful');
 
-      toast({
-        title: 'ดำเนินการเก็บเงินสำเร็จ! 🎉',
-        description: `เก็บเงินสำเร็จ ${successfulCharges} คน, ล้มเหลว ${failedCharges} คน, รวมเก็บได้ ฿${totalCollected.toFixed(2)}`,
-      });
+      // Step 2: Calculate settlement (preview mode)
+      console.log('Step 2: Calculating settlement...');
+      const calculateResponse = await apiClient.calculateSettlement(selectedEventId);
 
-      // Update breakdown with actual payment results if available
-      if (settlementData.calculationResults) {
-        const updatedBreakdown: CostBreakdownItem[] = settlementData.calculationResults.map((item: any) => ({
+      console.log('Settlement calculation response:', calculateResponse);
+
+      if (!calculateResponse.success) {
+        console.error('Settlement calculation failed:', calculateResponse.error);
+        throw new Error(calculateResponse.error || 'ไม่สามารถคำนวณค่าใช้จ่ายได้');
+      }
+
+      // Step 3: Display calculation results
+      if (calculateResponse.success && calculateResponse.data && (calculateResponse.data as any).calculationResults) {
+        // Transform settlement API response to breakdown format
+        const transformedData: CostBreakdownItem[] = (calculateResponse.data as any).calculationResults.map((item: any) => ({
           playerId: item.playerId,
           name: item.name || 'ไม่ระบุชื่อ',
           userType: item.role === 'member' ? 'member' : 'guest',
@@ -302,16 +270,27 @@ const CalculatePage = () => {
           shuttlecockFee: item.shuttlecockFee || 0,
           fine: item.penaltyFee || 0,
           total: item.totalAmount || 0,
-          isPaid: item.paymentStatus === 'completed' || item.paymentStatus === 'paid' || false
+          isPaid: item.paymentStatus === 'completed' || false
         }));
-        setBreakdown(updatedBreakdown);
+
+        setBreakdown(transformedData);
+        setIsCalculated(true);
+
+        const totalAmount = (calculateResponse.data as any).totalCollected || 0;
+
+        toast({
+          title: 'คำนวณสำเร็จ! 🎉',
+          description: `คำนวณค่าใช้จ่ายสำหรับ ${transformedData.length} คน ยอดรวม ฿${totalAmount.toFixed(2)}`,
+        });
+      } else {
+        throw new Error('Invalid response format from settlement API');
       }
 
     } catch (error) {
-      console.error('Settlement issue error:', error);
+      console.error('Calculation and settlement error:', error);
       toast({
-        title: 'เกิดข้อผิดพลาดในการเก็บเงิน',
-        description: error instanceof Error ? error.message : 'ไม่สามารถดำเนินการเก็บเงินได้',
+        title: 'เกิดข้อผิดพลาดในการคำนวณ',
+        description: error instanceof Error ? error.message : 'ไม่สามารถดำเนินการได้',
         variant: 'destructive'
       });
     } finally {
@@ -388,11 +367,11 @@ const CalculatePage = () => {
                     {isSavingShuttlecock ? (
                       <>
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        บันทึก...
+                        กำลังคำนวณ...
                       </>
                     ) : (
                       <>
-                        บันทึก
+                        บันทึกและคำนวณ
                       </>
                     )}
                   </Button>
@@ -495,16 +474,29 @@ const CalculatePage = () => {
               </Card>
             )}
 
-            <div className="flex justify-center">
-              <Button
-                className={`w-full md:w-auto px-8 ${isFormValid ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-400 cursor-not-allowed'}`}
-                onClick={calculate}
-                disabled={!isFormValid}
-              >
-                <Calculator className="w-4 h-4 mr-2" />
-                คำนวณค่าใช้จ่าย (โหมดดูตัวอย่าง)
-              </Button>
-            </div>
+            {/* Calculate Button */}
+            {eventDetail && players.length > 0 && !isCalculated && shuttlecockCount.trim() !== '' && !isNaN(parseInt(shuttlecockCount)) && parseInt(shuttlecockCount) > 0 && (
+              <div className="flex justify-center">
+                <Button
+                  onClick={submitCalculation}
+                  disabled={isSubmitting}
+                  className="w-full md:w-auto px-8 bg-blue-600 hover:bg-blue-700"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      กำลังดำเนินการ...
+                    </>
+                  ) : (
+                    <>
+                      <Receipt className="w-4 h-4 mr-2" />
+                      คำนวณและเก็บเงิน
+                    </>
+                  )}
+                </Button>
+              </div>
+            )}
+
 
             {isCalculated && breakdown.length > 0 && (
               <div className="space-y-4">
@@ -665,12 +657,12 @@ const CalculatePage = () => {
                       {isSubmitting ? (
                         <>
                           <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          บันทึกการคำนวณ...
+                          กำลังดำเนินการ...
                         </>
                       ) : (
                         <>
                           <Receipt className="w-4 h-4 mr-2" />
-                          บันทึกการคำนวณ
+                          คำนวณและเก็บเงิน
                         </>
                       )}
                     </Button>

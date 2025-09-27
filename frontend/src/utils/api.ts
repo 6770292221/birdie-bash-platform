@@ -330,38 +330,20 @@ class ApiClient {
   }
 
     // Settlement endpoints
-  async issueSettlement(eventId: string, data: {
-    currency?: string;
-    shuttlecockCount?: number;
-    absentPlayerIds?: string[];
-    penaltyFee?: number;
-  }): Promise<ApiResponse<any>> {
+  async issueSettlement(eventId: string): Promise<ApiResponse<any>> {
     return this.request(`/api/settlements/issue`, {
       method: "POST",
       data: {
-        event_id: eventId,
-        currency: data.currency || 'THB',
-        shuttlecockCount: data.shuttlecockCount || 0,
-        absentPlayerIds: data.absentPlayerIds || [],
-        penaltyFee: data.penaltyFee
+        event_id: eventId
       }
     });
   }
 
-  async calculateSettlement(eventId: string, data: {
-    currency?: string;
-    shuttlecockCount?: number;
-    absentPlayerIds?: string[];
-    penaltyFee?: number;
-  }): Promise<ApiResponse<any>> {
+  async calculateSettlement(eventId: string): Promise<ApiResponse<any>> {
     return this.request(`/api/settlements/calculate`, {
       method: "POST",
       data: {
-        event_id: eventId,
-        currency: data.currency || 'THB',
-        shuttlecockCount: data.shuttlecockCount || 0,
-        absentPlayerIds: data.absentPlayerIds || [],
-        penaltyFee: data.penaltyFee
+        event_id: eventId
       }
     });
   }
