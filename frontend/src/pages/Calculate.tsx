@@ -31,8 +31,8 @@ interface PaymentSummary {
   totalAmount: number;
   totalPaid: number;
   totalPending: number;
-  membersPaid: number;
-  guestsPaid: number;
+  // membersPaid: number;
+  // guestsPaid: number;
   totalMembers: number;
   totalGuests: number;
 }
@@ -83,6 +83,16 @@ const CalculatePage = () => {
     };
     fetch();
   }, [user, isAdmin, toast]);
+
+  const resetAllState = () => {
+    setEventDetail(null);
+    setPlayers([]);
+    setBreakdown([]);
+    setIsCalculated(false);
+    setShuttlecockCount('');
+    setIsSubmitting(false);
+    setIsSavingShuttlecock(false);
+  };
 
   const loadEventData = async (eventId: string) => {
     const [detail, reg, wait] = await Promise.all([
@@ -197,10 +207,10 @@ const CalculatePage = () => {
     ));
 
     const playerName = breakdown.find(item => item.playerId === playerId)?.name;
-    toast({
-      title: isPaid ? 'ชำระเงินแล้ว' : 'ยกเลิกการชำระ',
-      description: `${playerName} ${isPaid ? 'ชำระเงินเรียบร้อย' : 'ยกเลิกสถานะการชำระ'}`
-    });
+    // toast({
+    //   title: isPaid ? 'ชำระเงินแล้ว' : 'ยกเลิกการชำระ',
+    //   description: `${playerName} ${isPaid ? 'ชำระเงินเรียบร้อย' : 'ยกเลิกสถานะการชำระ'}`
+    // });
   };
 
   const paymentSummary: PaymentSummary = useMemo(() => {
@@ -211,15 +221,15 @@ const CalculatePage = () => {
     const members = breakdown.filter(item => item.userType === 'member');
     const guests = breakdown.filter(item => item.userType === 'guest');
 
-    const membersPaid = members.filter(item => item.isPaid).reduce((sum, item) => sum + item.total, 0);
-    const guestsPaid = guests.filter(item => item.isPaid).reduce((sum, item) => sum + item.total, 0);
+    // const membersPaid = members.filter(item => item.isPaid).reduce((sum, item) => sum + item.total, 0);
+    // const guestsPaid = guests.filter(item => item.isPaid).reduce((sum, item) => sum + item.total, 0);
 
     return {
       totalAmount,
       totalPaid,
       totalPending,
-      membersPaid,
-      guestsPaid,
+      // membersPaid,
+      // guestsPaid,
       totalMembers: members.length,
       totalGuests: guests.length
     };
@@ -272,7 +282,7 @@ const CalculatePage = () => {
           shuttlecockFee: item.shuttlecockFee || 0,
           fine: item.penaltyFee || 0,
           total: item.totalAmount || 0,
-          isPaid: item.paymentStatus === 'completed' || item.paymentStatus === 'paid' || false
+          // isPaid: item.paymentStatus === 'completed' || item.paymentStatus === 'paid' || false
         }));
 
         setBreakdown(transformedData);
@@ -310,7 +320,10 @@ const CalculatePage = () => {
   };
 
   useEffect(() => {
-    if (selectedEventId && isAdmin) loadEventData(selectedEventId);
+    if (selectedEventId && isAdmin) {
+      resetAllState();
+      loadEventData(selectedEventId);
+    }
   }, [selectedEventId, isAdmin]);
 
   if (!user) {
@@ -575,8 +588,7 @@ const CalculatePage = () => {
                             <TableHead className="text-right">ลูกขนไก่</TableHead>
                             <TableHead className="text-right">ค่าปรับ</TableHead>
                             <TableHead className="text-right">รวม</TableHead>
-                            <TableHead className="text-center">สถานะ</TableHead>
-                            <TableHead className="text-center">การชำระ</TableHead>
+
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -613,32 +625,6 @@ const CalculatePage = () => {
                                 )}
                               </TableCell>
                               <TableCell className="text-right font-bold">฿{item.total.toFixed(2)}</TableCell>
-                              <TableCell className="text-center">
-                                <Badge
-                                  className={`${item.isPaid
-                                    ? 'bg-green-100 text-green-700 border-green-300'
-                                    : 'bg-amber-100 text-amber-700 border-amber-300'
-                                  }`}
-                                >
-                                  {item.isPaid ? (
-                                    <>ชำระแล้ว</>
-                                  ) : (
-                                    <>รอชำระ</>
-                                  )}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="text-center">
-                                {item.userType === 'member' ? (
-                                  <div className="text-sm text-gray-500">อัตโนมัติ</div>
-                                ) : (
-                                  <Checkbox
-                                    checked={item.isPaid}
-                                    onCheckedChange={(checked) =>
-                                      handlePaymentToggle(item.playerId, !!checked)
-                                    }
-                                  />
-                                )}
-                              </TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
