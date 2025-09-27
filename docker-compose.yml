@@ -181,9 +181,9 @@ services:
       - RABBIT_CONSUMER_DELAY_MS=10000
       - RABBIT_PREFETCH=1
       - RABBIT_WAITLIST_QUEUE=events.payment
-      - RABBIT_AUTOBIND=false
+      - RABBIT_AUTOBIND=true
       - RABBIT_AUTOBIND_ON_RETURN=false
-      - RABBIT_BIND_QUEUE=settlement.debug
+      - RABBIT_BIND_QUEUE=payment.issue
       - RABBIT_BIND_KEY=event.settlement.issue
     depends_on:
       mongodb:

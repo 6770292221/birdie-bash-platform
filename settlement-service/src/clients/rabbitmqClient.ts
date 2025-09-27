@@ -77,7 +77,7 @@ export class RabbitMQPublisher {
 
               // Declare queues from environment variables
               const waitlistQueue = process.env.RABBIT_WAITLIST_QUEUE || 'events.payment';
-              const bindQueue = process.env.RABBIT_BIND_QUEUE || 'settlement.debug';
+              const bindQueue = process.env.RABBIT_BIND_QUEUE || 'payment.issue';
 
               channel.assertQueue(waitlistQueue, { durable: true }, (error3) => {
                 if (error3) {
@@ -144,7 +144,7 @@ export class RabbitMQPublisher {
         throw new Error('RabbitMQ channel not available');
       }
 
-      const routingKey = 'event.payment.charge';
+      const routingKey = process.env.RABBIT_BIND_KEY || 'event.settlement.issue';
       const messageBuffer = Buffer.from(JSON.stringify(message));
 
       // Log payload if enabled
