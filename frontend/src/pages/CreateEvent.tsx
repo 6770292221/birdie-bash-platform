@@ -4,6 +4,9 @@ import { useToast } from '@/hooks/use-toast';
 import CreateEventForm from '@/components/CreateEventForm';
 import { apiClient } from '@/utils/api';
 import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import LanguageToggle from '@/components/LanguageToggle';
+import { ArrowLeft } from 'lucide-react';
 
 // Minimal Event and Court shape expected by CreateEventForm props
 export interface Court { courtNumber: number; startTime: string; endTime: string; }
@@ -75,7 +78,25 @@ const CreateEventPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-green-50 py-6 px-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-green-50 py-6 px-4 relative">
+      {/* Language Toggle */}
+      <div className="absolute top-4 right-4 z-10">
+        <LanguageToggle />
+      </div>
+
+      {/* Back Button */}
+      <div className="absolute top-4 left-4 z-10">
+        <Button
+          onClick={() => navigate('/')}
+          variant="outline"
+          size="sm"
+          className="bg-white/80 hover:bg-white border-gray-300 text-gray-700 hover:text-gray-900 shadow-lg backdrop-blur-sm"
+        >
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          Back to Home
+        </Button>
+      </div>
+
       <div className="max-w-3xl mx-auto">
         <CreateEventForm onSubmit={handleSubmit} onCancel={() => navigate('/')} />
       </div>
