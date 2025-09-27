@@ -35,6 +35,16 @@ const EventSchema: Schema = new Schema(
     capacity: { type: CapacitySchema, required: true },
     shuttlecockPrice: { type: Number, required: true },
     courtHourlyRate: { type: Number, required: true },
+    penaltyFee: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    shuttlecockCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
     courts: [CourtTimeSchema],
     createdBy: { type: String, required: false },
     updatedBy: { type: String, required: false },

@@ -5,6 +5,7 @@ import http from "http";
 import https from "https";
 import messageQueueService from "../queue/publisher";
 import { EVENTS } from "../queue/events";
+import { PENALTY_CONFIG } from '../config/penaltyConfig';
 
 // Simple translation helper
 const translations = {
@@ -194,6 +195,7 @@ const mapPlayerResponse = (player: IPlayerDocument) => ({
   endTime: player.endTime || null,
   userType: (player as any).userType ?? (player.userId ? "member" : "guest"),
   status: player.status,
+  isPenalty: player.isPenalty,
   createdBy: (player as any).createdBy || null,
   registrationTime: player.registrationTime
     ? player.registrationTime.toISOString()
@@ -438,6 +440,26 @@ export const cancelPlayerRegistration = async (
     }
 
     const wasRegistered = player.status === "registered";
+
+    // Check if cancellation incurs penalty
+    if (PENALTY_CONFIG.PENALTY_ENABLED) {
+      const now = new Date();
+      const eventDateTime = new Date(`${event.eventDate}T00:00:00`);
+
+      // If event has specific start time, use it; otherwise use event date
+      if (player.startTime) {
+        const [hours, minutes] = player.startTime.split(':').map(Number);
+        eventDateTime.setHours(hours, minutes, 0, 0);
+      }
+
+      const minutesUntilEvent = (eventDateTime.getTime() - now.getTime()) / (1000 * 60);
+
+      // Apply penalty if canceling within the penalty period
+      if (minutesUntilEvent <= PENALTY_CONFIG.CANCELLATION_PENALTY_MINUTES && minutesUntilEvent > 0) {
+        player.isPenalty = true;
+      }
+    }
+
     player.status = "canceled";
     await player.save();
     // Capacity updates and waitlist promotion are handled by Event Service in a decoupled architecture.
@@ -462,6 +484,7 @@ export const cancelPlayerRegistration = async (
         playerId: player.id,
         eventId: player.eventId.toString(),
         status: player.status,
+        isPenalty: player.isPenalty,
         canceledAt: new Date().toISOString(),
       },
     });
@@ -540,6 +563,8 @@ export const registerMember = async (
       registrationTime: new Date(),
       userType: "member",
       isPenalty: false,
+      penaltyFee: 0,
+      shuttlecockCount: 0,
     };
 
     const userPhoneNumber = req.headers["x-user-phone"] as string;
@@ -915,6 +940,8 @@ export const registerGuest = async (
       createdBy: adminUserId,
       userType: "guest",
       isPenalty: false,
+      penaltyFee: 0,
+      shuttlecockCount: 0,
     };
     if (registrationData.startTime)
       playerData.startTime = registrationData.startTime;
