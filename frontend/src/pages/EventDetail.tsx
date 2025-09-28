@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/table';
 import CreateEventForm from '@/components/CreateEventForm';
 import LanguageToggle from '@/components/LanguageToggle';
-import { Loader2, Calendar, MapPin, Users, Clock, DollarSign, Settings, UserPlus, Edit3, Trash2, Phone, Timer, ArrowLeft, AlertTriangle, CheckCircle, XCircle, CreditCard, Check } from 'lucide-react';
+import { Loader2, Calendar, MapPin, Users, Clock, DollarSign, Settings, UserPlus, Edit3, Trash2, Phone, Timer, ArrowLeft, AlertTriangle, CheckCircle, XCircle, CreditCard, Check, PartyPopper, UserCheck, Target, AlertCircle } from 'lucide-react';
 
 interface Court { courtNumber: number; startTime: string; endTime: string }
 interface EventApi {
@@ -91,27 +91,81 @@ const EventDetail = () => {
   const [loadingPayments, setLoadingPayments] = useState(false);
   const [markingPaid, setMarkingPaid] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchDetail = async () => {
-      if (!id) return;
-      setLoading(true);
-      const res = await apiClient.getEvent(id);
-      if (res.success) {
-        // The API returns { event: {...} }
-        const data: any = res.data;
-        setEvent((data?.event || data) as EventApi);
-        // fetch players list: only registered and waitlist
-        await fetchPlayersFiltered();
+  const fetchDetail = async () => {
+    if (!id) return;
+    setLoading(true);
+    const res = await apiClient.getEvent(id);
+    if (res.success) {
+      // The API returns { event: {...} }
+      const data: any = res.data;
+      setEvent((data?.event || data) as EventApi);
+      // fetch players list: only registered and waitlist
+      await fetchPlayersFiltered();
 
-              // AWAITING PAYMENT: Fetch settlement data for payment status display
-        if ((data?.event || data)?.status === 'awaiting_payment') {
-          await fetchSettlements();
-        }
-      } else {
-        toast({ title: t('error.load_event_failed'), description: res.error, variant: 'destructive' });
+            // AWAITING PAYMENT: Fetch settlement data for payment status display
+      if ((data?.event || data)?.status === 'awaiting_payment') {
+        await fetchSettlements();
       }
-      setLoading(false);
-    };
+    } else {
+      toast({
+        title: (
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-red-600" />
+            {t('error.load_event_failed')}
+          </div>
+        ),
+        description: res.error || t('error.load_event_failed_desc'),
+        className: 'border-red-200 bg-red-50',
+        duration: 5000
+      });
+    }
+    setLoading(false);
+  };
+
+  // Helper function to check if a player belongs to the current user
+  const isMyPlayer = (player: any) => {
+    if (!user || !player || player.status === 'canceled') return false;
+
+    // Method 1: Match by userId (if available)
+    if (player.userId && String(player.userId) === String(user.id)) {
+      return true;
+    }
+
+    // Method 2: Match by email (if user is a member)
+    if (player.email && player.email === user.email) {
+      return true;
+    }
+
+    // Method 3: Match by name and userType member (fallback)
+    if (player.userType === 'member' && player.name && user.name && player.name.includes(user.name)) {
+      return true;
+    }
+
+    return false;
+  };
+
+  // Smart retry for RabbitMQ queue processing - wait for participants count to update
+  const fetchDetailWithRetry = async () => {
+    const initialParticipants = event?.capacity?.currentParticipants || 0;
+
+    // First fetch immediately
+    await fetchDetail();
+
+    // If participants count didn't change, wait and try once more
+    const updatedParticipants = event?.capacity?.currentParticipants || 0;
+    if (updatedParticipants === initialParticipants) {
+      console.log(`Participants still ${initialParticipants}, waiting 1 second for queue...`);
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      await fetchDetail();
+
+      const finalParticipants = event?.capacity?.currentParticipants || 0;
+      console.log(`Final check: participants ${initialParticipants} -> ${finalParticipants}`);
+    } else {
+      console.log(`Participants updated immediately: ${initialParticipants} -> ${updatedParticipants}`);
+    }
+  };
+
+  useEffect(() => {
     fetchDetail();
   }, [id, toast, t]);
 
@@ -140,14 +194,44 @@ const EventDetail = () => {
     try {
       const res = await apiClient.markPlayerAsPaid(id, playerId);
       if (res.success) {
-        toast({ title: 'สำเร็จ', description: 'ทำการชำระเงินแล้ว' });
+        toast({
+          title: (
+            <div className="flex items-center gap-2">
+              <Check className="w-4 h-4 text-green-600" />
+              {t('success.payment_updated')}
+            </div>
+          ),
+          description: t('success.payment_updated_desc'),
+          className: 'border-green-200 bg-green-50',
+          duration: 4000
+        });
         // Refresh settlements data
         await fetchSettlements();
       } else {
-        toast({ title: 'เกิดข้อผิดพลาด', description: res.error, variant: 'destructive' });
+        toast({
+          title: (
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-red-600" />
+              {t('error.payment_update_failed')}
+            </div>
+          ),
+          description: res.error || t('error.payment_update_failed_desc'),
+          className: 'border-red-200 bg-red-50',
+          duration: 5000
+        });
       }
     } catch (error) {
-      toast({ title: 'เกิดข้อผิดพลาด', description: 'ไม่สามารถอัปเดตสถานะการชำระเงินได้', variant: 'destructive' });
+      toast({
+        title: (
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-red-600" />
+            {t('error.payment_update_failed')}
+          </div>
+        ),
+        description: t('error.payment_update_failed_desc'),
+        className: 'border-red-200 bg-red-50',
+        duration: 5000
+      });
     } finally {
       setMarkingPaid(null);
       setOverlayAction(null);
@@ -212,7 +296,17 @@ const EventDetail = () => {
 
       const res = await apiClient.updateEvent(id, payload);
       if (res.success) {
-        toast({ title: t('success.saved') });
+        toast({
+          title: (
+            <div className="flex items-center gap-2">
+              <Check className="w-4 h-4 text-green-600" />
+              {t('success.saved')}
+            </div>
+          ),
+          description: t('success.saved_desc'),
+          className: 'border-green-200 bg-green-50',
+          duration: 4000
+        });
         setEditing(false);
         // refetch
         const d = await apiClient.getEvent(id);
@@ -221,10 +315,30 @@ const EventDetail = () => {
           setEvent((data?.event || data) as EventApi);
         }
       } else {
-        toast({ title: t('error.save_failed'), description: res.error, variant: 'destructive' });
+        toast({
+          title: (
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-red-600" />
+              {t('error.save_failed')}
+            </div>
+          ),
+          description: res.error || t('error.save_failed_desc'),
+          className: 'border-red-200 bg-red-50',
+          duration: 5000
+        });
       }
     } catch (e: any) {
-      toast({ title: t('error.save_failed'), description: e?.message || t('error.unknown'), variant: 'destructive' });
+      toast({
+        title: (
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-red-600" />
+            {t('error.save_failed')}
+          </div>
+        ),
+        description: e?.message || t('error.unknown'),
+        className: 'border-red-200 bg-red-50',
+        duration: 5000
+      });
     }
   };
 
@@ -233,10 +347,30 @@ const EventDetail = () => {
     if (!confirm(t('confirm.delete_event'))) return;
     const res = await apiClient.deleteEvent(id);
     if (res.success) {
-      toast({ title: t('success.event_deleted') });
+      toast({
+        title: (
+          <div className="flex items-center gap-2">
+            <Check className="w-4 h-4 text-green-600" />
+            {t('success.event_deleted')}
+          </div>
+        ),
+        description: t('success.event_deleted_desc'),
+        className: 'border-green-200 bg-green-50',
+        duration: 4000
+      });
       navigate('/');
     } else {
-      toast({ title: t('error.delete_event_failed'), description: res.error, variant: 'destructive' });
+      toast({
+        title: (
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-red-600" />
+            {t('error.delete_event_failed')}
+          </div>
+        ),
+        description: res.error || t('error.delete_event_failed_desc'),
+        className: 'border-red-200 bg-red-50',
+        duration: 5000
+      });
     }
   };
 
@@ -245,9 +379,15 @@ const EventDetail = () => {
     if (!id || isAddingGuest) return;
     if (!guestForm.startTime || !guestForm.endTime) {
       toast({
-        title: t('error.time_required_title'),
+        title: (
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-red-600" />
+            {t('error.time_required_title')}
+          </div>
+        ),
         description: t('error.time_required_guest'),
-        variant: 'destructive',
+        className: 'border-red-200 bg-red-50',
+        duration: 5000
       });
       return;
     }
@@ -263,37 +403,61 @@ const EventDetail = () => {
       const res = await apiClient.addGuest(id, payload);
 
       if (res.success) {
-        // Update players list immediately after successful add guest
-        await fetchPlayersFiltered();
+        // Update event data and players list with retry for RabbitMQ queue processing
+        await fetchDetailWithRetry();
 
         // Add 1-second delay for loading effect after updating state
         await new Promise(resolve => setTimeout(resolve, 1000));
 
-        toast({ title: t('success.player_added') });
+        toast({
+          title: (
+            <div className="flex items-center gap-2">
+              <UserCheck className="w-4 h-4 text-green-600" />
+              {t('success.player_added')}
+            </div>
+          ),
+          description: t('success.player_added_desc'),
+          className: 'border-green-200 bg-green-50',
+          duration: 4000 // แสดง 4 วินาที
+        });
         setGuestForm({ name: '', phoneNumber: '', startTime: '', endTime: '' });
         setIsAddingGuest(false);
         setOverlayAction(null);
-        // Refresh page immediately after loading completes
-        window.location.reload();
       } else {
         // Add 1-second delay for loading effect
         await new Promise(resolve => setTimeout(resolve, 1000));
 
-        toast({ title: t('error.add_player_failed'), description: res.error, variant: 'destructive' });
+        toast({
+          title: (
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-red-600" />
+              {t('error.add_player_failed')}
+            </div>
+          ),
+          description: res.error,
+          className: 'border-red-200 bg-red-50',
+          duration: 5000
+        });
         setIsAddingGuest(false);
         setOverlayAction(null);
-        // Refresh page after error
-        window.location.reload();
       }
     } catch (err: any) {
       // Add 1-second delay for loading effect
       await new Promise(resolve => setTimeout(resolve, 1000));
 
-      toast({ title: t('error.add_player_failed'), description: err?.message || t('error.unknown'), variant: 'destructive' });
+      toast({
+        title: (
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-red-600" />
+            {t('error.add_player_failed')}
+          </div>
+        ),
+        description: err?.message || t('error.unknown'),
+        className: 'border-red-200 bg-red-50',
+        duration: 5000
+      });
       setIsAddingGuest(false);
       setOverlayAction(null);
-      // Refresh page after error
-      window.location.reload();
     }
   };
 
@@ -307,26 +471,42 @@ const EventDetail = () => {
     const res = await apiClient.cancelPlayer(id, playerId);
 
     if (res.success) {
-      // Update players list immediately after successful cancellation
-      await fetchPlayersFiltered();
+      // Update event data and players list with retry for RabbitMQ queue processing
+      await fetchDetailWithRetry();
 
       // Add 1-second delay for loading effect after updating state
       await new Promise(resolve => setTimeout(resolve, 1000));
 
-      toast({ title: t('success.player_cancelled') });
+      toast({
+        title: (
+          <div className="flex items-center gap-2">
+            <Target className="w-4 h-4 text-green-600" />
+            {t('success.player_cancelled')}
+          </div>
+        ),
+        description: t('success.player_cancelled_desc'),
+        className: 'border-green-200 bg-green-50',
+        duration: 4000
+      });
       setCancelingPlayerId(null);
       setOverlayAction(null);
-      // Refresh page immediately after loading completes
-      window.location.reload();
     } else {
       // Add 2-second delay for loading effect
       await new Promise(resolve => setTimeout(resolve, 2000));
 
-      toast({ title: t('error.cancel_player_failed'), description: res.error, variant: 'destructive' });
+      toast({
+        title: (
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-red-600" />
+            {t('error.cancel_player_failed')}
+          </div>
+        ),
+        description: res.error,
+        className: 'border-red-200 bg-red-50',
+        duration: 5000
+      });
       setCancelingPlayerId(null);
       setOverlayAction(null);
-      // Refresh page after error
-      window.location.reload();
     }
   };
 
@@ -335,9 +515,15 @@ const EventDetail = () => {
     if (!id) return;
     if (!memberTime.startTime || !memberTime.endTime) {
       toast({
-        title: t('error.time_required_title'),
+        title: (
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-red-600" />
+            {t('error.time_required_title')}
+          </div>
+        ),
         description: t('error.time_required_member'),
-        variant: 'destructive',
+        className: 'border-red-200 bg-red-50',
+        duration: 5000
       });
       return;
     }
@@ -350,37 +536,59 @@ const EventDetail = () => {
       });
 
       if (res.success) {
-        // Update players list immediately after successful registration
-        await fetchPlayersFiltered();
+        // Update event data and players list with retry for RabbitMQ queue processing
+        await fetchDetailWithRetry();
 
         // Add 1-second delay for loading effect after updating state
         await new Promise(resolve => setTimeout(resolve, 1000));
 
-        toast({ title: t('success.registered') });
+        toast({
+          title: (
+            <div className="flex items-center gap-2">
+              <PartyPopper className="w-4 h-4 text-green-600" />
+              {t('success.registered')}
+            </div>
+          ),
+          description: t('success.registered_desc'),
+          className: 'border-green-200 bg-green-50',
+          duration: 4000
+        });
         setIsRegisteringMember(false);
         setOverlayAction(null);
-        // Refresh page immediately after loading completes
-        window.location.reload();
+        // Reset member time form
+        setMemberTime({ startTime: '', endTime: '' });
       } else {
         // Add 1-second delay for loading effect
         await new Promise(resolve => setTimeout(resolve, 1000));
 
-        toast({ title: t('error.registration_failed'), description: res.error, variant: 'destructive' });
+        toast({
+          title: (
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-red-600" />
+              {t('error.registration_failed')}
+            </div>
+          ),
+          description: res.error || t('error.registration_failed_desc'),
+          className: 'border-red-200 bg-red-50',
+          duration: 6000
+        });
         setIsRegisteringMember(false);
         setOverlayAction(null);
-        // Refresh page even on error to reset state
-        setTimeout(() => {
-          window.location.reload();
-        }, 1500);
       }
     } catch (err: any) {
-      toast({ title: t('error.registration_failed'), description: err?.message || t('error.unknown'), variant: 'destructive' });
+      toast({
+        title: (
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-red-600" />
+            {t('error.registration_failed')}
+          </div>
+        ),
+        description: err?.message || t('error.unknown'),
+        className: 'border-red-200 bg-red-50',
+        duration: 6000, // แสดง 6 วินาที
+      });
       setIsRegisteringMember(false);
       setOverlayAction(null);
-      // Refresh page even on error to reset state
-      setTimeout(() => {
-        window.location.reload();
-      }, 1500);
     }
   };
 
@@ -1036,7 +1244,24 @@ const EventDetail = () => {
               {(() => {
                 // USER REGISTRATION CONTROL: Check if registration is disabled due to event status
                 const registrationDisabled = event.status === 'calculating' || event.status === 'awaiting_payment' || event.status === 'completed' || event.status === 'canceled' || event.status === 'in_progress';
-                const mine = players.find((p:any) => p.userId && user && (p.userId === user.id) && p.status !== 'canceled');
+                // Find the current user's registration
+                const mine = players.find((p:any) => isMyPlayer(p));
+
+                // Debug: log the data to see what's happening
+                console.log('Finding mine player:', {
+                  userId: user?.id,
+                  userEmail: user?.email,
+                  userName: user?.name,
+                  allPlayers: players.map(p => ({
+                    playerId: p.playerId,
+                    userId: p.userId,
+                    email: p.email,
+                    name: p.name,
+                    userType: p.userType,
+                    status: p.status
+                  })),
+                  mineFound: mine
+                });
 
                 if (registrationDisabled && !mine) {
                   return (
@@ -1214,7 +1439,7 @@ const EventDetail = () => {
                                 }>
                                   {p.userType === 'member' ? t('user.member_badge') : t('user.guest_badge')}
                                 </Badge>
-                                {p.userId === user?.id && (
+                                {isMyPlayer(p) && (
                                   <Badge className="bg-purple-100 text-purple-800 border border-purple-300">
                                     👤 {t('user.you_badge')}
                                   </Badge>
@@ -1270,7 +1495,7 @@ const EventDetail = () => {
                                   }>
                                     {p.userType === 'member' ? t('user.member_badge') : t('user.guest_badge')}
                                   </Badge>
-                                  {p.userId === user?.id && (
+                                  {isMyPlayer(p) && (
                                     <Badge className="bg-purple-100 text-purple-800 border border-purple-300">
                                       👤 {t('user.you_badge')}
                                     </Badge>
