@@ -160,6 +160,19 @@ const mapPlayerResponse = (player: IPlayerDocument) => ({
     : null,
 });
 
+function parseTimeToMinutes(time: string): number | null {
+  if (typeof time !== 'string') {
+    return null;
+  }
+
+  const [hours, minutes] = time.split(':').map(Number);
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) {
+    return null;
+  }
+
+  return hours * 60 + minutes;
+}
+
 function extractEventStatus(status: any): {
   state?: EventStatus;
   isAcceptingRegistrations?: boolean;
@@ -401,20 +414,61 @@ export const cancelPlayerRegistration = async (
 
     // Check if cancellation incurs penalty
     if (PENALTY_CONFIG.PENALTY_ENABLED) {
-      const now = new Date();
-      const eventDateTime = new Date(`${event.eventDate}T00:00:00`);
+      const BANGKOK_OFFSET_MILLIS = 7 * 60 * 60 * 1000; // UTC+7
 
-      // If event has specific start time, use it; otherwise use event date
-      if (player.startTime) {
-        const [hours, minutes] = player.startTime.split(':').map(Number);
-        eventDateTime.setHours(hours, minutes, 0, 0);
+      const parseValidTime = (time?: unknown): string | undefined => {
+        if (typeof time !== 'string') return undefined;
+        return /^([01]?\d|2[0-3]):[0-5]\d$/.test(time) ? time : undefined;
+      };
+
+      let effectiveStartTime = parseValidTime(player.startTime);
+
+      if (!effectiveStartTime) {
+        const courts = Array.isArray((event as any).courts) ? (event as any).courts : [];
+        type CourtTimeSummary = { time: string; minutes: number };
+
+        const earliest = courts
+          .map((court: any) => parseValidTime(court?.startTime))
+          .filter((time: string | undefined): time is string => Boolean(time))
+          .map((time: string): CourtTimeSummary => ({
+            time,
+            minutes: parseTimeToMinutes(time) ?? Number.POSITIVE_INFINITY,
+          }))
+          .filter((item: CourtTimeSummary) => Number.isFinite(item.minutes))
+          .sort((a: CourtTimeSummary, b: CourtTimeSummary) => a.minutes - b.minutes)[0];
+
+        if (earliest) {
+          effectiveStartTime = earliest.time;
+        }
       }
 
-      const minutesUntilEvent = (eventDateTime.getTime() - now.getTime()) / (1000 * 60);
+      const eventDateParts = typeof event.eventDate === 'string' ? event.eventDate.split('-') : [];
+      const year = Number(eventDateParts[0]);
+      const month = Number(eventDateParts[1]);
+      const day = Number(eventDateParts[2]);
 
-      // Apply penalty if canceling within the penalty period
-      if (minutesUntilEvent <= PENALTY_CONFIG.CANCELLATION_PENALTY_MINUTES && minutesUntilEvent > 0) {
-        player.isPenalty = true;
+      if (
+        effectiveStartTime &&
+        !Number.isNaN(year) &&
+        !Number.isNaN(month) &&
+        !Number.isNaN(day)
+      ) {
+        const totalMinutes = parseTimeToMinutes(effectiveStartTime);
+        if (typeof totalMinutes === 'number') {
+          const startHours = Math.floor(totalMinutes / 60);
+          const startMinutes = totalMinutes % 60;
+
+          const eventStartUtcMillis =
+            Date.UTC(year, month - 1, day, startHours, startMinutes) - BANGKOK_OFFSET_MILLIS;
+          const minutesUntilEvent = (eventStartUtcMillis - Date.now()) / (1000 * 60);
+
+          if (
+            minutesUntilEvent <= PENALTY_CONFIG.CANCELLATION_PENALTY_MINUTES &&
+            minutesUntilEvent > 0
+          ) {
+            player.isPenalty = true;
+          }
+        }
       }
     }
 

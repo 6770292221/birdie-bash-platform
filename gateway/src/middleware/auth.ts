@@ -26,6 +26,7 @@ export function requireAuth(
 ) {
   if (!req.user) {
     res.status(401).json({
+      success: false,
       error: "Authentication required",
       code: "AUTHENTICATION_REQUIRED",
     });
@@ -41,6 +42,7 @@ export function requireAdmin(
 ) {
   if (!req.user) {
     res.status(401).json({
+      success: false,
       error: "Authentication required",
       code: "AUTHENTICATION_REQUIRED",
     });
@@ -63,10 +65,22 @@ export function requireAdmin(
   next();
 }
 
+export function requireAdminForMethods(methods: string[]) {
+  const normalized = methods.map((method) => method.toUpperCase());
+
+  return (req: RequestWithUser, res: Response, next: NextFunction) => {
+    if (!normalized.includes(req.method.toUpperCase())) {
+      next();
+      return;
+    }
+
+    requireAdmin(req, res, next);
+  };
+}
+
 export function forwardUserHeaders(proxyReq: any, req: RequestWithUser) {
   if (req.user) {
     proxyReq.setHeader("x-user-id", req.user.userId);
     proxyReq.setHeader("x-user-role", req.user.role);
-    proxyReq.setHeader("x-authenticated", "true");
   }
 }

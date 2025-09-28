@@ -3,6 +3,7 @@ export interface ProxyRoute {
   target: string;
   protected: boolean;
   adminRequired?: boolean;
+  adminForMethods?: string[];
   methods?: string[];
 }
 
@@ -31,24 +32,44 @@ export function getRoutes(
           { path: "/api/events/:id/players/:pid/cancel", target: registrationUrl, protected: true },
         ]
       : []),
+    {
+      path: "/api/auth/profile",
+      target: authUrl,
+      protected: true,
+      methods: ["GET"],
+    },
+    {
+      path: "/api/auth/users",
+      target: authUrl,
+      protected: true,
+      adminRequired: true,
+      methods: ["GET"],
+    },
+    {
+      path: "/api/auth/user/:id",
+      target: authUrl,
+      protected: true,
+      methods: ["GET"],
+    },
     { path: "/api/auth", target: authUrl, protected: false },
     {
       path: "/api/events",
       target: eventUrl,
       protected: true,
       adminRequired: false,
+      adminForMethods: ["POST", "PUT", "PATCH", "DELETE"],
     },
     {
       path: "/api/event/venues",
       target: eventUrl,
-      protected: false,
+      protected: true,
       adminRequired: false,
       methods: ["GET"],
     },
     {
       path: "/api/event/venues/:id",
       target: eventUrl,
-      protected: false,
+      protected: true,
       adminRequired: false,
       methods: ["GET"],
     },

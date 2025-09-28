@@ -61,7 +61,7 @@ import { Venue } from "../models/Venue";
  *         name: limit
  *         schema:
  *           type: number
- *           default: 50
+ *           venues: 50
  *           minimum: 1
  *           maximum: 100
  *         description: Number of venues to return
