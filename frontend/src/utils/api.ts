@@ -405,6 +405,37 @@ class ApiClient {
   async getVenue(venueId: string): Promise<ApiResponse<any>> {
     return this.request(`/api/event/venues/${venueId}`);
   }
+
+  async seedMatching(eventId: string): Promise<ApiResponse<any>> {
+    return this.request("/api/matchings/seed", {
+      method: "POST",
+      data: { eventId }
+    });
+  }
+
+  async advanceMatching(eventId: string, data?: {
+    courtId?: string;
+    at?: string;
+  }): Promise<ApiResponse<any>> {
+    return this.request("/api/matchings/advance", {
+      method: "POST",
+      data: {
+        eventId,
+        ...data
+      }
+    });
+  }
+
+  async getMatchingStatus(eventId: string): Promise<ApiResponse<any>> {
+    return this.request(`/api/matchings/${eventId}/status`);
+  }
+
+  async closeMatching(eventId: string): Promise<ApiResponse<any>> {
+    return this.request("/api/matchings/close", {
+      method: "POST",
+      data: { eventId }
+    });
+  }
 }
 
 // Create and export singleton instance
