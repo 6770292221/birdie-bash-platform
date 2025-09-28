@@ -3,7 +3,6 @@ import * as protoLoader from '@grpc/proto-loader';
 import path from 'path';
 import { prisma } from './config/paymentDatabase';
 import { IPayment, PaymentStatus, PaymentType, TransactionType } from './models/Payment';
-import { PaymentService } from './services/paymentService';
 import { omiseService } from './services/omiseService';
 import { v4 as uuidv4 } from 'uuid';
 import { Logger } from './utils/logger';
@@ -19,7 +18,6 @@ const packageDefinition = protoLoader.loadSync(PROTO_PATH, {
 });
 
 const paymentProto = grpc.loadPackageDefinition(packageDefinition).payment as any;
-const paymentService = new PaymentService();
 
 // Convert PaymentStatus enum from proto to internal
 function convertStatusFromProto(protoStatus: number): PaymentStatus {
@@ -183,205 +181,6 @@ const grpcService = {
     }
   },
 
-  //TODO: Verify & Test this function
-  async confirmPayment(call: grpc.ServerUnaryCall<any, any>, callback: grpc.sendUnaryData<any>) {
-    try {
-      const request = call.request;
-      
-      Logger.grpc('ConfirmPayment request received', {
-        payment_id: request.payment_id,
-        payment_method_id: request.payment_method_id
-      });
-      
-      if (!request.payment_id) {
-        Logger.error('Invalid ConfirmPayment request - missing payment_id');
-        callback({
-          code: grpc.status.INVALID_ARGUMENT,
-          message: 'Payment ID is required'
-        });
-        return;
-      }
-
-      const payment = await prisma.payment.findUnique({ 
-        where: { id: request.payment_id },
-        include: { transactions: true }
-      });
-      if (!payment) {
-        Logger.error('Payment not found', { payment_id: request.payment_id });
-        callback({
-          code: grpc.status.NOT_FOUND,
-          message: 'Payment not found'
-        });
-        return;
-      }
-
-      // Confirm payment (manual confirmation process)
-      const confirmedPayment = await paymentService.confirmPayment(
-        payment.paymentIntentId!,
-        request.payment_method_id
-      );
-
-      // Update payment status - for MVP, payments require manual confirmation
-      const updatedPayment = await prisma.payment.update({
-        where: { id: payment.id },
-        data: {
-          status: confirmedPayment.status === 'succeeded' 
-            ? PaymentStatus.COMPLETED 
-            : confirmedPayment.status === 'requires_confirmation'
-            ? PaymentStatus.PENDING
-            : PaymentStatus.FAILED,
-          lastStatusChange: new Date(),
-          chargeId: confirmedPayment.latest_charge || payment.chargeId,
-          transactions: {
-            create: {
-              id: uuidv4(),
-              type: TransactionType.charge,
-              amount: payment.amount,
-              status: confirmedPayment.status === 'succeeded' 
-                ? PaymentStatus.COMPLETED 
-                : confirmedPayment.status === 'requires_confirmation'
-                ? PaymentStatus.PENDING
-                : PaymentStatus.FAILED,
-              transactionId: confirmedPayment.id,
-              timestamp: new Date(),
-              metadata: { 
-                confirmationMethod: 'manual',
-                originalStatus: confirmedPayment.status 
-              }
-            }
-          }
-        },
-        include: {
-          transactions: true
-        }
-      });
-
-      const response = {
-        id: updatedPayment.id,
-        status: convertStatusToProto(updatedPayment.status),
-        amount: updatedPayment.amount,
-        currency: updatedPayment.currency,
-        payment_intent_id: updatedPayment.paymentIntentId,
-        created_at: updatedPayment.createdAt.getTime(),
-        updated_at: updatedPayment.updatedAt.getTime()
-      };
-
-      Logger.success('ConfirmPayment completed', {
-        payment_id: updatedPayment.id,
-        status: updatedPayment.status,
-        confirmation_status: confirmedPayment.status
-      });
-
-      callback(null, response);
-    } catch (error) {
-      Logger.error('gRPC confirmPayment error', error);
-      callback({
-        code: grpc.status.INTERNAL,
-        message: error instanceof Error ? error.message : 'Unknown error'
-      });
-    }
-  },
-
-  //TODO: Verify & Test this function
-  async refundPayment(call: grpc.ServerUnaryCall<any, any>, callback: grpc.sendUnaryData<any>) {
-    try {
-      const request = call.request;
-      
-      if (!request.payment_id) {
-        callback({
-          code: grpc.status.INVALID_ARGUMENT,
-          message: 'Payment ID is required'
-        });
-        return;
-      }
-
-      const payment = await prisma.payment.findUnique({ 
-        where: { id: request.payment_id },
-        include: { transactions: true }
-      });
-      if (!payment) {
-        callback({
-          code: grpc.status.NOT_FOUND,
-          message: 'Payment not found'
-        });
-        return;
-      }
-
-      if (payment.status !== PaymentStatus.COMPLETED) {
-        callback({
-          code: grpc.status.FAILED_PRECONDITION,
-          message: 'Can only refund completed payments'
-        });
-        return;
-      }
-
-      const refundAmount = request.amount || (payment.amount - payment.refundedAmount);
-      
-      if (refundAmount <= 0 || (payment.refundedAmount + refundAmount) > payment.amount) {
-        callback({
-          code: grpc.status.INVALID_ARGUMENT,
-          message: 'Invalid refund amount'
-        });
-        return;
-      }
-
-      // Process refund (now manual refund process)
-      const refund = await paymentService.createRefund({
-        chargeId: payment.chargeId!,
-        amount: refundAmount,
-        reason: request.reason
-      });
-
-      // Update payment record
-      const updatedPayment = await prisma.payment.update({
-        where: { id: payment.id },
-        data: {
-          refundedAmount: payment.refundedAmount + refundAmount,
-          status: (payment.refundedAmount + refundAmount) >= payment.amount 
-            ? PaymentStatus.REFUNDED 
-            : PaymentStatus.PARTIALLY_REFUNDED,
-          lastStatusChange: new Date(),
-          transactions: {
-            create: {
-              id: uuidv4(),
-              type: TransactionType.refund,
-              amount: refundAmount,
-              status: PaymentStatus.PENDING, // Refunds are manual process
-              transactionId: refund.id,
-              timestamp: new Date(),
-              metadata: { 
-                reason: request.reason,
-                refundMethod: 'manual',
-                refundReference: refund.id
-              }
-            }
-          }
-        },
-        include: {
-          transactions: true
-        }
-      });
-
-      const response = {
-        id: updatedPayment.id,
-        status: convertStatusToProto(updatedPayment.status),
-        amount: refundAmount,
-        currency: updatedPayment.currency,
-        created_at: updatedPayment.createdAt.getTime(),
-        updated_at: updatedPayment.updatedAt.getTime()
-      };
-
-      callback(null, response);
-    } catch (error) {
-      console.error('gRPC refundPayment error:', error);
-      callback({
-        code: grpc.status.INTERNAL,
-        message: error instanceof Error ? error.message : 'Unknown error'
-      });
-    }
-  },
-
-  //TODO: Verify & Test this function
   async getPaymentStatus(call: grpc.ServerUnaryCall<any, any>, callback: grpc.sendUnaryData<any>) {
     try {
       const request = call.request;
@@ -438,7 +237,6 @@ const grpcService = {
     }
   },
 
-  //TODO: Verify & Test this function
   async getPlayerPayments(call: grpc.ServerUnaryCall<any, any>, callback: grpc.sendUnaryData<any>) {
     try {
       const request = call.request;

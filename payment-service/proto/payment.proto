@@ -7,12 +7,6 @@ service PaymentService {
   // Issue charges for a payment
   rpc IssueCharges(ChargeRequest) returns (PaymentResponse);
   
-  // Confirm a payment
-  rpc ConfirmPayment(ConfirmationRequest) returns (PaymentResponse);
-  
-  // Refund a payment
-  rpc RefundPayment(RefundRequest) returns (PaymentResponse);
-  
   // Get payment status
   rpc GetPaymentStatus(PaymentStatusRequest) returns (PaymentStatusResponse);
   
@@ -32,18 +26,6 @@ message ChargeRequest {
   string description = 5;
   string payment_method_id = 6;
   map<string, string> metadata = 7;
-}
-
-message ConfirmationRequest {
-  string payment_id = 1;
-  string payment_method_id = 2;
-  string payment_intent_id = 3;
-}
-
-message RefundRequest {
-  string payment_id = 1;
-  double amount = 2; // Optional - full refund if not specified
-  string reason = 3;
 }
 
 message PaymentStatusRequest {
