@@ -605,6 +605,7 @@ const translations = {
     'success.saved': 'Saved',
     'success.saved_desc': 'Data saved successfully',
     'success.event_deleted': 'Event Deleted',
+    'success.event_deleted_desc': 'Event has been removed from the system',
 
     // Skill levels
     'skill.beginner_0': '0 - Absolute Beginner (BG)',

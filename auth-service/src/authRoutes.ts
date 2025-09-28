@@ -1,6 +1,6 @@
 import express from 'express';
-import { register, login, verifyToken, getUserById, getProfile } from './controllers/authController';
-import { authenticateToken } from './middleware/auth';
+import { register, login, verifyToken, getUserById, getProfile, getAllUsers } from './controllers/authController';
+import { authenticateToken, authorizeRole } from './middleware/auth';
 
 const router = express.Router();
 
@@ -160,6 +160,66 @@ router.get('/verify', authenticateToken, verifyToken);
  *         description: Invalid or expired token
  */
 router.get('/profile', authenticateToken, getProfile);
+
+/**
+ * @swagger
+ * /api/auth/users:
+ *   get:
+ *     summary: Get all users
+ *     tags: [Authentication]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 100
+ *         description: Number of users to return (default 25)
+ *       - in: query
+ *         name: offset
+ *         schema:
+ *           type: integer
+ *           minimum: 0
+ *         description: Number of users to skip for pagination
+ *       - in: query
+ *         name: role
+ *         schema:
+ *           type: string
+ *           enum: [admin, user]
+ *         description: Filter users by role
+ *     responses:
+ *       200:
+ *         description: Users retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 users:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/User'
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     total:
+ *                       type: integer
+ *                     limit:
+ *                       type: integer
+ *                     offset:
+ *                       type: integer
+ *                     hasMore:
+ *                       type: boolean
+ *       401:
+ *         description: Access token required
+ *       403:
+ *         description: Invalid token or insufficient permissions
+ */
+router.get('/users', authenticateToken, authorizeRole(['admin']), getAllUsers);
 
 /**
  * @swagger
