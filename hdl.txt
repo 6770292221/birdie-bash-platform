@@ -1,116 +1,122 @@
-title Event-Driven Microservices (Registration checks Event status)
+title Birdie Bash Platform - Complete Microservices Architecture
 
 // ---------- Users / Clients ----------
 Users [icon: users, color: gray] {
   Organizer [icon: user, color: red]
   Player [icon: user, color: green]
-  Web Client [icon: monitor, color: blue, label: "Web Client (Browser)"]
+  Web Client [icon: monitor, color: blue, label: "React Frontend\n(Port 9001)"]
 }
 
 // ---------- Ingress ----------
-API Gateway [icon: aws-api-gateway, color: orange, label: "API Gateway\n(REST Routing)"]
+Gateway [icon: aws-api-gateway, color: orange, label: "API Gateway\n(Port 3000)"]
 
-// ---------- Services ----------
-Auth Service [icon: lock, color: blue, label: "AUTH SERVICE (REST)"] {
-  AuthDB [icon: mongodb, color: green, label: "MongoDB: users"]
+// ---------- Core Services ----------
+Auth Service [icon: lock, color: blue, label: "AUTH SERVICE\n(Port 3001)"] {
+  AuthDB [icon: mongodb, color: green, label: "MongoDB : users"]
 }
 
-Event Service [icon: calendar, color: blue, label: "EVENT SERVICE (REST)"] {
-  EventDB [icon: mongodb, color: green, label: "MongoDB: events"]
-  Capacity Consumer [icon:server, color:purple, label:"capacity-consumer"]
+Event Service [icon: calendar, color: blue, label: "EVENT SERVICE\n(Port 3003)"] {
+  EventDB [icon: mongodb, color: green, label: "MongoDB : events"]
+  Capacity Worker [icon: server, color: purple, label: "capacity-worker-consumer"]
+  Event Status Scheduler [icon: timer, color: red, label: "event-scheduler"]
 }
 
-Registration Service [icon: edit, color: blue, label: "REGISTRATION SERVICE (REST)"] {
-  RegDB [icon: mongodb, color: green, label: "MongoDB: registrations"]
+Registration Service [icon: edit, color: blue, label: "REGISTRATION SERVICE\n(Port 3005)"] {
+  RegDB [icon: mongodb, color: green, label: "MongoDB : registrations"]
+  Waitlist Worker [icon: server, color: purple, label: "waitlist.promoter-consumer"]
 }
 
-Notification Service [icon: bell, color: blue, label: "NOTIFICATION SERVICE (REST)"] {
-  NotificationDB [icon: mongodb, color: green, label: "MongoDB: notifications"]
-  Notification Consumer [icon: server, color: purple, label: "notification-consumer"]
+Settlement Service [icon: dollar-sign, color: blue, label: "SETTLEMENT SERVICE\n(Port 3006)"] {
+  SettleDB [icon: mongodb, color: green, label: "MongoDB : settlements"]
 }
 
-Settlement Service [icon: dollar-sign, color: blue, label: "SETTLEMENT SERVICE (REST)"] {
-  SettleDB [icon: mongodb, color: green, label: "MongoDB: settlements"]
-}
-
-Payment Service [icon: credit-card, color: red, label: "PAYMENT SERVICE (gRPC)"] {
-  PayDB [icon: mysql, color: blue, label: "MySQL: payments"]
-}
-
-Matching Service [icon: shuffle, color: blue, label: "MATCHING SERVICE (REST)"] {
+// ---------- Business Services ----------
+Matching Service [icon: shuffle, color: orange, label: "MATCHING SERVICE\n(Future Implementation)"] {
   MatchingDB [icon: mongodb, color: green, label: "MongoDB: matching"]
 }
 
-// ---------- MQ Hub ----------
-RabbitMQ [icon: rabbitmq, color: purple, label: "RabbitMQ (topic: events)"]
+Notification Service [icon: bell, color: orange, label: "NOTIFICATION SERVICE"] {
+  NotificationDB [icon: mongodb, color: green, label: "MongoDB: notifications"]
+  Notification Worker [icon: server, color: purple, label: "notification-worker-consumer"]
+}
 
-// ---------- External ----------
-Stripe [icon: qr-code, color: gray, label: "Stripe / PromptPay"]
-Stripe Webhook [icon: webhook, color: gray, label: "Webhook (Inbound)"]
-LINE [icon: message-circle, color: green, label: "LINE outbound"]
-SMS [icon: message-square, color: green, label: "SMS outbound"]
+Payment Service [icon: credit-card, color: orange, label: "PAYMENT SERVICE\n(Future Implementation)"] {
+  PayDB [icon: mysql, color: blue, label: "MySQL: payments"]
+  Payment Worker [icon: server, color: purple, label: "payment-worker"]
+}
+
+// ---------- Message Queue ----------
+RabbitMQ [icon: rabbitmq, color: purple, label: "RabbitMQ\n(Port 5672)"]
+
+// ---------- Infrastructure ----------
+
+// ---------- External Services ----------
+Stripe API [icon: credit-card, color: gray, label: "Stripe Payment"]
+SMS Provider [icon: message-square, color: orange, label: "SMS Gateway"]
 
 // ---------- Connections ----------
 
-// Users to Web Client
+// Users to Frontend
 Organizer > Web Client
 Player > Web Client
 
-// Web Client to API Gateway
-Web Client > API Gateway: HTTPS REST
+// Frontend to Gateway
+Web Client > Gateway: HTTPS REST
 
-// API Gateway to Services
-API Gateway > Auth Service: REST
-API Gateway > Event Service: REST
-API Gateway > Notification Service: REST
-API Gateway > Settlement Service: REST
-API Gateway > Payment Service: gRPC
-API Gateway > Matching Service: REST
+// Gateway to Services
+Gateway > Auth Service: REST /api/auth/*
+Gateway > Event Service: REST /api/events/*
+Gateway > Registration Service: REST /api/registrations/*
+Gateway > Settlement Service: REST /api/settlements/*
+Gateway > Matching Service: REST /api/matching/*
+Gateway > Payment Service: REST /api/payments/*
 
-// Service DBs
+// Service-to-Service Communication
+Registration Service > Event Service: GET /api/events/{id}
+Settlement Service > Event Service: GET /api/events/{id}
+Matching Service > Event Service: GET /api/events/{id}
+Payment Service > Settlement Service: POST /api/settlements
 
 // Event Service <-> RabbitMQ
 Event Service --> RabbitMQ: event.created
 Event Service --> RabbitMQ: event.updated
 Event Service --> RabbitMQ: event.deleted
-Event Service <-- RabbitMQ: event.participant.joined
-Event Service <-- RabbitMQ: event.participant.cancelled
+Event Service --> RabbitMQ: event.\ncapacity.\nslot.opened
+Event Service <-- RabbitMQ: event.\nparticipant.joined
+Event Service <-- RabbitMQ: event.\nparticipant.cancelled
+Event Service <-- RabbitMQ: event.waitlist.promoted
 
 
 // Registration Service <-> RabbitMQ
-Registration Service --> RabbitMQ: event.participant.joined
-Registration Service --> RabbitMQ: event.participant.cancelled
-Registration Service --> RabbitMQ: event.waiting.promoted
+Registration Service --> RabbitMQ: event.\nparticipant.joined
+Registration Service --> RabbitMQ: event.\nparticipant.cancelled
+Registration Service --> RabbitMQ: event.\nwaitlist.promoted
+Registration Service --> RabbitMQ: event.\nwaiting.added
 
-// Registration Service status check call
-Registration Service > Event Service: GET \n /api/events/{id}/\nstatus
+Registration Service <-- RabbitMQ: event.\ncapacity.\nslot.opened
 
-// Event Service internal promote call
-Event Service > Registration Service: POST /registra/waitlist/promote
-
-// Notification Service <-> RabbitMQ
-Notification Service --> RabbitMQ: notification.sent
-
-// Notification Consumer <-> RabbitMQ
-Notification Consumer <-- RabbitMQ: event.participant.joined
-Notification Consumer <-- RabbitMQ: event.waiting.promoted
-Notification Consumer <-- RabbitMQ: payment.success
-Notification Consumer <-- RabbitMQ: payment.failed
-
-// Notification Consumer outbound
-Notification Consumer > LINE: LINE outbound
-Notification Consumer > SMS: SMS outbound
 
 // Settlement Service <-> RabbitMQ
-// Settlement Service --> RabbitMQ: settlement.ready
+Settlement Service --> RabbitMQ: payment
+Payment Worker <-- RabbitMQ: payment
 
-// Payment Service <-> RabbitMQ
-// Payment Service <-- RabbitMQ: settlement.ready
-// Payment Service --> RabbitMQ: payment.success
-// Payment Service --> RabbitMQ: payment.failed
+// Workers <-> RabbitMQ
+Capacity Worker <-- RabbitMQ: event.\nparticipant.joined
+Capacity Worker <-- RabbitMQ: event.\nparticipant.cancelled
+Waitlist Worker <-- RabbitMQ: event.\ncapacity.updated
 
-// Payment Service <-> Stripe
-Payment Service > Stripe: Create QR Payment
-Stripe Webhook > Payment Service: payment status
-Capacity Consumer <-- RabbitMQ: event.participant.joined
-Capacity Consumer <-- RabbitMQ: event.participant.cancelled
+// Notification <-> RabbitMQ
+Notification Worker <-- RabbitMQ: event.created
+Notification Worker <-- RabbitMQ: event.updated
+Notification Worker <-- RabbitMQ: event.deleted
+Notification Worker <-- RabbitMQ: event.\nparticipant.joined
+Notification Worker <-- RabbitMQ: event.\nwaiting.added
+Notification Worker <-- RabbitMQ: event.\nwaitlist.promoted
+Notification Worker <-- RabbitMQ: event.\nparticipant.cancelled
+
+// External Integrations
+Payment Service > Stripe API: Create Payment
+Notification Worker > SMS Provider: Send SMS
+
+// Database Connections
+Payment Service < Stripe API: Webhook Payment Statu

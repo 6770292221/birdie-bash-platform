@@ -6,7 +6,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/components/ui/form';
 import { useForm } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Check, AlertCircle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -35,14 +35,27 @@ const LoginForm = () => {
     
     if (error) {
       toast({
-        title: t('login.failed'),
+        title: (
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-red-600" />
+            {t('login.failed')}
+          </div>
+        ),
         description: error,
-        variant: "destructive",
+        className: 'border-red-200 bg-red-50',
+        duration: 5000
       });
     } else {
       toast({
-        title: t('login.success'),
+        title: (
+          <div className="flex items-center gap-2">
+            <Check className="w-4 h-4 text-green-600" />
+            {t('login.success')}
+          </div>
+        ),
         description: t('login.success_desc'),
+        className: 'border-green-200 bg-green-50',
+        duration: 4000
       });
       navigate('/');
     }

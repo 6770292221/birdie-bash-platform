@@ -168,6 +168,20 @@ const translations = {
     'register.success_desc': 'สามารถเข้าสู่ระบบได้ทันที',
     'register.failed': 'ลงทะเบียนไม่สำเร็จ',
 
+    // Success messages
+    'success.registered': 'ลงทะเบียนเรียบร้อย',
+    'success.registered_desc': 'ลงทะเบียนเข้าร่วมกิจกรรมเรียบร้อยแล้ว',
+    'success.player_added': 'เพิ่มผู้เล่นสำเร็จ',
+    'success.player_added_desc': 'เพิ่มผู้เล่นใหม่เรียบร้อยแล้ว',
+    'success.player_cancelled': 'ยกเลิกเรียบร้อย',
+    'success.player_cancelled_desc': 'ยกเลิกการเข้าร่วมเรียบร้อยแล้ว',
+    'success.saved': 'บันทึกแล้ว',
+    'success.saved_desc': 'บันทึกข้อมูลเรียบร้อยแล้ว',
+    'success.event_deleted': 'ลบกิจกรรมแล้ว',
+    'success.event_deleted_desc': 'ลบกิจกรรมออกจากระบบแล้ว',
+    'success.payment_updated': 'อัปเดตการชำระเงินแล้ว',
+    'success.payment_updated_desc': 'อัปเดตสถานะการชำระเงินเรียบร้อยแล้ว',
+
     // Skill levels
     'skill.beginner_0': '0 - มือเปาะแปะ (BG - Beginner)',
     'skill.beginner_1': '1 - มือหน้าบ้าน (BG - Beginner)',
@@ -303,6 +317,33 @@ const translations = {
     'activity.total': 'ทั้งหมด {count} กิจกรรม',
     'activity.empty_title': 'ยังไม่มีประวัติกิจกรรม',
     'activity.empty_desc': 'คุณยังไม่ได้เข้าร่วมกิจกรรมใด ๆ',
+
+    // Admin interface
+    'admin.player_added': 'เพิ่มผู้เล่นแล้ว',
+    'admin.player_added_desc': 'เพิ่ม {name} เข้ากิจกรรมแล้ว',
+    'admin.player_removed': 'ลบผู้เล่นแล้ว',
+    'admin.player_removed_desc': 'ลบ {name} ออกจากกิจกรรมแล้ว',
+    'admin.cost_calculation_complete': 'คำนวณค่าใช้จ่ายเสร็จแล้ว',
+    'admin.cost_calculation_desc': 'ค่าใช้จ่ายรวม: ฿{total}',
+    'admin.event_updated': 'อัปเดตกิจกรรมแล้ว',
+    'admin.event_updated_desc': 'บันทึกข้อมูลคอร์ตและลูกขนไก่เรียบร้อยแล้ว',
+    'admin.players_updated': 'อัปเดตผู้เล่นแล้ว',
+    'admin.players_updated_desc': 'บันทึกข้อมูลผู้เล่นเรียบร้อยแล้ว',
+    'admin.player_times_updated': 'อัปเดตเวลาผู้เล่นแล้ว',
+    'admin.player_times_updated_desc': 'อัปเดตเวลาเริ่มต้นและสิ้นสุดของผู้เล่นเรียบร้อยแล้ว',
+    'admin.payment_confirmed': 'ยืนยันการชำระเงินแล้ว',
+    'admin.payment_status_updated': 'อัปเดตสถานะการชำระเงินแล้ว',
+    'admin.payment_status_desc': '{name} ถูกทำเครื่องหมายเป็น {status}',
+    'admin.payment_status_paid': 'ชำระแล้ว',
+    'admin.payment_status_unpaid': 'ยังไม่ชำระ',
+    'admin.all_payments_confirmed': 'ยืนยันการชำระเงินทั้งหมดแล้ว',
+    'admin.all_payments_confirmed_desc': 'ทำเครื่องหมายผู้เล่นทุกคนเป็นชำระแล้ว',
+
+    // Create event
+    'create_event.success': 'สร้างอีเวนต์สำเร็จ',
+    'create_event.success_desc': 'บันทึกข้อมูลเรียบร้อย',
+    'create_event.failed': 'สร้างอีเวนต์ไม่สำเร็จ',
+    'create_event.failed_desc': 'เกิดข้อผิดพลาด',
     'activity.browse_events': 'เรียกดูกิจกรรม',
     'activity.location': 'สถานที่',
     'activity.play_time': 'เวลาเล่นของคุณ',
@@ -311,7 +352,6 @@ const translations = {
 
     // Common
     'common.error': 'เกิดข้อผิดพลาด',
-    'common.loading': 'กำลังโหลด...',
 
     // Loading messages
     'loading.cancelling_registration': 'กำลังยกเลิกการลงทะเบียน',
@@ -326,11 +366,17 @@ const translations = {
 
     // Error messages
     'error.registration_failed': 'การลงทะเบียนไม่สำเร็จ',
+    'error.registration_failed_desc': 'การลงทะเบียนล้มเหลว กรุณาลองใหม่อีกครั้ง',
     'error.load_event_failed': 'โหลดข้อมูลอีเวนต์ไม่สำเร็จ',
+    'error.load_event_failed_desc': 'ไม่สามารถโหลดข้อมูลกิจกรรมได้ กรุณาลองใหม่',
     'error.save_failed': 'บันทึกข้อมูลไม่สำเร็จ',
+    'error.save_failed_desc': 'ไม่สามารถบันทึกข้อมูลได้ กรุณาลองใหม่',
     'error.delete_event_failed': 'ลบอีเวนต์ไม่สำเร็จ',
+    'error.delete_event_failed_desc': 'ไม่สามารถลบกิจกรรมได้ กรุณาลองใหม่',
     'error.add_player_failed': 'เพิ่มผู้เล่นไม่สำเร็จ',
     'error.cancel_player_failed': 'ยกเลิกผู้เล่นไม่สำเร็จ',
+    'error.payment_update_failed': 'อัปเดตการชำระเงินไม่สำเร็จ',
+    'error.payment_update_failed_desc': 'ไม่สามารถอัปเดตสถานะการชำระเงินได้',
     'error.unknown': 'เกิดข้อผิดพลาดไม่ทราบสาเหตุ',
 
     // User registration status
@@ -549,6 +595,18 @@ const translations = {
     'register.success_desc': 'You can login immediately',
     'register.failed': 'Registration Failed',
 
+    // Success messages
+    'success.registered': 'Registration Successful',
+    'success.registered_desc': 'Successfully registered for the event',
+    'success.player_added': 'Player Added Successfully',
+    'success.player_added_desc': 'New player has been added successfully',
+    'success.player_cancelled': 'Cancellation Successful',
+    'success.player_cancelled_desc': 'Successfully cancelled participation',
+    'success.saved': 'Saved',
+    'success.saved_desc': 'Data saved successfully',
+    'success.event_deleted': 'Event Deleted',
+    'success.event_deleted_desc': 'Event has been removed from the system',
+
     // Skill levels
     'skill.beginner_0': '0 - Absolute Beginner (BG)',
     'skill.beginner_1': '1 - Beginner (BG)',
@@ -692,7 +750,6 @@ const translations = {
 
     // Common
     'common.error': 'Error occurred',
-    'common.loading': 'Loading...',
 
     // Loading messages
     'loading.cancelling_registration': 'Cancelling Registration',
@@ -707,6 +764,7 @@ const translations = {
 
     // Error messages
     'error.registration_failed': 'Registration Failed',
+    'error.registration_failed_desc': 'Registration failed, please try again',
     'error.load_event_failed': 'Failed to Load Event',
     'error.save_failed': 'Save Failed',
     'error.delete_event_failed': 'Failed to Delete Event',
@@ -770,7 +828,34 @@ const translations = {
 
     // Events
     'events.edit': 'Edit Event',
-    'events.edit_description': 'Edit event information'
+    'events.edit_description': 'Edit event information',
+
+    // Create event
+    'create_event.success': 'Event Created Successfully',
+    'create_event.success_desc': 'Data saved successfully',
+    'create_event.failed': 'Failed to Create Event',
+    'create_event.failed_desc': 'An error occurred',
+
+    // Admin interface
+    'admin.player_added': 'Player Added',
+    'admin.player_added_desc': 'Added {name} to the event',
+    'admin.player_removed': 'Player Removed',
+    'admin.player_removed_desc': 'Removed {name} from the event',
+    'admin.cost_calculation_complete': 'Cost Calculation Complete',
+    'admin.cost_calculation_desc': 'Total cost: ฿{total}',
+    'admin.event_updated': 'Event Updated',
+    'admin.event_updated_desc': 'Court usage and shuttlecock count saved successfully',
+    'admin.players_updated': 'Players Updated',
+    'admin.players_updated_desc': 'Player information saved successfully',
+    'admin.player_times_updated': 'Player Times Updated',
+    'admin.player_times_updated_desc': 'Player start and end times updated successfully',
+    'admin.payment_confirmed': 'Payment Confirmed',
+    'admin.payment_status_updated': 'Payment Status Updated',
+    'admin.payment_status_desc': '{name} marked as {status}',
+    'admin.payment_status_paid': 'paid',
+    'admin.payment_status_unpaid': 'unpaid',
+    'admin.all_payments_confirmed': 'All Payments Confirmed',
+    'admin.all_payments_confirmed_desc': 'All players marked as paid'
   }
 };
 

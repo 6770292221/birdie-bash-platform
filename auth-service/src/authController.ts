@@ -35,6 +35,8 @@ export const register = async (req: Request, res: Response, next: NextFunction):
       userId: (user._id as any).toString(),
       email: user.email,
       role: user.role,
+      name: user.name,
+      phoneNumber: user.phoneNumber ?? null,
     });
 
     res.status(201).json({
@@ -70,6 +72,8 @@ export const login = async (req: Request, res: Response, next: NextFunction): Pr
       userId: (user._id as any).toString(),
       email: user.email,
       role: user.role,
+      name: user.name,
+      phoneNumber: user.phoneNumber ?? null,
     });
 
     res.status(200).json({

@@ -19,23 +19,34 @@ export function attachUserFromJwt(secret: string) {
   };
 }
 
-export function requireAuth(req: RequestWithUser, res: Response, next: NextFunction) {
+export function requireAuth(
+  req: RequestWithUser,
+  res: Response,
+  next: NextFunction
+) {
   if (!req.user) {
-    res.status(401).json({ error: "Authentication required", code: "AUTHENTICATION_REQUIRED" });
+    res.status(401).json({
+      error: "Authentication required",
+      code: "AUTHENTICATION_REQUIRED",
+    });
     return;
   }
   next();
 }
 
-export function requireAdmin(req: RequestWithUser, res: Response, next: NextFunction) {
+export function requireAdmin(
+  req: RequestWithUser,
+  res: Response,
+  next: NextFunction
+) {
   if (!req.user) {
-    res.status(401).json({ 
-      error: "Authentication required", 
-      code: "AUTHENTICATION_REQUIRED" 
+    res.status(401).json({
+      error: "Authentication required",
+      code: "AUTHENTICATION_REQUIRED",
     });
     return;
   }
-  
+
   if (req.user.role !== "admin") {
     res.status(403).json({
       error: "Admin privileges required",
@@ -43,21 +54,19 @@ export function requireAdmin(req: RequestWithUser, res: Response, next: NextFunc
       details: {
         userId: req.user.userId,
         currentRole: req.user.role,
-        requiredRole: "admin"
-      }
+        requiredRole: "admin",
+      },
     });
     return;
   }
-  
+
   next();
 }
 
 export function forwardUserHeaders(proxyReq: any, req: RequestWithUser) {
   if (req.user) {
     proxyReq.setHeader("x-user-id", req.user.userId);
-    proxyReq.setHeader("x-user-email", req.user.email);
     proxyReq.setHeader("x-user-role", req.user.role);
     proxyReq.setHeader("x-authenticated", "true");
   }
 }
-

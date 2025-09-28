@@ -23,18 +23,18 @@ const CreateEventForm = ({ onSubmit, onCancel, editEvent, onUpdateEvent }: Creat
   const isEditing = !!editEvent;
 
   // Venue state
-  const [venues, setVenues] = useState<any[]>([]);
+  const [venues, setVenues] = useState<Array<{ id: string; name: string; address?: string; phone?: string }>>([]);
   const [venuesLoading, setVenuesLoading] = useState(false);
   
   const [eventName, setEventName] = useState(editEvent?.eventName || '');
   const [eventDate, setEventDate] = useState(editEvent?.eventDate || '');
   const [venue, setVenue] = useState(editEvent?.venue || '');
   const [maxPlayers, setMaxPlayers] = useState(editEvent?.maxPlayers || 12);
-  const [waitlistEnabled, setWaitlistEnabled] = useState((editEvent as any)?.waitlistEnabled || false);
+  const [waitlistEnabled, setWaitlistEnabled] = useState((editEvent as Event & { waitlistEnabled?: boolean })?.waitlistEnabled || false);
   const [shuttlecockPrice, setShuttlecockPrice] = useState(editEvent?.shuttlecockPrice || 20);
   const [courtHourlyRate, setCourtHourlyRate] = useState(editEvent?.courtHourlyRate || 150);
-  const [penaltyFee, setPenaltyFee] = useState((editEvent as any)?.penaltyFee || 0);
-  const [penaltyEnabled, setPenaltyEnabled] = useState((editEvent as any)?.penaltyFee > 0);
+  const [penaltyFee, setPenaltyFee] = useState((editEvent as Event & { penaltyFee?: number })?.penaltyFee || 0);
+  const [penaltyEnabled, setPenaltyEnabled] = useState(((editEvent as Event & { penaltyFee?: number })?.penaltyFee || 0) > 0);
   const [courts, setCourts] = useState<Court[]>(
     editEvent?.courts && editEvent.courts.length > 0
       ? editEvent.courts
@@ -50,7 +50,7 @@ const CreateEventForm = ({ onSubmit, onCancel, editEvent, onUpdateEvent }: Creat
 
   const selectedVenue = useMemo(() => {
     if (!venue) return null;
-    return venues.find((item: any) => item.name === venue) || null;
+    return venues.find((item) => item.name === venue) || null;
   }, [venue, venues]);
 
   // Get today's date in YYYY-MM-DD format for min date
@@ -186,7 +186,7 @@ const CreateEventForm = ({ onSubmit, onCancel, editEvent, onUpdateEvent }: Creat
         courtHourlyRate,
         penaltyFee: penaltyEnabled ? penaltyFee : 0,
         courts,
-      } as any);
+      } as Omit<Event, 'id' | 'players' | 'status' | 'createdBy'> & { waitlistEnabled: boolean; penaltyFee: number });
     }
   };
 
