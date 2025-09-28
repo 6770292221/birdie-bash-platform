@@ -334,7 +334,7 @@ class ApiClient {
     currency?: string;
     shuttlecockCount?: number;
     absentPlayerIds?: string[];
-  }): Promise<ApiResponse<{ events: unknown[] }>> {
+  }): Promise<ApiResponse<unknown>> {
     return this.request(`/api/settlements/issue`, {
       method: "POST",
       data: {
@@ -346,8 +346,17 @@ class ApiClient {
     });
   }
 
+  async calculateSettlement(eventId: string): Promise<ApiResponse<unknown>> {
+    return this.request(`/api/settlements/calculate`, {
+      method: "POST",
+      data: {
+        event_id: eventId
+      }
+    });
+  }
+
   // Settlement detail endpoint (mocked for now)
-  async getSettlements(eventId: string): Promise<ApiResponse<any>> {
+  async getSettlements(eventId: string): Promise<ApiResponse<unknown>> {
     // Mock data for now - replace with real API call later
     return new Promise((resolve) => {
       setTimeout(() => {
@@ -375,7 +384,7 @@ class ApiClient {
   }
 
   // Mark player as paid endpoint (mocked for now)
-  async markPlayerAsPaid(eventId: string, playerId: string): Promise<ApiResponse<any>> {
+  async markPlayerAsPaid(eventId: string, playerId: string): Promise<ApiResponse<unknown>> {
     // Mock response for now - replace with real API call later
     return new Promise((resolve) => {
       setTimeout(() => {
@@ -398,11 +407,11 @@ class ApiClient {
     rating?: number;
     limit?: number;
     offset?: number;
-  }): Promise<ApiResponse<{ events: unknown[] }>> {
+  }): Promise<ApiResponse<unknown>> {
     return this.request("/api/event/venues", { params });
   }
 
-  async getVenue(venueId: string): Promise<ApiResponse<any>> {
+  async getVenue(venueId: string): Promise<ApiResponse<unknown>> {
     return this.request(`/api/event/venues/${venueId}`);
   }
 }
