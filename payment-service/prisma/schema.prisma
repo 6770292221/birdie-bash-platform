@@ -12,47 +12,43 @@ datasource db {
 }
 
 model Payment {
-  id                String   @id @default(uuid())
-  eventId           String?
-  playerId          String
-  amount            Float
-  currency          String   @default("thb")
-  status            PaymentStatus @default(PENDING)
-  paymentType       PaymentType
-  paymentIntentId   String?
-  paymentMethodId   String?
-  chargeId          String?
-  description       String?  @db.Text
-  refundedAmount    Float    @default(0)
-  metadata          Json?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  lastStatusChange  DateTime @default(now())
-  
-  transactions      PaymentTransaction[]
-  
+  id             String   @id @default(uuid())
+  eventId        String   @map("event_id")
+  playerId       String   @map("player_id")
+  amount         Float
+  currency       String?  @default("thb")
+  description    String?  @db.Text
+  paymentMethod  String?  @default("PROMPT_PAY") @map("payment_method")
+  qrCodeUri      String?  @map("qr_code_uri")
+  omiseChargeId  String?  @map("omise_charge_id")
+  omiseSourceId  String?  @map("omise_source_id")
+  status         PaymentStatus @default(PENDING)
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  transactions   PaymentTransaction[]
+
   @@index([playerId])
   @@index([eventId])
   @@index([status])
-  @@index([paymentIntentId])
-  @@index([createdAt])
+  @@map("payment")
 }
 
 model PaymentTransaction {
   id            String   @id @default(uuid())
-  paymentId     String
+  paymentId     String   @map("payment_id")
   type          TransactionType
   amount        Float
   status        PaymentStatus
-  transactionId String?
+  transactionId String?  @map("transaction_id")
   timestamp     DateTime @default(now())
-  metadata      Json?
-  
+
   payment       Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
-  
+
   @@index([paymentId])
   @@index([type])
   @@index([timestamp])
+  @@map("payment_transaction")
 }
 
 enum PaymentStatus {
@@ -60,21 +56,11 @@ enum PaymentStatus {
   PROCESSING
   COMPLETED
   FAILED
-  REFUNDED
-  PARTIALLY_REFUNDED
   CANCELLED
 }
 
-enum PaymentType {
-  EVENT_REGISTRATION
-  MEMBERSHIP_FEE
-  GUEST_FEE
-  DEPOSIT
-  PENALTY
-}
+// Removed PaymentType to simplify schema per new requirements
 
 enum TransactionType {
   charge
-  refund
-  authorization
 }

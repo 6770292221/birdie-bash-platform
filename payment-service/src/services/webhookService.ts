@@ -123,8 +123,6 @@ export class WebhookService {
           return await this.handleChargeFailed(webhookEvent);
         case 'charge.pending':
           return await this.handleChargePending(webhookEvent);
-        case 'charge.reversed':
-          return await this.handleChargeReversed(webhookEvent);
         default:
           Logger.warning('Unhandled webhook event type', { event_type: webhookEvent.key });
           return {
@@ -174,41 +172,32 @@ export class WebhookService {
       };
     }
 
-    // Update payment status to completed
-    const updatedPayment = await prisma.payment.update({
-      where: { id: payment.id },
-      data: {
-        status: 'COMPLETED',
-        lastStatusChange: new Date(),
-        transactions: {
-          create: {
-            id: uuidv4(),
-            type: 'charge',
-            amount: payment.amount,
-            status: 'COMPLETED',
-            transactionId: chargeId,
-            timestamp: new Date(),
-            metadata: {
-              webhookEventId: webhookEvent.id,
-              webhookEventType: webhookEvent.key,
-              omiseStatus,
-              omiseData: webhookEvent.data,
-              paidAt: webhookEvent.data?.paid_at,
-              authorizedAt: webhookEvent.data?.authorized_at,
-              net: webhookEvent.data?.net,
-              fee: webhookEvent.data?.fee,
-              transaction: webhookEvent.data?.transaction
+    // Idempotency: if a COMPLETED transaction already exists for this charge, skip creating another
+    const existingCompletedTx = await prisma.paymentTransaction.findFirst({
+      where: { paymentId: payment.id, transactionId: chargeId, status: 'COMPLETED' }
+    });
+
+    let updatedPayment;
+    if (existingCompletedTx) {
+      updatedPayment = payment;
+    } else {
+      updatedPayment = await prisma.payment.update({
+        where: { id: payment.id },
+        data: {
+          status: 'COMPLETED',
+          transactions: {
+            create: {
+              id: uuidv4(),
+              type: 'charge',
+              amount: payment.amount,
+              status: 'COMPLETED',
+              transactionId: chargeId,
+              timestamp: new Date()
             }
           }
         }
-      },
-      include: {
-        transactions: {
-          orderBy: { timestamp: 'desc' },
-          take: 1
-        }
-      }
-    });
+      });
+    }
 
     Logger.success('Payment marked as completed via webhook', {
       payment_id: updatedPayment.id,
@@ -248,28 +237,23 @@ export class WebhookService {
       };
     }
 
-    // Update payment status to failed
+    // Idempotency: avoid duplicate FAILED transaction
+    const existingFailedTx = await prisma.paymentTransaction.findFirst({
+      where: { paymentId: payment.id, transactionId: chargeId, status: 'FAILED' }
+    });
+
     const updatedPayment = await prisma.payment.update({
       where: { id: payment.id },
       data: {
         status: 'FAILED',
-        lastStatusChange: new Date(),
-        transactions: {
+        transactions: existingFailedTx ? undefined : {
           create: {
             id: uuidv4(),
             type: 'charge',
             amount: payment.amount,
             status: 'FAILED',
             transactionId: chargeId,
-            timestamp: new Date(),
-            metadata: {
-              webhookEventId: webhookEvent.id,
-              webhookEventType: webhookEvent.key,
-              omiseStatus,
-              failureCode,
-              failureMessage,
-              omiseData: webhookEvent.data
-            }
+            timestamp: new Date()
           }
         }
       }
@@ -311,24 +295,24 @@ export class WebhookService {
       };
     }
 
-    // Create transaction record for pending status update
-    await prisma.paymentTransaction.create({
-      data: {
-        id: uuidv4(),
-        paymentId: payment.id,
-        type: 'charge',
-        amount: payment.amount,
-        status: 'PENDING',
-        transactionId: chargeId,
-        timestamp: new Date(),
-        metadata: {
-          webhookEventId: webhookEvent.id,
-          webhookEventType: webhookEvent.key,
-          omiseStatus,
-          omiseData: webhookEvent.data
-        }
-      }
+    // Only create a pending transaction if one doesn't already exist for this charge
+    const existingPendingTx = await prisma.paymentTransaction.findFirst({
+      where: { paymentId: payment.id, transactionId: chargeId, status: 'PENDING' }
     });
+
+    if (!existingPendingTx) {
+      await prisma.paymentTransaction.create({
+        data: {
+          id: uuidv4(),
+          paymentId: payment.id,
+          type: 'charge',
+          amount: payment.amount,
+          status: 'PENDING',
+          transactionId: chargeId,
+          timestamp: new Date()
+        }
+      });
+    }
 
     Logger.info('Payment pending status updated via webhook', {
       payment_id: payment.id,
@@ -347,117 +331,28 @@ export class WebhookService {
   /**
    * Handle charge.reversed event - payment was reversed/refunded
    */
-  private async handleChargeReversed(webhookEvent: OmiseWebhookEvent): Promise<WebhookProcessingResult> {
-    const chargeId = webhookEvent.data?.id;
-    const omiseStatus = webhookEvent.data?.status;
-    const refundedAmount = webhookEvent.data?.refunded_amount || 0;
-
-    if (!chargeId) {
-      throw new Error('Charge ID not found in webhook data');
-    }
-
-    const payment = await this.findPaymentByChargeId(chargeId);
-    if (!payment) {
-      Logger.warning('Payment not found for charge ID', { charge_id: chargeId });
-      return {
-        success: false,
-        message: `Payment not found for charge ID: ${chargeId}`
-      };
-    }
-
-    // Determine if it's a full or partial refund
-    const isPartialRefund = refundedAmount > 0 && refundedAmount < payment.amount;
-    const newStatus = isPartialRefund ? 'PARTIALLY_REFUNDED' : 'REFUNDED';
-
-    // Update payment status
-    const updatedPayment = await prisma.payment.update({
-      where: { id: payment.id },
-      data: {
-        status: newStatus,
-        refundedAmount: refundedAmount,
-        lastStatusChange: new Date(),
-        transactions: {
-          create: {
-            id: uuidv4(),
-            type: 'refund',
-            amount: refundedAmount,
-            status: newStatus,
-            transactionId: chargeId,
-            timestamp: new Date(),
-            metadata: {
-              webhookEventId: webhookEvent.id,
-              webhookEventType: webhookEvent.key,
-              omiseStatus,
-              refundedAmount,
-              totalAmount: payment.amount,
-              isPartialRefund,
-              omiseData: webhookEvent.data
-            }
-          }
-        }
-      }
-    });
-
-    Logger.warning('Payment refunded via webhook', {
-      payment_id: updatedPayment.id,
-      charge_id: chargeId,
-      webhook_event_id: webhookEvent.id,
-      refunded_amount: refundedAmount,
-      total_amount: payment.amount,
-      is_partial: isPartialRefund
-    });
-
-    return {
-      success: true,
-      message: `Payment ${isPartialRefund ? 'partially ' : ''}refunded`,
-      paymentId: updatedPayment.id,
-      updatedStatus: newStatus as PaymentStatus
-    };
-  }
+  // Refund/reversal handling removed per simplified requirements
 
   /**
    * Find payment by Omise charge ID
    */
   private async findPaymentByChargeId(chargeId: string) {
-    // Try to find by chargeId first
-    let payment = await prisma.payment.findFirst({
-      where: { chargeId }
+    // New direct lookup using omiseChargeId (camelCase field mapped to snake_case column)
+      const payment = await prisma.payment.findFirst({
+        where: { omiseChargeId: chargeId }
     });
-
-    // If not found, try to find by metadata containing the charge ID
-    if (!payment) {
-      payment = await prisma.payment.findFirst({
-        where: {
-          OR: [
-            {
-              metadata: {
-                string_contains: chargeId
-              }
-            },
-            {
-              paymentIntentId: chargeId
-            }
-          ]
-        }
-      });
-    }
-
-    return payment;
+    return payment || null;
   }
 
   /**
    * Check if webhook event has already been processed (idempotency)
    */
   private async isWebhookAlreadyProcessed(webhookEventId: string): Promise<boolean> {
-    const existingTransaction = await prisma.paymentTransaction.findFirst({
-      where: {
-        metadata: {
-          string_contains: webhookEventId
-        }
-      }
+    // Consider event processed if a transaction with this charge (event id) already exists
+    const existing = await prisma.paymentTransaction.findFirst({
+      where: { transactionId: webhookEventId }
     });
-
-    return !!existingTransaction;
+    return !!existing;
   }
 }
 

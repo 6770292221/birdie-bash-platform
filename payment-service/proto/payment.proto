@@ -4,15 +4,15 @@ package payment;
 
 // Payment service definition
 service PaymentService {
-  // Issue charges for a payment
+  // Issue charges for a payment (PromptPay only for now)
   rpc IssueCharges(ChargeRequest) returns (PaymentResponse);
-  
+
   // Get payment status
   rpc GetPaymentStatus(PaymentStatusRequest) returns (PaymentStatusResponse);
-  
+
   // Get payments for a player
   rpc GetPlayerPayments(PlayerPaymentsRequest) returns (PlayerPaymentsResponse);
-  
+
   // Get payments for an event
   rpc GetEventPayments(EventPaymentsRequest) returns (EventPaymentsResponse);
 }
@@ -20,12 +20,11 @@ service PaymentService {
 // Request messages
 message ChargeRequest {
   string event_id = 1;
-  string player_id = 2;
+  string player_id = 2;          
   double amount = 3;
-  string currency = 4;
-  string description = 5;
-  string payment_method_id = 6;
-  map<string, string> metadata = 7;
+  string currency = 4;             // optional (defaults to thb)
+  string description = 5;          // optional
+  string payment_method = 6;       // optional (defaults to PROMPT_PAY)
 }
 
 message PaymentStatusRequest {
@@ -49,8 +48,8 @@ message PaymentResponse {
   PaymentStatus status = 2;
   double amount = 3;
   string currency = 4;
-  string payment_intent_id = 5;
-  string client_secret = 6;
+  // field 5 (payment_intent_id) removed/reserved
+  string qr_code_uri = 6;
   string error_message = 7;
   int64 created_at = 8;
   int64 updated_at = 9;
@@ -61,13 +60,11 @@ message PaymentStatusResponse {
   PaymentStatus status = 2;
   double amount = 3;
   string currency = 4;
-  double refunded_amount = 5;
-  string event_id = 6;
-  string player_id = 7;
-  int64 created_at = 8;
-  int64 updated_at = 9;
-  int64 last_status_change = 10;
-  repeated PaymentTransaction transactions = 11;
+  string event_id = 5;
+  string player_id = 6;
+  int64 created_at = 7;
+  int64 updated_at = 8;
+  repeated PaymentTransaction transactions = 9;
 }
 
 message PlayerPaymentsResponse {
@@ -83,10 +80,9 @@ message PaymentSummary {
   PaymentStatus status = 2;
   double amount = 3;
   string currency = 4;
-  double refunded_amount = 5;
-  string event_id = 6;
-  int64 created_at = 7;
-  int64 updated_at = 8;
+  string event_id = 5;
+  int64 created_at = 6;
+  int64 updated_at = 7;
 }
 
 message EventPaymentSummary {
@@ -102,7 +98,6 @@ message PaymentTransaction {
   PaymentStatus status = 4;
   string transaction_id = 5;
   int64 timestamp = 6;
-  map<string, string> metadata = 7;
 }
 
 // Enums
@@ -111,13 +106,9 @@ enum PaymentStatus {
   PROCESSING = 1;
   COMPLETED = 2;
   FAILED = 3;
-  REFUNDED = 4;
-  PARTIALLY_REFUNDED = 5;
-  CANCELLED = 6;
+  CANCELLED = 4;
 }
 
 enum TransactionType {
   CHARGE = 0;
-  REFUND = 1;
-  AUTHORIZATION = 2;
 }

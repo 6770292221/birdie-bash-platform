@@ -1,16 +1,13 @@
 export interface PaymentRequest {
-  eventId: string;
-  playerId: string;
+  event_id?: string;
+  player_id: string;
   amount: number;
-  currency: string;
+  currency?: string; // default thb
   description?: string;
-  metadata?: Record<string, any>;
+  payment_method?: string; // PROMPT_PAY default
 }
 
-export interface ChargeRequest extends PaymentRequest {
-  paymentMethodId?: string;
-  paymentIntentId?: string;
-}
+export interface ChargeRequest extends PaymentRequest {}
 
 export interface RefundRequest {
   paymentId: string;
@@ -19,9 +16,7 @@ export interface RefundRequest {
 }
 
 export interface PaymentConfirmation {
-  paymentId: string;
-  paymentIntentId?: string;
-  paymentMethodId?: string;
+  payment_id: string;
 }
 
 export enum PaymentStatus {
@@ -47,24 +42,21 @@ export interface PaymentResponse {
   status: PaymentStatus;
   amount: number;
   currency: string;
-  paymentIntentId?: string;
-  clientSecret?: string;
-  errorMessage?: string;
-  createdAt: Date;
-  updatedAt: Date;
+  qr_code_uri?: string;
+  error_message?: string;
+  created_at: Date;
+  updated_at: Date;
 }
 
 export interface PaymentStatusResponse {
-  paymentId: string;
+  payment_id: string;
   status: PaymentStatus;
   amount: number;
   currency: string;
-  refundedAmount?: number;
-  eventId?: string;
-  playerId?: string;
-  createdAt: Date;
-  updatedAt: Date;
-  lastStatusChange: Date;
+  event_id?: string;
+  player_id?: string;
+  created_at: Date;
+  updated_at: Date;
   transactions: PaymentTransaction[];
 }
 
@@ -73,9 +65,8 @@ export interface PaymentTransaction {
   type: 'charge' | 'refund' | 'authorization';
   amount: number;
   status: PaymentStatus;
-  transactionId?: string;
+  transaction_id?: string;
   timestamp: Date;
-  metadata?: Record<string, any>;
 }
 
 // Omise Webhook Types

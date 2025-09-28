@@ -2,12 +2,12 @@ import * as grpc from '@grpc/grpc-js';
 import * as protoLoader from '@grpc/proto-loader';
 import path from 'path';
 import { prisma } from './config/paymentDatabase';
-import { IPayment, PaymentStatus, PaymentType, TransactionType } from './models/Payment';
+import { PaymentStatus, TransactionType } from './models/Payment';
 import { omiseService } from './services/omiseService';
 import { v4 as uuidv4 } from 'uuid';
 import { Logger } from './utils/logger';
 
-// Load the protobuf
+// Load the protobuf definition
 const PROTO_PATH = path.join(__dirname, '../proto/payment.proto');
 const packageDefinition = protoLoader.loadSync(PROTO_PATH, {
   keepCase: true,
@@ -16,7 +16,6 @@ const packageDefinition = protoLoader.loadSync(PROTO_PATH, {
   defaults: true,
   oneofs: true,
 });
-
 const paymentProto = grpc.loadPackageDefinition(packageDefinition).payment as any;
 
 // Convert PaymentStatus enum from proto to internal
@@ -26,25 +25,21 @@ function convertStatusFromProto(protoStatus: number): PaymentStatus {
     1: PaymentStatus.PROCESSING,
     2: PaymentStatus.COMPLETED,
     3: PaymentStatus.FAILED,
-    4: PaymentStatus.REFUNDED,
-    5: PaymentStatus.PARTIALLY_REFUNDED,
-    6: PaymentStatus.CANCELLED,
-  };
+    4: PaymentStatus.CANCELLED,
+  } as const;
   return statusMap[protoStatus as keyof typeof statusMap] || PaymentStatus.PENDING;
 }
 
 // Convert PaymentStatus enum to proto format
 function convertStatusToProto(status: PaymentStatus): number {
-  const statusMap = {
-    [PaymentStatus.PENDING]: 0,
-    [PaymentStatus.PROCESSING]: 1,
-    [PaymentStatus.COMPLETED]: 2,
-    [PaymentStatus.FAILED]: 3,
-    [PaymentStatus.REFUNDED]: 4,
-    [PaymentStatus.PARTIALLY_REFUNDED]: 5,
-    [PaymentStatus.CANCELLED]: 6,
-  };
-  return statusMap[status] || 0;
+  switch (status) {
+    case PaymentStatus.PENDING: return 0;
+    case PaymentStatus.PROCESSING: return 1;
+    case PaymentStatus.COMPLETED: return 2;
+    case PaymentStatus.FAILED: return 3;
+    case PaymentStatus.CANCELLED: return 4;
+    default: return 0;
+  }
 }
 
 // gRPC service implementations
@@ -57,18 +52,20 @@ const grpcService = {
         player_id: request.player_id,
         amount: request.amount,
         currency: request.currency,
-        event_id: request.event_id
+        event_id: request.event_id,
+        payment_method: request.payment_method
       });
 
       // Validate required fields
-      if (!request.player_id || !request.amount) {
+      if (!request.player_id || !request.amount || !request.event_id) {
         Logger.error('Invalid IssueCharges request - missing required fields', {
           player_id: request.player_id,
-          amount: request.amount
+          amount: request.amount,
+          event_id: request.event_id
         });
         callback({
           code: grpc.status.INVALID_ARGUMENT,
-          message: 'Missing required fields: player_id and amount are required'
+          message: 'Missing required fields: player_id, event_id and amount are required'
         });
         return;
       }
@@ -114,23 +111,16 @@ const grpcService = {
       const payment = await prisma.payment.create({
         data: {
           id: paymentId,
-          eventId: request.event_id || null,
+          eventId: request.event_id,
           playerId: request.player_id,
-          amount: request.amount, // Store original amount (not in satang)
+          amount: request.amount,
           currency: currency.toLowerCase(),
           status: PaymentStatus.PENDING,
-          paymentType: request.event_id ? PaymentType.EVENT_REGISTRATION : PaymentType.MEMBERSHIP_FEE,
           description: request.description || null,
-          metadata: {
-            ...request.metadata,
-            omiseSourceId: omiseSource.id,
-            omiseChargeId: omiseCharge.id,
-            qrCodeUri: omiseCharge.source?.scannable_code?.image?.download_uri
-          },
-          refundedAmount: 0,
-          lastStatusChange: new Date(),
-          paymentIntentId: omiseCharge.id, // Store Omise charge ID
-          chargeId: omiseCharge.id,
+          paymentMethod: (request.payment_method || 'PROMPT_PAY'),
+          qrCodeUri: omiseCharge.source?.scannable_code?.image?.download_uri || null,
+          omiseChargeId: omiseCharge.id,
+          omiseSourceId: omiseSource.id,
           transactions: {
             create: {
               id: uuidv4(),
@@ -138,17 +128,11 @@ const grpcService = {
               amount: request.amount,
               status: PaymentStatus.PENDING,
               transactionId: omiseCharge.id,
-              timestamp: new Date(),
-              metadata: {
-                omiseStatus: omiseCharge.status,
-                sourceType: omiseSource.type
-              }
+              timestamp: new Date()
             }
           }
         },
-        include: {
-          transactions: true
-        }
+        include: { transactions: true }
       });
 
       const response = {
@@ -156,8 +140,7 @@ const grpcService = {
         status: convertStatusToProto(payment.status),
         amount: payment.amount,
         currency: payment.currency,
-        payment_intent_id: omiseCharge.id,
-        client_secret: omiseCharge.source?.scannable_code?.image?.download_uri || '', // QR code URL
+        qr_code_uri: payment.qrCodeUri || '',
         created_at: payment.createdAt.getTime(),
         updated_at: payment.updatedAt.getTime()
       };
@@ -210,20 +193,17 @@ const grpcService = {
         status: convertStatusToProto(payment.status),
         amount: payment.amount,
         currency: payment.currency,
-        refunded_amount: payment.refundedAmount,
         event_id: payment.eventId,
         player_id: payment.playerId,
         created_at: payment.createdAt.getTime(),
         updated_at: payment.updatedAt.getTime(),
-        last_status_change: payment.lastStatusChange.getTime(),
-        transactions: payment.transactions.map((tx: any) => ({
+        transactions: payment.transactions.map((tx) => ({
           id: tx.id,
-          type: tx.type === 'charge' ? 0 : tx.type === 'refund' ? 1 : 2,
+          type: 0, // only 'charge'
           amount: tx.amount,
           status: convertStatusToProto(tx.status),
           transaction_id: tx.transactionId,
-          timestamp: tx.timestamp.getTime(),
-          metadata: tx.metadata || {}
+          timestamp: tx.timestamp.getTime()
         }))
       };
 
@@ -249,9 +229,9 @@ const grpcService = {
         return;
       }
 
-      const filter: any = { playerId: request.player_id };
+    const filter: any = { playerId: request.player_id };
       if (request.status) filter.status = convertStatusFromProto(parseInt(request.status));
-      if (request.event_id) filter.eventId = request.event_id;
+  if (request.event_id) filter.eventId = request.event_id;
 
       const payments = await prisma.payment.findMany({
         where: filter,
@@ -259,15 +239,14 @@ const grpcService = {
       });
 
       const response = {
-        payments: payments.map((payment: any) => ({
-          payment_id: payment.id,
-          status: convertStatusToProto(payment.status),
-          amount: payment.amount,
-          currency: payment.currency,
-          refunded_amount: payment.refundedAmount,
-          event_id: payment.eventId,
-          created_at: payment.createdAt.getTime(),
-          updated_at: payment.updatedAt.getTime()
+        payments: payments.map((p) => ({
+          payment_id: p.id,
+          status: convertStatusToProto(p.status),
+          amount: p.amount,
+          currency: p.currency,
+          event_id: p.eventId,
+          created_at: p.createdAt.getTime(),
+          updated_at: p.updatedAt.getTime()
         }))
       };
 
@@ -293,7 +272,7 @@ const grpcService = {
         return;
       }
 
-      const filter: any = { eventId: request.event_id };
+    const filter: any = { eventId: request.event_id };
       if (request.status) filter.status = convertStatusFromProto(parseInt(request.status));
 
       const payments = await prisma.payment.findMany({
@@ -302,10 +281,10 @@ const grpcService = {
       });
 
       const response = {
-        payments: payments.map((payment: any) => ({
-          player_id: payment.playerId,
-          amount: payment.amount,
-          status: convertStatusToProto(payment.status)
+        payments: payments.map((p) => ({
+          player_id: p.playerId,
+          amount: p.amount,
+          status: convertStatusToProto(p.status)
         }))
       };
 
@@ -321,9 +300,6 @@ const grpcService = {
 };
 
 export function startGrpcServer() {
-  // Display banner
-  Logger.displayBanner();
-
   const server = new grpc.Server();
   server.addService(paymentProto.PaymentService.service, grpcService);
 

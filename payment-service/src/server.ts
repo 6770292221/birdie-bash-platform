@@ -35,6 +35,9 @@ app.post('/webhooks/omise', (req: Request, res: Response) => webhookService.hand
 // Error handling middleware
 app.use(errorHandler);
 
+// Display banner on startup
+Logger.displayBanner();
+
 // Database connection
 connectPaymentDB();
 
