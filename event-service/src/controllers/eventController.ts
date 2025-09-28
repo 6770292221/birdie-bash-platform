@@ -154,19 +154,22 @@ function validateCourts(courts: ICourtTime[]): CourtValidationResult {
       let endMinutes = timeToMinutes(court.endTime);
 
       // ถ้า endTime เป็น 00:00 หรือน้อยกว่า startTime แสดงว่าข้ามวัน
-      if (endMinutes <= startMinutes) {
+      if (endMinutes < startMinutes) {
         endMinutes += 1440; // เพิ่ม 24 ชั่วโมง (1440 นาที)
       }
 
-      // ตรวจสอบระยะเวลาขั้นต่ำ (30 นาที)
+      // ตรวจสอบระยะเวลาขั้นต่ำ (60 นาที)
       const duration = endMinutes - startMinutes;
-      if (duration < 30) {
-        courtErrors.minimumDuration = `Court session must be at least 30 minutes. Current: ${duration} minutes`;
+      if (duration === 0) {
+        courtErrors.minimumDuration =
+          "Court start time and end time cannot be the same. Minimum duration is 1 hour (60 minutes).";
+      } else if (duration < 60) {
+        courtErrors.minimumDuration = `Court session must be at least 1 hour (60 minutes). Current duration: ${formatDuration(duration)} (${duration} minutes)`;
       }
 
       // ตรวจสอบระยะเวลาสูงสุด (ไม่เกิน 12 ชั่วโมง)
       if (duration > 720) {
-        courtErrors.maximumDuration = `Court session cannot exceed 12 hours. Current: ${duration} minutes`;
+        courtErrors.maximumDuration = `Court session cannot exceed 12 hours (720 minutes). Current duration: ${formatDuration(duration)} (${duration} minutes)`;
       }
 
       // ตรวจสอบเวลาสมเหตุสมผล (6:00-24:00)
@@ -189,6 +192,70 @@ function validateCourts(courts: ICourtTime[]): CourtValidationResult {
     isValid: Object.keys(errors).length === 0,
     errors: Object.keys(errors).length > 0 ? errors : undefined,
   };
+}
+
+function buildCourtValidationMessage(errors: any): string {
+  if (!errors) {
+    return "Invalid courts configuration";
+  }
+
+  const summaries: string[] = [];
+
+  if (
+    Array.isArray(errors.duplicateCourtNumbers) &&
+    errors.duplicateCourtNumbers.length > 0
+  ) {
+    summaries.push(
+      `Duplicate court numbers: ${errors.duplicateCourtNumbers.join(", ")}`
+    );
+  }
+
+  if (Array.isArray(errors.timeOverlaps) && errors.timeOverlaps.length > 0) {
+    errors.timeOverlaps.forEach((overlap: any) => {
+      if (overlap?.court && overlap?.session1 && overlap?.session2) {
+        summaries.push(
+          `Court ${overlap.court} has overlapping time slots ${overlap.session1} and ${overlap.session2}`
+        );
+      }
+    });
+  }
+
+  Object.entries(errors).forEach(([key, value]) => {
+    if (!key.startsWith("court_") || !value || typeof value !== "object") {
+      return;
+    }
+
+    const courtLabel = key.replace("court_", "Court ");
+
+    Object.values(value).forEach((message) => {
+      if (typeof message === "string" && message.trim().length > 0) {
+        summaries.push(`${courtLabel}: ${message}`);
+      }
+    });
+  });
+
+  return summaries.length > 0
+    ? `Invalid courts configuration: ${summaries.join("; ")}`
+    : "Invalid courts configuration";
+}
+
+function formatDuration(totalMinutes: number): string {
+  if (!Number.isFinite(totalMinutes) || totalMinutes < 0) {
+    return `${totalMinutes} minutes`;
+  }
+
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  const parts: string[] = [];
+
+  if (hours > 0) {
+    parts.push(`${hours} hour${hours === 1 ? "" : "s"}`);
+  }
+  if (minutes > 0 || parts.length === 0) {
+    parts.push(`${minutes} minute${minutes === 1 ? "" : "s"}`);
+  }
+
+  return parts.join(" ");
 }
 
 function timeToMinutes(timeStr: string): number {
@@ -340,7 +407,7 @@ export const createEvent = async (
       if (!courtValidation.isValid) {
         res.status(400).json({
           code: "VALIDATION_ERROR",
-          message: "Invalid courts configuration",
+          message: buildCourtValidationMessage(courtValidation.errors),
           details: courtValidation.errors,
         });
         return;
@@ -771,7 +838,7 @@ export const updateEvent = async (
       if (!courtValidation.isValid) {
         res.status(400).json({
           code: "VALIDATION_ERROR",
-          message: "Invalid courts configuration",
+          message: buildCourtValidationMessage(courtValidation.errors),
           details: courtValidation.errors,
         });
         return;

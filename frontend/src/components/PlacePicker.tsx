@@ -32,10 +32,10 @@ const PlacePicker = ({ id, className, value, onChange, onSelect, placeholder, di
 
     loadGoogleMaps(apiKey).then(() => {
       if (!inputRef.current) { setLoaded(false); return; }
-      if (!(window as any).google?.maps) { setLoadError('maps-missing'); return; }
-      if (!(window as any).google?.maps?.places) { setLoadError('places-missing'); return; }
+      if (!(window as { google?: { maps?: unknown } }).google?.maps) { setLoadError('maps-missing'); return; }
+      if (!(window as { google?: { maps?: { places?: unknown } } }).google?.maps?.places) { setLoadError('places-missing'); return; }
       setLoaded(true);
-      autocomplete = new (window as any).google.maps.places.Autocomplete(inputRef.current, {
+      autocomplete = new (window as { google: { maps: { places: { Autocomplete: new (input: HTMLInputElement, options: unknown) => google.maps.places.Autocomplete } } } }).google.maps.places.Autocomplete(inputRef.current, {
         fields: ['name', 'formatted_address', 'geometry', 'place_id'],
         // types removed to allow broader search (addresses/places)
       });

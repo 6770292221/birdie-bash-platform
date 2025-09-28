@@ -6,7 +6,7 @@ import axios, { AxiosError, AxiosInstance } from "axios";
 const GATEWAY_URL =
   (import.meta.env.VITE_GATEWAY_URL as string) || "http://localhost:3000";
 
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   success: boolean;
   data?: T;
   message?: string;
@@ -90,7 +90,7 @@ class ApiClient {
     this.http.interceptors.request.use((config) => {
       if (this.token) {
         config.headers = config.headers || {};
-        (config.headers as any)["Authorization"] = `Bearer ${this.token}`;
+        config.headers["Authorization"] = `Bearer ${this.token}`;
       }
       return config;
     });
@@ -108,12 +108,12 @@ class ApiClient {
 
   private async request<T>(
     endpoint: string,
-    options: { method?: string; data?: any; params?: any; headers?: Record<string, string> } = {}
+    options: { method?: string; data?: unknown; params?: Record<string, unknown>; headers?: Record<string, string> } = {}
   ): Promise<ApiResponse<T>> {
     try {
       const res = await this.http.request({
         url: endpoint,
-        method: (options.method || "GET") as any,
+        method: options.method || "GET",
         data: options.data,
         params: options.params,
         headers: options.headers,
@@ -126,12 +126,12 @@ class ApiClient {
         message: data?.message,
       };
     } catch (err) {
-      const axErr = err as AxiosError<any>;
+      const axErr = err as AxiosError<{ message?: string; details?: unknown }>;
       const statusText = axErr.response?.status
         ? `HTTP ${axErr.response.status}`
         : "Network error";
 
-      const responseData = axErr.response?.data as any;
+      const responseData = axErr.response?.data;
       let errorMessage = responseData?.message || axErr.message || statusText;
 
       // Only use details if there's no message
@@ -151,7 +151,7 @@ class ApiClient {
               const nestedMessages = detailValues
                 .filter(v => typeof v === 'object' && v !== null)
                 .map(obj => {
-                  const objValues = Object.values(obj as any);
+                  const objValues = Object.values(obj as Record<string, unknown>);
                   return objValues.find(val => typeof val === 'string');
                 })
                 .filter(Boolean);
@@ -200,12 +200,12 @@ class ApiClient {
       const res = await this.http.get("/api/auth/verify");
       return {
         success: true,
-        data: res.data?.user as User,
+        data: res.data?.user,
         message: res.data?.message,
       };
     } catch (err) {
-      const axErr = err as AxiosError<any>;
-      const message = (axErr.response?.data as any)?.message || axErr.message || "Network error";
+      const axErr = err as AxiosError<{ message?: string; details?: unknown }>;
+      const message = (axErr.response?.data as { message?: string })?.message || axErr.message || "Network error";
       return { success: false, error: message };
     }
   }
@@ -227,7 +227,7 @@ class ApiClient {
     offset?: number;
     status?: string;
     date?: string;
-  }): Promise<ApiResponse<any>> {
+  }): Promise<ApiResponse<{ events: unknown[] }>> {
     return this.request(`/api/events`, {
       params: {
         limit: params?.limit,
@@ -330,16 +330,23 @@ class ApiClient {
   }
 
     // Settlement endpoints
-  async issueSettlement(eventId: string): Promise<ApiResponse<any>> {
+  async issueSettlement(eventId: string, data: {
+    currency?: string;
+    shuttlecockCount?: number;
+    absentPlayerIds?: string[];
+  }): Promise<ApiResponse<unknown>> {
     return this.request(`/api/settlements/issue`, {
       method: "POST",
       data: {
-        event_id: eventId
+        event_id: eventId,
+        currency: data.currency || 'THB',
+        shuttlecockCount: data.shuttlecockCount || 0,
+        absentPlayerIds: data.absentPlayerIds || []
       }
     });
   }
 
-  async calculateSettlement(eventId: string): Promise<ApiResponse<any>> {
+  async calculateSettlement(eventId: string): Promise<ApiResponse<unknown>> {
     return this.request(`/api/settlements/calculate`, {
       method: "POST",
       data: {
@@ -349,7 +356,7 @@ class ApiClient {
   }
 
   // Settlement detail endpoint (mocked for now)
-  async getSettlements(eventId: string): Promise<ApiResponse<any>> {
+  async getSettlements(eventId: string): Promise<ApiResponse<unknown>> {
     // Mock data for now - replace with real API call later
     return new Promise((resolve) => {
       setTimeout(() => {
@@ -377,7 +384,7 @@ class ApiClient {
   }
 
   // Mark player as paid endpoint (mocked for now)
-  async markPlayerAsPaid(eventId: string, playerId: string): Promise<ApiResponse<any>> {
+  async markPlayerAsPaid(eventId: string, playerId: string): Promise<ApiResponse<unknown>> {
     // Mock response for now - replace with real API call later
     return new Promise((resolve) => {
       setTimeout(() => {
@@ -400,11 +407,11 @@ class ApiClient {
     rating?: number;
     limit?: number;
     offset?: number;
-  }): Promise<ApiResponse<any>> {
+  }): Promise<ApiResponse<unknown>> {
     return this.request("/api/event/venues", { params });
   }
 
-  async getVenue(venueId: string): Promise<ApiResponse<any>> {
+  async getVenue(venueId: string): Promise<ApiResponse<unknown>> {
     return this.request(`/api/event/venues/${venueId}`);
   }
 }

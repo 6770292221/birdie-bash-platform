@@ -7,48 +7,6 @@ import messageQueueService from "../queue/publisher";
 import { EVENTS } from "../queue/events";
 import { PENALTY_CONFIG } from '../config/penaltyConfig';
 
-// Simple translation helper
-const translations = {
-  en: {
-    "registration.closed": "Event is not accepting registrations",
-    "event.not_found": "Event not found",
-    "player.already_registered": "User is already registered for this event",
-    "player.not_found": "Player registration not found",
-    "event.full": "Event is full and waitlist is not enabled",
-    "validation.name_required": "Name is required for guest registration",
-    "validation.phone_required": "Phone number is required for guest registration",
-    "validation.time_format": "Invalid time format",
-    "validation.start_before_end": "Start time must be less than end time",
-    "auth.required": "Authentication is required",
-    "auth.admin_required": "Admin privileges required",
-    "internal.error": "Internal server error"
-  },
-  th: {
-    "registration.closed": "กิจกรรมนี้ไม่เปิดให้ลงทะเบียน",
-    "event.not_found": "ไม่พบกิจกรรม",
-    "player.already_registered": "ผู้ใช้ลงทะเบียนกิจกรรมนี้แล้ว",
-    "player.not_found": "ไม่พบข้อมูลการลงทะเบียนผู้เล่น",
-    "event.full": "กิจกรรมเต็มแล้วและไม่เปิดรายชื่อสำรอง",
-    "validation.name_required": "กรุณากรอกชื่อสำหรับการลงทะเบียนแขก",
-    "validation.phone_required": "กรุณากรอกหมายเลขโทรศัพท์สำหรับการลงทะเบียนแขก",
-    "validation.time_format": "รูปแบบเวลาไม่ถูกต้อง",
-    "validation.start_before_end": "เวลาเริ่มต้องน้อยกว่าเวลาสิ้นสุด",
-    "auth.required": "จำเป็นต้องยืนยันตัวตน",
-    "auth.admin_required": "จำเป็นต้องมีสิทธิ์ผู้ดูแลระบบ",
-    "internal.error": "เกิดข้อผิดพลาดภายในระบบ"
-  }
-};
-
-function getLanguage(req: Request): 'en' | 'th' {
-  const acceptLanguage = req.headers['accept-language'] || '';
-  return acceptLanguage.includes('th') ? 'th' : 'en';
-}
-
-function t(req: Request, key: string): string {
-  const lang = getLanguage(req);
-  return translations[lang][key as keyof typeof translations['en']] || translations.en[key as keyof typeof translations['en']] || key;
-}
-
 interface ExtendedRequest extends Request {
   headers: Request["headers"] & {
     "x-user-id"?: string;
@@ -251,7 +209,7 @@ export const getPlayers = async (
     if (!event) {
       res.status(404).json({
         code: "EVENT_NOT_FOUND",
-        message: t(req, "event.not_found"),
+        message: "Event not found",
         details: { eventId },
       });
       return;
@@ -383,7 +341,7 @@ export const cancelPlayerRegistration = async (
     if (!event) {
       res.status(404).json({
         code: "EVENT_NOT_FOUND",
-        message: t(req, "event.not_found"),
+        message: "Event not found",
         details: { eventId },
       });
       return;
@@ -509,7 +467,7 @@ export const registerMember = async (
     if (!event) {
       res.status(404).json({
         code: "EVENT_NOT_FOUND",
-        message: t(req, "event.not_found"),
+        message: "Event not found",
         details: { eventId },
       });
       return;
@@ -518,7 +476,7 @@ export const registerMember = async (
     if (!registrationGate.accepting) {
       res.status(400).json({
         code: "REGISTRATION_CLOSED",
-        message: t(req, "registration.closed"),
+        message: "Event is not accepting registrations",
         details: {
           eventId,
           status: registrationGate.state ?? event.status,
@@ -529,8 +487,6 @@ export const registerMember = async (
     }
 
     const userId = req.headers["x-user-id"];
-    const userName = req.headers["x-user-name"];
-    const userEmail = req.headers["x-user-email"];
 
     if (!userId) {
       res.status(401).json({
@@ -549,23 +505,29 @@ export const registerMember = async (
     if (existingUserPlayer) {
       res.status(400).json({
         code: "PLAYER_ALREADY_REGISTERED",
-        message: t(req, "player.already_registered"),
+        message: "User is already registered for this event",
         details: { eventId, userId },
       });
       return;
     }
 
-    let playerData: any = {
+    const playerData: any = {
       eventId,
       userId,
-      name: userName || "",
-      email: userEmail || "",
       registrationTime: new Date(),
       userType: "member",
       isPenalty: false,
       penaltyFee: 0,
       shuttlecockCount: 0,
     };
+
+    if (typeof req.headers["x-user-name"] === "string") {
+      playerData.name = req.headers["x-user-name"] as string;
+    }
+
+    if (typeof req.headers["x-user-email"] === "string") {
+      playerData.email = req.headers["x-user-email"] as string;
+    }
 
     const userPhoneNumber = req.headers["x-user-phone"] as string;
     if (userPhoneNumber) {
@@ -619,7 +581,7 @@ export const registerMember = async (
       if (startTime >= endTime) {
         res.status(400).json({
           code: "VALIDATION_ERROR",
-          message: t(req, "validation.start_before_end"),
+          message: "Start time must be less than end time",
           details: {
             startTime: playerData.startTime,
             endTime: playerData.endTime,
@@ -697,7 +659,7 @@ export const registerMember = async (
     } else {
       res.status(400).json({
         code: "EVENT_FULL",
-        message: t(req, "event.full"),
+        message: "Event is full and waitlist is not enabled",
         details: {
           eventId,
           maxParticipants: capacity?.maxParticipants,
@@ -725,8 +687,8 @@ export const registerMember = async (
         eventId,
         playerId: player.id,
         userId: player.userId || undefined,
-        playerName: req.headers["x-user-name"] as string,
-        playerEmail: req.headers["x-user-email"] as string,
+        playerName: player.name || undefined,
+        playerEmail: player.email || undefined,
         status: playerData.status as "registered" | "waitlist",
         userType: "member",
       });
@@ -770,7 +732,7 @@ export const promoteWaitlist = async (
     if (!eventData) {
       res.status(404).json({
         error: "EVENT_NOT_FOUND",
-        message: t(req, "event.not_found"),
+        message: "Event not found",
         eventId,
       });
       return;
@@ -934,7 +896,7 @@ export const registerGuest = async (
     if (!event) {
       res.status(404).json({
         code: "EVENT_NOT_FOUND",
-        message: t(req, "event.not_found"),
+        message: "Event not found",
         details: { eventId },
       });
       return;
@@ -944,7 +906,7 @@ export const registerGuest = async (
     if (!registrationGate.accepting) {
       res.status(400).json({
         code: "REGISTRATION_CLOSED",
-        message: t(req, "registration.closed"),
+        message: "Event is not accepting registrations",
         details: {
           eventId,
           status: registrationGate.state ?? event.status,
@@ -957,7 +919,7 @@ export const registerGuest = async (
     if (!registrationData.name) {
       res.status(400).json({
         code: "VALIDATION_ERROR",
-        message: t(req, "validation.name_required"),
+        message: "Name is required for guest registration",
         details: { field: "name", required: true },
       });
       return;
@@ -965,7 +927,7 @@ export const registerGuest = async (
     if (!registrationData.phoneNumber) {
       res.status(400).json({
         code: "VALIDATION_ERROR",
-        message: t(req, "validation.phone_required"),
+        message: "Phone number is required for guest registration",
         details: { field: "phoneNumber", required: true },
       });
       return;
@@ -1007,7 +969,7 @@ export const registerGuest = async (
       if (startTime >= endTime) {
         res.status(400).json({
           code: "VALIDATION_ERROR",
-          message: t(req, "validation.start_before_end"),
+          message: "Start time must be less than end time",
           details: {
             startTime: playerData.startTime,
             endTime: playerData.endTime,
@@ -1094,7 +1056,7 @@ export const registerGuest = async (
     } else {
       res.status(400).json({
         code: "EVENT_FULL",
-        message: t(req, "event.full"),
+        message: "Event is full and waitlist is not enabled",
         details: {
           eventId,
           maxParticipants: capacity?.maxParticipants,
