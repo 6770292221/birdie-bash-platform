@@ -9,6 +9,7 @@ import {
   forwardUserHeaders,
 } from "./middleware/auth";
 import { getRoutes } from "./routesConfig";
+import { registerPaymentRoutes } from './routes/paymentRoutes';
 import { registerDocs } from "./docs/aggregate";
 
 dotenv.config();
@@ -31,6 +32,8 @@ const SETTLEMENT_SERVICE_URL =
   process.env.SETTLEMENT_SERVICE_URL || "http://localhost:3006";
 const REGISTRATION_SERVICE_URL =
   process.env.REGISTRATION_SERVICE_URL || "http://localhost:3005";
+const PAYMENT_SERVICE_GRPC_URL =
+  process.env.PAYMENT_SERVICE_GRPC_URL || "localhost:50051";
 
 app.use(cors());
 app.use(express.json());
@@ -179,7 +182,10 @@ routes.forEach((route) => {
   }
 });
 
-// Catch all for undefined routes
+// Register payment routes (backed by gRPC) before 404 handler
+registerPaymentRoutes(app);
+
+// Catch all for undefined routes, place it after all other routes
 app.use("*", (req, res) => {
   res.status(404).json({
     error: "Route not found",
@@ -205,6 +211,7 @@ function startGateway(port: number, attempt = 0) {
     console.log(` ✅ Event Service: ${EVENT_SERVICE_URL}`);
     console.log(` ✅ Registration Service: ${REGISTRATION_SERVICE_URL}`);
     console.log(` ✅ Settlement Service: ${SETTLEMENT_SERVICE_URL}`);
+    console.log(` ✅ Payment Service: (gRPC) ${PAYMENT_SERVICE_GRPC_URL}`);
     console.log(` 📘 Gateway docs: http://localhost:${port}/api-docs`);
   });
 

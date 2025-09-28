@@ -42,6 +42,36 @@ function convertStatusToProto(status: PaymentStatus): number {
   }
 }
 
+// Accept either a numeric enum index or a string enum name and return PaymentStatus
+function parseStatusInput(input: any): PaymentStatus | undefined {
+  if (input === undefined || input === null) return undefined;
+  const raw = String(input).trim();
+
+  // If already matches a PaymentStatus key
+  const upper = raw.toUpperCase();
+  if ((PaymentStatus as any)[upper]) {
+    return (PaymentStatus as any)[upper] as PaymentStatus;
+  }
+
+  // If it's a number fall back to legacy proto numeric mapping
+  const maybeNum = Number(raw);
+  if (!isNaN(maybeNum)) {
+    return convertStatusFromProto(maybeNum);
+  }
+
+  return undefined;
+}
+
+// Validate status strictly (must be one of enum values or valid legacy numeric)
+function validateStatusOrThrow(input: any): PaymentStatus {
+  const parsed = parseStatusInput(input);
+  if (!parsed) {
+    const valid = Object.values(PaymentStatus).join(', ');
+    throw new Error(`Invalid status value. Allowed: ${valid}`);
+  }
+  return parsed;
+}
+
 // gRPC service implementations
 const grpcService = {
   async issueCharges(call: grpc.ServerUnaryCall<any, any>, callback: grpc.sendUnaryData<any>) {
@@ -141,8 +171,8 @@ const grpcService = {
         amount: payment.amount,
         currency: payment.currency,
         qr_code_uri: payment.qrCodeUri || '',
-        created_at: payment.createdAt.getTime(),
-        updated_at: payment.updatedAt.getTime()
+        created_at: payment.createdAt.toISOString(),
+        updated_at: payment.updatedAt.toISOString()
       };
 
       Logger.success('IssueCharges completed successfully with Omise', {
@@ -195,15 +225,15 @@ const grpcService = {
         currency: payment.currency,
         event_id: payment.eventId,
         player_id: payment.playerId,
-        created_at: payment.createdAt.getTime(),
-        updated_at: payment.updatedAt.getTime(),
+        created_at: payment.createdAt.toISOString(),
+        updated_at: payment.updatedAt.toISOString(),
         transactions: payment.transactions.map((tx) => ({
           id: tx.id,
           type: 0, // only 'charge'
           amount: tx.amount,
           status: convertStatusToProto(tx.status),
           transaction_id: tx.transactionId,
-          timestamp: tx.timestamp.getTime()
+          timestamp: tx.timestamp.toISOString()
         }))
       };
 
@@ -229,9 +259,19 @@ const grpcService = {
         return;
       }
 
-    const filter: any = { playerId: request.player_id };
-      if (request.status) filter.status = convertStatusFromProto(parseInt(request.status));
-  if (request.event_id) filter.eventId = request.event_id;
+      const filter: any = { playerId: request.player_id };
+      if (request.status) {
+        try {
+          filter.status = validateStatusOrThrow(request.status);
+        } catch (e) {
+          callback({
+            code: grpc.status.INVALID_ARGUMENT,
+            message: e instanceof Error ? e.message : 'Invalid status'
+          });
+          return;
+        }
+      }
+      if (request.event_id) filter.eventId = request.event_id;
 
       const payments = await prisma.payment.findMany({
         where: filter,
@@ -245,8 +285,8 @@ const grpcService = {
           amount: p.amount,
           currency: p.currency,
           event_id: p.eventId,
-          created_at: p.createdAt.getTime(),
-          updated_at: p.updatedAt.getTime()
+          created_at: p.createdAt.toISOString(),
+          updated_at: p.updatedAt.toISOString()
         }))
       };
 
@@ -272,8 +312,18 @@ const grpcService = {
         return;
       }
 
-    const filter: any = { eventId: request.event_id };
-      if (request.status) filter.status = convertStatusFromProto(parseInt(request.status));
+      const filter: any = { eventId: request.event_id };
+      if (request.status) {
+        try {
+          filter.status = validateStatusOrThrow(request.status);
+        } catch (e) {
+          callback({
+            code: grpc.status.INVALID_ARGUMENT,
+            message: e instanceof Error ? e.message : 'Invalid status'
+          });
+          return;
+        }
+      }
 
       const payments = await prisma.payment.findMany({
         where: filter,
