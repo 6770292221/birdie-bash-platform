@@ -113,7 +113,7 @@ const EventDetail = () => {
       setLoading(false);
     };
     fetchDetail();
-  }, [id]);
+  }, [id, toast, t]);
 
   // AWAITING PAYMENT: Fetch mock settlement data to display payment status
   const fetchSettlements = async () => {
