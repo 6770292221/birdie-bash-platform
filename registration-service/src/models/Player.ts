@@ -59,6 +59,10 @@ const PlayerSchema: Schema = new Schema(
       enum: ['member', 'guest'],
       required: true,
     },
+    isPenalty: {
+      type: Boolean,
+      default: false,
+    },
     createdBy: {
       type: String,
       required: false,

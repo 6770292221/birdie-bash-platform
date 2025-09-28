@@ -14,16 +14,16 @@ const LanguageSwitcher = () => {
 
   return (
     <Select value={language} onValueChange={setLanguage}>
-      <SelectTrigger className="w-32 bg-white/70 backdrop-blur-sm border-gray-200">
-        <Globe className="w-4 h-4 mr-2" />
-        <SelectValue />
+      <SelectTrigger className="w-36 bg-white/90 backdrop-blur-sm border-gray-300 shadow-md hover:shadow-lg transition-all hover:bg-white focus:ring-2 focus:ring-blue-500">
+        <Globe className="w-4 h-4 mr-2 text-gray-600" />
+        <SelectValue placeholder="Language" />
       </SelectTrigger>
-      <SelectContent className="bg-white border-gray-200 z-50">
+      <SelectContent className="bg-white border-gray-200 shadow-xl z-50 backdrop-blur-sm">
         {languages.map((lang) => (
-          <SelectItem key={lang.code} value={lang.code}>
+          <SelectItem key={lang.code} value={lang.code} className="hover:bg-gray-100">
             <span className="flex items-center">
-              <span className="mr-2">{lang.flag}</span>
-              {lang.name}
+              <span className="mr-3 text-lg">{lang.flag}</span>
+              <span className="font-medium">{lang.name}</span>
             </span>
           </SelectItem>
         ))}

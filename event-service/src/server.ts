@@ -5,11 +5,13 @@ import swaggerUi from "swagger-ui-express";
 import swaggerSpecs from "./config/swagger";
 import { connectEventDB } from "./config/eventDatabase";
 import eventRoutes from "./routes/eventRoutes";
+import venueRoutes from "./routes/venueRoutes";
+import { startEventScheduler, stopEventScheduler } from "./schedulers/eventScheduler";
 
 dotenv.config();
 
 const app = express();
-const BASE_PORT = Number(process.env.PORT) || 3002;
+const BASE_PORT = Number(process.env.PORT) || 3003;
 
 app.use(cors());
 app.use(express.json());
@@ -45,6 +47,9 @@ app.use((req: any, res: Response, next: any) => {
 // Event endpoints (mounted router)
 app.use("/api/events", eventRoutes);
 
+// Venue endpoints (mounted router)
+app.use("/api/event/venues", venueRoutes);
+
 // Initialize DB connection (non-blocking)
 connectEventDB();
 
@@ -52,6 +57,7 @@ connectEventDB();
 const { spawn } = require('child_process');
 const enableCapacity = String(process.env.ENABLE_CAPACITY_WORKER || 'true').toLowerCase() !== 'false';
 let capacityWorker: any = null;
+let lifecycleTimer: NodeJS.Timeout | null = null;
 if (enableCapacity) {
   capacityWorker = spawn('npx', ['ts-node', 'src/consumers/capacityConsumer.ts'], {
     cwd: process.cwd(),
@@ -61,9 +67,20 @@ if (enableCapacity) {
   console.log('🔄 Capacity Consumer started');
 }
 
+const lifecycleEnv =
+  process.env.ENABLE_EVENT_LIFECYCLE_SCHEDULER ?? process.env.ENABLE_SETTLEMENT_SCHEDULER;
+const enableEventLifecycleScheduler = String(lifecycleEnv ?? 'true')
+  .toLowerCase()
+  .trim() !== 'false';
+if (enableEventLifecycleScheduler) {
+  lifecycleTimer = startEventScheduler();
+  console.log('⏱️ Event lifecycle scheduler started');
+}
+
 // Ensure worker is terminated with the server to avoid multiple consumers
 const stopWorker = () => {
   try { if (capacityWorker) capacityWorker.kill('SIGTERM'); } catch { /* noop */ }
+  stopEventScheduler(lifecycleTimer);
 };
 process.on('exit', stopWorker);
 process.on('SIGINT', () => { stopWorker(); process.exit(0); });

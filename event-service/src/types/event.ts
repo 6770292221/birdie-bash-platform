@@ -1,5 +1,13 @@
-export type EventStatus = 'active' | 'canceled' | 'completed';
-export type PlayerStatus = 'registered' | 'waitlist' | 'canceled';
+export enum EventStatus {
+  UPCOMING = 'upcoming',           // กำลังจะมาถึง
+  IN_PROGRESS = 'in_progress',     // กำลังดำเนินการ
+  CALCULATING = 'calculating',     // กำลังคำนวณ
+  AWAITING_PAYMENT = 'awaiting_payment', // รอการชำระเงิน
+  COMPLETED = 'completed',         // เสร็จสิ้น
+  CANCELED = 'canceled'            // ยกเลิก
+}
+
+export type EventStatusType = 'upcoming' | 'in_progress' | 'calculating' | 'awaiting_payment' | 'completed' | 'canceled';
 
 export interface TimeInfo {
   date: Date;
@@ -39,10 +47,12 @@ export interface IEvent {
   eventName: string;
   eventDate: string;
   location: string;
-  status: EventStatus;
+  status: EventStatusType;
   capacity: CapacityInfo;
   shuttlecockPrice: number;
   courtHourlyRate: number;
+  penaltyFee: number;
+  shuttlecockCount: number;
   courts: ICourtTime[];
   createdBy?: string;
   updatedBy?: string;
@@ -54,13 +64,14 @@ export interface IEventCreate {
   eventName: string;
   eventDate: string;
   location: string;
-  status?: EventStatus;
   capacity: Omit<CapacityInfo, 'availableSlots' | 'waitlistEnabled'> & {
     availableSlots?: number;
     waitlistEnabled?: boolean;
   };
   shuttlecockPrice: number;
   courtHourlyRate: number;
+  penaltyFee?: number;
+  shuttlecockCount?: number;
   courts: ICourtTime[];
 }
 
@@ -69,9 +80,11 @@ export interface IEventUpdate {
   eventDate?: string;
   location?: string;
   capacity?: Partial<CapacityInfo>;
-  status?: EventStatus;
+  status?: EventStatusType;
   shuttlecockPrice?: number;
   courtHourlyRate?: number;
+  penaltyFee?: number;
+  shuttlecockCount?: number;
   courts?: ICourtTime[];
 }
 
@@ -98,39 +111,3 @@ export interface ICourtCreate {
   maxPlayers: number;
 }
 
-export interface IPlayer {
-  id: string;
-  eventId: string;
-  userId?: string;
-  name: string;
-  email: string;
-  phoneNumber: string;
-  startTime?: string;
-  endTime?: string;
-  registrationTime: Date;
-  status: PlayerStatus;
-  createdBy?: string;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export interface IPlayerRegister {
-  userId?: string;
-  name: string;
-  email: string;
-  phoneNumber: string;
-  startTime?: string;
-  endTime?: string;
-}
-
-export interface RegisterByUser {
-  startTime?: string;
-  endTime?: string;
-}
-
-export interface RegisterByGuest {
-  name: string;
-  phoneNumber: string;
-  startTime?: string;
-  endTime?: string;
-}

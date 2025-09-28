@@ -35,7 +35,7 @@ const connectDB = async () => {
     }
   } catch (error) {
     console.error('Auth Service - Database connection failed:', error);
-    process.exit(1);
+    // Don't exit - let service start without DB for health checks
   }
 };
 

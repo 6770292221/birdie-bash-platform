@@ -2,7 +2,7 @@ let loadingPromise: Promise<void> | null = null;
 
 export function loadGoogleMaps(apiKey?: string, language: string = 'th'): Promise<void> {
   if (typeof window === 'undefined') return Promise.resolve();
-  if ((window as any).google && (window as any).google.maps) return Promise.resolve();
+  if ((window as { google?: { maps?: unknown } }).google?.maps) return Promise.resolve();
   if (!apiKey) return Promise.resolve();
   if (loadingPromise) return loadingPromise;
 

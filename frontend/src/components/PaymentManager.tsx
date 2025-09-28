@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CreditCard, CheckCircle, Clock, QrCode, DollarSign, Receipt } from 'lucide-react';
+import { CreditCard, CheckCircle, Clock, QrCode, DollarSign, Receipt, Check, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -65,8 +65,18 @@ const PaymentManager: React.FC<PaymentManagerProps> = ({
     
     const playerName = costBreakdown.find(c => c.playerId === playerId)?.name;
     toast({
-      title: isPaid ? "Payment Confirmed" : "Payment Status Updated",
-      description: `${playerName} marked as ${isPaid ? 'paid' : 'unpaid'}`,
+      title: (
+        <div className="flex items-center gap-2">
+          <Check className="w-4 h-4 text-green-600" />
+          {isPaid ? t('admin.payment_confirmed') : t('admin.payment_status_updated')}
+        </div>
+      ),
+      description: t('admin.payment_status_desc', {
+        name: playerName,
+        status: isPaid ? t('admin.payment_status_paid') : t('admin.payment_status_unpaid')
+      }),
+      className: 'border-green-200 bg-green-50',
+      duration: 4000
     });
   };
 
@@ -268,8 +278,15 @@ const PaymentManager: React.FC<PaymentManagerProps> = ({
               }));
               setPaymentStatuses(allPaidStatuses);
               toast({
-                title: "All Payments Confirmed",
-                description: "All players marked as paid",
+                title: (
+                  <div className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-green-600" />
+                    {t('admin.all_payments_confirmed')}
+                  </div>
+                ),
+                description: t('admin.all_payments_confirmed_desc'),
+                className: 'border-green-200 bg-green-50',
+                duration: 4000
               });
             }}
             className="bg-green-600 hover:bg-green-700 flex-1"

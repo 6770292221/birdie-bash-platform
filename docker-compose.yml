@@ -47,6 +47,12 @@ services:
       RABBITMQ_DEFAULT_PASS: password123
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD-SHELL", "rabbitmq-diagnostics -q ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     networks:
       - birdie-network
 
@@ -78,13 +84,16 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=3000
+      - JWT_SECRET=your-secret-key
       - AUTH_SERVICE_URL=http://auth-service:3001
       - EVENT_SERVICE_URL=http://event-service:3003
       - REGISTRATION_SERVICE_URL=http://registration-service:3005
+      - SETTLEMENT_SERVICE_URL=http://settlement-service:3006
     depends_on:
       - auth-service
       - event-service
       - registration-service
+      - settlement-service
     networks:
       - birdie-network
 
@@ -118,9 +127,12 @@ services:
       - RABBIT_URL=amqp://admin:password123@rabbitmq:5672
       - RABBIT_EXCHANGE=events
       - ENABLE_CAPACITY_WORKER=true
+      - REGISTRATION_SERVICE_URL=http://registration-service:3005
     depends_on:
-      - mongodb
-      - rabbitmq
+      mongodb:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
     networks:
       - birdie-network
 
@@ -140,8 +152,43 @@ services:
       - RABBIT_EXCHANGE=events
       - ENABLE_WAITLIST_WORKER=true
     depends_on:
-      - rabbitmq
-      - event-service
+      rabbitmq:
+        condition: service_healthy
+      event-service:
+        condition: service_started
+    networks:
+      - birdie-network
+
+  # Settlement Service
+  settlement-service:
+    build: ./settlement-service
+    container_name: birdie-settlement-service
+    restart: unless-stopped
+    ports:
+      - "3006:3006"
+    environment:
+      - NODE_ENV=development
+      - PORT=3006
+      - SETTLEMENT_DB_URI=mongodb+srv://birdie_admin:AppUser%232025%21@birdie-bash-cluster.lwadyko.mongodb.net/settlement?retryWrites=true&w=majority&appName=birdie-bash-cluster
+      - GRPC_PORT=50051
+      - GATEWAY_URL=http://birdie-gateway:3000
+      - RABBIT_URL=amqp://admin:password123@rabbitmq:5672
+      - RABBIT_EXCHANGE=events
+      - RABBIT_LOG_PAYLOADS=true
+      - RABBIT_MAX_LOG_BYTES=2048
+      - RABBIT_RETRY_MS=2000
+      - ENABLE_WAITLIST_WORKER=true
+      - RABBIT_CONSUMER_DELAY_MS=10000
+      - RABBIT_PREFETCH=1
+      - RABBIT_AUTOBIND=true
+      - RABBIT_AUTOBIND_ON_RETURN=false
+      - RABBIT_PAYMENT_QUEUE=payment.issue
+      - RABBIT_BIND_KEY=payment.settlement.issue
+    depends_on:
+      mongodb:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
     networks:
       - birdie-network
 

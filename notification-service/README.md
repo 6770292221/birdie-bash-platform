@@ -17,12 +17,6 @@ Consumes `events` from **RabbitMQ** and delivers notifications via **email**, **
 - **Providers**: Nodemailer (SMTP), Twilio (SMS), LINE Notify (Line)
 - **Templates**: lightweight `{{var}}` rendering in `src/templates/templates.ts`
 
-```
-[publisher] -- event.created --> [RabbitMQ exchange: events(topic)]
-                                   |-> (bind: event.#) -> [queue: events.notification] -> [worker]
-                                                              |-> email / sms / line -> [NotificationLog (Mongo)]
-```
-
 ---
 
 ## Requirements

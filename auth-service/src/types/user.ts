@@ -1,4 +1,4 @@
-export type SkillType = 'S' | 'P' | 'BG' | 'N';
+export type SkillType = 'BG' | 'BG+' | 'S-' | 'S' | 'N' | 'P-' | 'P' | 'P+' | 'C' | 'B' | 'A';
 
 export interface IUser {
   email: string;

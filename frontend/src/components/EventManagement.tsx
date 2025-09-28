@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Calculator, Clock, DollarSign, Edit2, Save, X, Plus, UserX, Users, CreditCard } from 'lucide-react';
+import { Calculator, Clock, DollarSign, Edit2, Save, X, Plus, UserX, Users, CreditCard, Check, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,6 +10,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Event, Court, Player } from '@/pages/Index';
 import { useToast } from '@/hooks/use-toast';
+import { useLanguage } from '@/contexts/LanguageContext';
 import PlayerMatching from './PlayerMatching';
 import PaymentManager from './PaymentManager';
 
@@ -41,6 +42,7 @@ const EventManagement = ({ event, onUpdateEvent, onClose }: EventManagementProps
   const [absentPlayers, setAbsentPlayers] = useState<Set<string>>(new Set());
   const [costBreakdown, setCostBreakdown] = useState<CostBreakdown[]>([]);
   const { toast } = useToast();
+  const { t } = useLanguage();
 
   const registeredPlayers = editingPlayers.filter(p => p.status === 'registered');
   const cancelledOnEventDay = editingPlayers.filter(p => p.status === 'cancelled' && p.cancelledOnEventDay);
@@ -163,8 +165,15 @@ const EventManagement = ({ event, onUpdateEvent, onClose }: EventManagementProps
     };
     setEditingPlayers([...editingPlayers, newPlayer]);
     toast({
-      title: "Player Added",
-      description: `Added ${newPlayer.name} to the event`,
+      title: (
+        <div className="flex items-center gap-2">
+          <Check className="w-4 h-4 text-green-600" />
+          {t('admin.player_added')}
+        </div>
+      ),
+      description: t('admin.player_added_desc', { name: newPlayer.name }),
+      className: 'border-green-200 bg-green-50',
+      duration: 4000
     });
   };
 
@@ -178,9 +187,15 @@ const EventManagement = ({ event, onUpdateEvent, onClose }: EventManagementProps
     
     const removedPlayer = editingPlayers.find(p => p.id === playerId);
     toast({
-      title: "Player Removed",
-      description: `Removed ${removedPlayer?.name} from the event`,
-      variant: "destructive",
+      title: (
+        <div className="flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 text-red-600" />
+          {t('admin.player_removed')}
+        </div>
+      ),
+      description: t('admin.player_removed_desc', { name: removedPlayer?.name || 'Unknown' }),
+      className: 'border-red-200 bg-red-50',
+      duration: 5000
     });
   };
 
@@ -318,8 +333,15 @@ const EventManagement = ({ event, onUpdateEvent, onClose }: EventManagementProps
     setCostBreakdown(breakdown);
     
     toast({
-      title: "Cost Calculation Complete",
-      description: `Total cost: ฿${breakdown.reduce((sum, item) => sum + item.total, 0).toFixed(2)}`,
+      title: (
+        <div className="flex items-center gap-2">
+          <Check className="w-4 h-4 text-green-600" />
+          {t('admin.cost_calculation_complete')}
+        </div>
+      ),
+      description: t('admin.cost_calculation_desc', { total: breakdown.reduce((sum, item) => sum + item.total, 0).toFixed(2) }),
+      className: 'border-green-200 bg-green-50',
+      duration: 4000
     });
   };
 
@@ -332,8 +354,15 @@ const EventManagement = ({ event, onUpdateEvent, onClose }: EventManagementProps
     setIsEditing(false);
     
     toast({
-      title: "Event Updated",
-      description: "Actual court usage and shuttlecock count saved successfully",
+      title: (
+        <div className="flex items-center gap-2">
+          <Check className="w-4 h-4 text-green-600" />
+          {t('admin.event_updated')}
+        </div>
+      ),
+      description: t('admin.event_updated_desc'),
+      className: 'border-green-200 bg-green-50',
+      duration: 4000
     });
   };
 
@@ -344,8 +373,15 @@ const EventManagement = ({ event, onUpdateEvent, onClose }: EventManagementProps
     setIsEditingPlayers(false);
     
     toast({
-      title: "Players Updated",
-      description: "Player information saved successfully",
+      title: (
+        <div className="flex items-center gap-2">
+          <Check className="w-4 h-4 text-green-600" />
+          {t('admin.players_updated')}
+        </div>
+      ),
+      description: t('admin.players_updated_desc'),
+      className: 'border-green-200 bg-green-50',
+      duration: 4000
     });
   };
 
@@ -373,8 +409,15 @@ const EventManagement = ({ event, onUpdateEvent, onClose }: EventManagementProps
     calculateCosts();
     
     toast({
-      title: "Player Times Updated",
-      description: "Player start and end times updated successfully",
+      title: (
+        <div className="flex items-center gap-2">
+          <Check className="w-4 h-4 text-green-600" />
+          {t('admin.player_times_updated')}
+        </div>
+      ),
+      description: t('admin.player_times_updated_desc'),
+      className: 'border-green-200 bg-green-50',
+      duration: 4000
     });
   };
 

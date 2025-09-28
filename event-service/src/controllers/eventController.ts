@@ -1,7 +1,14 @@
 import { Request, Response } from "express";
 import Event from "../models/Event";
-import { IEventCreate, IEventUpdate, ICourtTime } from "../types/event";
+import {
+  IEventCreate,
+  IEventUpdate,
+  ICourtTime,
+  EventStatus,
+  EventStatusType,
+} from "../types/event";
 import messageQueueService from "../queue/publisher";
+import { getLatestCourtEndTimestamp } from "../utils/eventTime";
 
 interface ExtendedRequest extends Request {
   headers: Request["headers"] & {
@@ -16,64 +23,93 @@ interface CourtValidationResult {
   errors: any;
 }
 
-function validateEventDate(eventDate: string): { isValid: boolean; error?: string } {
+function validateEventDate(eventDate: string): {
+  isValid: boolean;
+  error?: string;
+} {
   // ตรวจสอบรูปแบบวันที่ YYYY-MM-DD
   const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
   if (!dateRegex.test(eventDate)) {
     return {
       isValid: false,
-      error: `Invalid date format: ${eventDate}. Expected YYYY-MM-DD`
+      error: `Invalid date format: ${eventDate}. Expected YYYY-MM-DD`,
     };
   }
 
   // ตรวจสอบว่าวันที่ valid หรือไม่
-  const eventDateObj = new Date(eventDate + 'T00:00:00.000Z');
+  const eventDateObj = new Date(eventDate + "T00:00:00.000Z");
   if (isNaN(eventDateObj.getTime())) {
     return {
       isValid: false,
-      error: `Invalid date: ${eventDate}`
+      error: `Invalid date: ${eventDate}`,
     };
   }
 
-  // ตรวจสอบว่าไม่ใช่วันที่ในอดีต (เทียบกับ UTC วันนี้)
-  const today = new Date();
-  const todayUTC = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const eventDateLocal = new Date(eventDateObj.getFullYear(), eventDateObj.getMonth(), eventDateObj.getDate());
+  // ตรวจสอบว่าไม่ใช่วันที่ในอดีต (เทียบกับเวลาไทย)
+  const nowBangkok = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Bangkok"}));
+  const todayBangkok = new Date(nowBangkok.getFullYear(), nowBangkok.getMonth(), nowBangkok.getDate());
+  const eventDateLocal = new Date(
+    eventDateObj.getFullYear(),
+    eventDateObj.getMonth(),
+    eventDateObj.getDate()
+  );
 
-  if (eventDateLocal < todayUTC) {
+  if (eventDateLocal < todayBangkok) {
     return {
       isValid: false,
-      error: `Event date cannot be in the past. Event date: ${eventDate}, Today: ${todayUTC.toISOString().split('T')[0]}`
+      error: `Event date cannot be in the past. Event date: ${eventDate}, Today: ${
+        todayBangkok.toISOString().split("T")[0]
+      }`,
     };
   }
 
   return { isValid: true };
 }
 
-function validateEventDateTime(eventDate: string, courts: ICourtTime[]): { isValid: boolean; error?: string } {
+function validateEventDateTime(
+  eventDate: string,
+  courts: ICourtTime[]
+): { isValid: boolean; error?: string } {
   // ตรวจสอบวันที่ก่อน
   const dateValidation = validateEventDate(eventDate);
   if (!dateValidation.isValid) {
     return dateValidation;
   }
 
-  // ถ้าเป็นวันนี้ ตรวจสอบเวลาด้วย
-  const eventDateObj = new Date(eventDate + 'T00:00:00.000Z');
-  const today = new Date();
-  const todayUTC = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  // ใช้เวลาไทย (UTC+7) สำหรับการตรวจสอบ
+  const nowBangkok = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Bangkok"}));
+  const todayBangkok = new Date(nowBangkok.getFullYear(), nowBangkok.getMonth(), nowBangkok.getDate());
+  const eventDateObj = new Date(eventDate + "T00:00:00.000Z");
   const eventDateLocal = new Date(eventDateObj.getFullYear(), eventDateObj.getMonth(), eventDateObj.getDate());
 
-  if (eventDateLocal.getTime() === todayUTC.getTime()) {
+  // ตรวจสอบว่าเป็นวันนี้หรือวันในอดีต
+  if (eventDateLocal.getTime() < todayBangkok.getTime()) {
+    return {
+      isValid: false,
+      error: `Event date cannot be in the past. Event date: ${eventDate}, Today: ${todayBangkok.toISOString().split("T")[0]}`,
+    };
+  }
+
+  if (eventDateLocal.getTime() === todayBangkok.getTime()) {
     // เป็นวันนี้ - ตรวจสอบเวลา
-    const now = new Date();
-    const currentTimeMinutes = now.getHours() * 60 + now.getMinutes();
+    const currentTimeMinutes = nowBangkok.getHours() * 60 + nowBangkok.getMinutes();
+    const currentTimeString = nowBangkok.toTimeString().slice(0, 5);
 
     for (const court of courts) {
-      const startMinutes = timeToMinutes(court.startTime);
+      let startMinutes = timeToMinutes(court.startTime);
+
+      // ถ้าเป็นเวลาข้ามวัน (เช่น 23:00-01:00) ให้ถือว่าเริ่มวันถัดไป
+      const endMinutes = timeToMinutes(court.endTime);
+      if (endMinutes <= startMinutes) {
+        // เวลาข้ามวัน - ให้ผ่าน validation เพราะเป็นวันถัดไป
+        continue;
+      }
+
+      // ตรวจสอบเฉพาะเวลาในวันเดียวกัน
       if (startMinutes <= currentTimeMinutes) {
         return {
           isValid: false,
-          error: `Court ${court.courtNumber} start time (${court.startTime}) cannot be in the past. Current time: ${now.toTimeString().slice(0, 5)}`
+          error: `Court ${court.courtNumber} start time (${court.startTime}) cannot be in the past. Current time: ${currentTimeString}`,
         };
       }
     }
@@ -84,23 +120,25 @@ function validateEventDateTime(eventDate: string, courts: ICourtTime[]): { isVal
 
 function validateCourts(courts: ICourtTime[]): CourtValidationResult {
   const errors: any = {};
-  
+
   // ตรวจสอบ courtNumber ซ้ำ
-  const courtNumbers = courts.map(c => c.courtNumber);
-  const duplicateNumbers = courtNumbers.filter((num, index) => courtNumbers.indexOf(num) !== index);
+  const courtNumbers = courts.map((c) => c.courtNumber);
+  const duplicateNumbers = courtNumbers.filter(
+    (num, index) => courtNumbers.indexOf(num) !== index
+  );
   if (duplicateNumbers.length > 0) {
     errors.duplicateCourtNumbers = duplicateNumbers;
   }
-  
+
   // ตรวจสอบแต่ละ court
   courts.forEach((court, index) => {
     const courtErrors: any = {};
-    
+
     // ตรวจสอบ courtNumber ต้องเป็นเลขบวก
     if (!court.courtNumber || court.courtNumber <= 0) {
       courtErrors.courtNumber = "Court number must be a positive integer";
     }
-    
+
     // ตรวจสอบรูปแบบเวลา (HH:MM)
     const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
     if (!timeRegex.test(court.startTime)) {
@@ -109,80 +147,154 @@ function validateCourts(courts: ICourtTime[]): CourtValidationResult {
     if (!timeRegex.test(court.endTime)) {
       courtErrors.endTime = `Invalid time format: ${court.endTime}. Expected HH:MM (24-hour format)`;
     }
-    
-    // ตรวจสอบ startTime < endTime
+
+    // ตรวจสอบ startTime < endTime (รองรับเวลาข้ามวัน)
     if (timeRegex.test(court.startTime) && timeRegex.test(court.endTime)) {
       const startMinutes = timeToMinutes(court.startTime);
-      const endMinutes = timeToMinutes(court.endTime);
-      
-      if (startMinutes >= endMinutes) {
-        courtErrors.timeRange = `Start time (${court.startTime}) must be before end time (${court.endTime})`;
+      let endMinutes = timeToMinutes(court.endTime);
+
+      // ถ้า endTime เป็น 00:00 หรือน้อยกว่า startTime แสดงว่าข้ามวัน
+      if (endMinutes < startMinutes) {
+        endMinutes += 1440; // เพิ่ม 24 ชั่วโมง (1440 นาที)
       }
-      
-      // ตรวจสอบระยะเวลาขั้นต่ำ (30 นาที)
-      if (endMinutes - startMinutes < 30) {
-        courtErrors.minimumDuration = `Court session must be at least 30 minutes. Current: ${endMinutes - startMinutes} minutes`;
+
+      // ตรวจสอบระยะเวลาขั้นต่ำ (60 นาที)
+      const duration = endMinutes - startMinutes;
+      if (duration === 0) {
+        courtErrors.minimumDuration =
+          "Court start time and end time cannot be the same. Minimum duration is 1 hour (60 minutes).";
+      } else if (duration < 60) {
+        courtErrors.minimumDuration = `Court session must be at least 1 hour (60 minutes). Current duration: ${formatDuration(duration)} (${duration} minutes)`;
       }
-      
+
+      // ตรวจสอบระยะเวลาสูงสุด (ไม่เกิน 12 ชั่วโมง)
+      if (duration > 720) {
+        courtErrors.maximumDuration = `Court session cannot exceed 12 hours (720 minutes). Current duration: ${formatDuration(duration)} (${duration} minutes)`;
+      }
+
       // ตรวจสอบเวลาสมเหตุสมผล (6:00-24:00)
-      if (startMinutes < 360) { // ก่อน 6:00
-        courtErrors.startTimeRealistic = `Start time too early: ${court.startTime}. Courts typically open after 6:00`;
-      }
-      if (endMinutes > 1440) { // หลัง 24:00
-        courtErrors.endTimeRealistic = `End time too late: ${court.endTime}. Courts typically close before 24:00`;
-      }
+      // เดิมเคยบังคับเวลาเปิดสนาม (เช่น เปิดหลัง 06:00 และปิดก่อน 24:00)
+      // ปัจจุบันยกเลิกเงื่อนไขนี้เพื่อให้ผู้ใช้สามารถกำหนดเวลาได้ยืดหยุ่นมากขึ้น
     }
-    
+
     if (Object.keys(courtErrors).length > 0) {
       errors[`court_${index + 1}`] = courtErrors;
     }
   });
-  
+
   // ตรวจสอบการซ้อนทับของเวลาในสนามเดียวกัน
   const timeOverlaps = findTimeOverlaps(courts);
   if (timeOverlaps.length > 0) {
     errors.timeOverlaps = timeOverlaps;
   }
-  
+
   return {
     isValid: Object.keys(errors).length === 0,
-    errors: Object.keys(errors).length > 0 ? errors : undefined
+    errors: Object.keys(errors).length > 0 ? errors : undefined,
   };
 }
 
+function buildCourtValidationMessage(errors: any): string {
+  if (!errors) {
+    return "Invalid courts configuration";
+  }
+
+  const summaries: string[] = [];
+
+  if (
+    Array.isArray(errors.duplicateCourtNumbers) &&
+    errors.duplicateCourtNumbers.length > 0
+  ) {
+    summaries.push(
+      `Duplicate court numbers: ${errors.duplicateCourtNumbers.join(", ")}`
+    );
+  }
+
+  if (Array.isArray(errors.timeOverlaps) && errors.timeOverlaps.length > 0) {
+    errors.timeOverlaps.forEach((overlap: any) => {
+      if (overlap?.court && overlap?.session1 && overlap?.session2) {
+        summaries.push(
+          `Court ${overlap.court} has overlapping time slots ${overlap.session1} and ${overlap.session2}`
+        );
+      }
+    });
+  }
+
+  Object.entries(errors).forEach(([key, value]) => {
+    if (!key.startsWith("court_") || !value || typeof value !== "object") {
+      return;
+    }
+
+    const courtLabel = key.replace("court_", "Court ");
+
+    Object.values(value).forEach((message) => {
+      if (typeof message === "string" && message.trim().length > 0) {
+        summaries.push(`${courtLabel}: ${message}`);
+      }
+    });
+  });
+
+  return summaries.length > 0
+    ? `Invalid courts configuration: ${summaries.join("; ")}`
+    : "Invalid courts configuration";
+}
+
+function formatDuration(totalMinutes: number): string {
+  if (!Number.isFinite(totalMinutes) || totalMinutes < 0) {
+    return `${totalMinutes} minutes`;
+  }
+
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  const parts: string[] = [];
+
+  if (hours > 0) {
+    parts.push(`${hours} hour${hours === 1 ? "" : "s"}`);
+  }
+  if (minutes > 0 || parts.length === 0) {
+    parts.push(`${minutes} minute${minutes === 1 ? "" : "s"}`);
+  }
+
+  return parts.join(" ");
+}
+
 function timeToMinutes(timeStr: string): number {
-  const [hours, minutes] = timeStr.split(':').map(Number);
+  const [hours, minutes] = timeStr.split(":").map(Number);
   return hours * 60 + minutes;
 }
 
 function findTimeOverlaps(courts: ICourtTime[]): any[] {
   const overlaps: any[] = [];
-  
+
   for (let i = 0; i < courts.length; i++) {
     for (let j = i + 1; j < courts.length; j++) {
       const court1 = courts[i];
       const court2 = courts[j];
-      
+
       // ถ้าเป็นสนามเดียวกัน ตรวจสอบการซ้อนทับ
       if (court1.courtNumber === court2.courtNumber) {
         const start1 = timeToMinutes(court1.startTime);
-        const end1 = timeToMinutes(court1.endTime);
+        let end1 = timeToMinutes(court1.endTime);
         const start2 = timeToMinutes(court2.startTime);
-        const end2 = timeToMinutes(court2.endTime);
-        
-        // ตรวจสอบการซ้อนทับ
-        if ((start1 < end2 && start2 < end1)) {
+        let end2 = timeToMinutes(court2.endTime);
+
+        // ปรับ endTime สำหรับเวลาข้ามวัน
+        if (end1 <= start1) end1 += 1440;
+        if (end2 <= start2) end2 += 1440;
+
+        // ตรวจสอบการซ้อนทับ (รองรับเวลาข้ามวัน)
+        if (start1 < end2 && start2 < end1) {
           overlaps.push({
             court: court1.courtNumber,
             session1: `${court1.startTime}-${court1.endTime}`,
             session2: `${court2.startTime}-${court2.endTime}`,
-            message: `Court ${court1.courtNumber} has overlapping time slots`
+            message: `Court ${court1.courtNumber} has overlapping time slots`,
           });
         }
       }
     }
   }
-  
+
   return overlaps;
 }
 
@@ -270,7 +382,7 @@ export const createEvent = async (
       res.status(400).json({
         code: "VALIDATION_ERROR",
         message: "Invalid event date",
-        details: { eventDate: dateValidation.error }
+        details: { eventDate: dateValidation.error },
       });
       return;
     }
@@ -278,12 +390,15 @@ export const createEvent = async (
     // Validate courts data
     if (eventData.courts && eventData.courts.length > 0) {
       // Validate date and time together
-      const dateTimeValidation = validateEventDateTime(eventData.eventDate, eventData.courts);
+      const dateTimeValidation = validateEventDateTime(
+        eventData.eventDate,
+        eventData.courts
+      );
       if (!dateTimeValidation.isValid) {
         res.status(400).json({
           code: "VALIDATION_ERROR",
           message: "Invalid event date/time",
-          details: { eventDateTime: dateTimeValidation.error }
+          details: { eventDateTime: dateTimeValidation.error },
         });
         return;
       }
@@ -292,16 +407,21 @@ export const createEvent = async (
       if (!courtValidation.isValid) {
         res.status(400).json({
           code: "VALIDATION_ERROR",
-          message: "Invalid courts configuration",
-          details: courtValidation.errors
+          message: buildCourtValidationMessage(courtValidation.errors),
+          details: courtValidation.errors,
         });
         return;
       }
     }
 
-    // Ignore any client-provided id; it will be generated by MongoDB
-    const { /* id: _ignored, */ ...payload } = eventData as any;
-    const event = new Event({ ...payload, createdBy: userId });
+    const { status: _ignoredStatus, ...payload } = eventData as IEventCreate & {
+      status?: EventStatusType;
+    };
+    const event = new Event({
+      ...payload,
+      status: EventStatus.UPCOMING,
+      createdBy: userId,
+    });
     await event.save();
 
     // Publish RabbitMQ message: event.created (routingKey: event.created)
@@ -311,6 +431,7 @@ export const createEvent = async (
         eventName: event.eventName,
         eventDate: event.eventDate,
         location: event.location,
+        venue: event.location,
         createdBy: event.createdBy || userId,
       });
     } catch (e) {
@@ -318,7 +439,11 @@ export const createEvent = async (
     }
 
     const availableSlotsAfter = event.capacity.availableSlots;
-    const waitlistActiveAfter = (event.capacity.waitlistEnabled === true) && (event.status === "active") && (availableSlotsAfter <= 0);
+    const waitlistActiveAfter =
+      event.capacity.waitlistEnabled === true &&
+      (event.status === EventStatus.UPCOMING ||
+        event.status === EventStatus.IN_PROGRESS) &&
+      availableSlotsAfter <= 0;
 
     res.status(201).json({
       message: "Event created successfully",
@@ -327,11 +452,14 @@ export const createEvent = async (
         eventName: event.eventName,
         eventDate: event.eventDate,
         location: event.location,
+        venue: event.location,
         status: event.status,
         capacity: event.capacity,
         waitlistActive: waitlistActiveAfter,
         shuttlecockPrice: event.shuttlecockPrice,
         courtHourlyRate: event.courtHourlyRate,
+        penaltyFee: event.penaltyFee,
+        shuttlecockCount: event.shuttlecockCount,
         courts: event.courts,
         createdBy: event.createdBy,
         updatedBy: (event as any).updatedBy,
@@ -354,10 +482,9 @@ export const createEvent = async (
       return;
     }
     if (error?.code === 11000) {
-      res.status(400).json({
+      res.status(409).json({
         code: "EVENT_EXISTS",
-        message:
-          "An event with the same name and date already exists",
+        message: "An event with the same name and date already exists",
         details: error.keyValue,
       });
       return;
@@ -394,6 +521,11 @@ export const createEvent = async (
  *           type: string
  *           format: date
  *         description: Filter events by date (YYYY-MM-DD)
+ *       - in: query
+ *         name: eventName
+ *         schema:
+ *           type: string
+ *         description: Search events by name (case-insensitive partial match)
  *       - in: query
  *         name: limit
  *         schema:
@@ -457,11 +589,12 @@ export const createEvent = async (
  */
 export const getEvents = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { status, date, limit = 10, offset = 0 } = req.query;
+    const { status, date, eventName, limit = 10, offset = 0 } = req.query;
 
     const filter: any = {};
     if (status) filter["status"] = status;
     if (date) filter.eventDate = date;
+    if (eventName) filter.eventName = { $regex: eventName, $options: 'i' };
 
     const events = await Event.find(filter)
       .sort({ eventDate: 1, createdAt: 1 })
@@ -476,11 +609,18 @@ export const getEvents = async (req: Request, res: Response): Promise<void> => {
         eventName: event.eventName,
         eventDate: event.eventDate,
         location: event.location,
+        venue: event.location,
         status: event.status,
         capacity: event.capacity,
-        waitlistActive: (event.capacity.waitlistEnabled === true) && (event.status === "active") && ((event.capacity.availableSlots ?? 0) <= 0),
+        waitlistActive:
+          event.capacity.waitlistEnabled === true &&
+          (event.status === EventStatus.UPCOMING ||
+            event.status === EventStatus.IN_PROGRESS) &&
+          (event.capacity.availableSlots ?? 0) <= 0,
         shuttlecockPrice: event.shuttlecockPrice,
         courtHourlyRate: event.courtHourlyRate,
+        penaltyFee: event.penaltyFee,
+        shuttlecockCount: event.shuttlecockCount,
         courts: event.courts,
         createdBy: (event as any).createdBy,
         updatedBy: (event as any).updatedBy,
@@ -540,6 +680,12 @@ export const getEvents = async (req: Request, res: Response): Promise<void> => {
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/Error'
+ *       400:
+ *         description: Event cannot be canceled in its current status
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  *       500:
  *         description: Internal server error
  *         content:
@@ -559,7 +705,11 @@ export const getEvent = async (req: Request, res: Response): Promise<void> => {
     }
 
     const available = event.capacity.availableSlots;
-    const waitlistActive = (event.capacity.waitlistEnabled === true) && (event.status === "active") && (available <= 0);
+    const waitlistActive =
+      event.capacity.waitlistEnabled === true &&
+      (event.status === EventStatus.UPCOMING ||
+        event.status === EventStatus.IN_PROGRESS) &&
+      available <= 0;
 
     res.status(200).json({
       event: {
@@ -567,11 +717,14 @@ export const getEvent = async (req: Request, res: Response): Promise<void> => {
         eventName: event.eventName,
         eventDate: event.eventDate,
         location: event.location,
+        venue: event.location,
         status: event.status,
         capacity: event.capacity,
         waitlistActive,
         shuttlecockPrice: event.shuttlecockPrice,
         courtHourlyRate: event.courtHourlyRate,
+        penaltyFee: event.penaltyFee,
+        shuttlecockCount: event.shuttlecockCount,
         courts: event.courts,
         createdBy: (event as any).createdBy,
         updatedBy: (event as any).updatedBy,
@@ -656,7 +809,7 @@ export const updateEvent = async (
         res.status(400).json({
           code: "VALIDATION_ERROR",
           message: "Invalid event date",
-          details: { eventDate: dateValidation.error }
+          details: { eventDate: dateValidation.error },
         });
         return;
       }
@@ -666,14 +819,17 @@ export const updateEvent = async (
     if (updateData.courts && updateData.courts.length > 0) {
       // ใช้ eventDate ใหม่หรือเก่า
       const eventDateToUse = updateData.eventDate || event.eventDate;
-      
+
       // Validate date and time together
-      const dateTimeValidation = validateEventDateTime(eventDateToUse, updateData.courts);
+      const dateTimeValidation = validateEventDateTime(
+        eventDateToUse,
+        updateData.courts
+      );
       if (!dateTimeValidation.isValid) {
         res.status(400).json({
           code: "VALIDATION_ERROR",
           message: "Invalid event date/time",
-          details: { eventDateTime: dateTimeValidation.error }
+          details: { eventDateTime: dateTimeValidation.error },
         });
         return;
       }
@@ -682,21 +838,29 @@ export const updateEvent = async (
       if (!courtValidation.isValid) {
         res.status(400).json({
           code: "VALIDATION_ERROR",
-          message: "Invalid courts configuration",
-          details: courtValidation.errors
+          message: buildCourtValidationMessage(courtValidation.errors),
+          details: courtValidation.errors,
         });
         return;
       }
     }
 
     // ถ้าแก้เฉพาะวันที่ (ไม่แก้ courts) ให้ตรวจสอบกับ courts เดิม
-    if (updateData.eventDate && (!updateData.courts || updateData.courts.length === 0) && event.courts && event.courts.length > 0) {
-      const dateTimeValidation = validateEventDateTime(updateData.eventDate, event.courts);
+    if (
+      updateData.eventDate &&
+      (!updateData.courts || updateData.courts.length === 0) &&
+      event.courts &&
+      event.courts.length > 0
+    ) {
+      const dateTimeValidation = validateEventDateTime(
+        updateData.eventDate,
+        event.courts
+      );
       if (!dateTimeValidation.isValid) {
         res.status(400).json({
           code: "VALIDATION_ERROR",
           message: "Invalid event date/time with existing courts",
-          details: { eventDateTime: dateTimeValidation.error }
+          details: { eventDateTime: dateTimeValidation.error },
         });
         return;
       }
@@ -713,15 +877,14 @@ export const updateEvent = async (
         res.status(404).json({ error: "Event not found" });
         return;
       }
-      
+
       Object.assign(updatedEvent, updateDataWithUser);
       await updatedEvent.save();
     } catch (error: any) {
       if (error?.code === 11000) {
-        res.status(400).json({
+        res.status(409).json({
           code: "EVENT_EXISTS",
-          message:
-            "An event with the same name and date already exists",
+          message: "An event with the same name and date already exists",
           details: error.keyValue,
         });
         return;
@@ -737,6 +900,7 @@ export const updateEvent = async (
         eventName: updatedEvent!.eventName,
         eventDate: updatedEvent!.eventDate,
         location: updatedEvent!.location,
+        venue: updatedEvent!.location,
       });
     } catch (e) {
       console.error("Publish event.updated failed:", e);
@@ -749,10 +913,13 @@ export const updateEvent = async (
         eventName: updatedEvent!.eventName,
         eventDate: updatedEvent!.eventDate,
         location: updatedEvent!.location,
+        venue: updatedEvent!.location,
         status: updatedEvent!.status,
         capacity: updatedEvent!.capacity,
         shuttlecockPrice: updatedEvent!.shuttlecockPrice,
         courtHourlyRate: updatedEvent!.courtHourlyRate,
+        penaltyFee: updatedEvent!.penaltyFee,
+        shuttlecockCount: updatedEvent!.shuttlecockCount,
         courts: updatedEvent!.courts,
         createdBy: (updatedEvent as any).createdBy,
         updatedBy: (updatedEvent as any).updatedBy,
@@ -770,12 +937,13 @@ export const updateEvent = async (
  * @swagger
  * /api/events/{id}:
  *   delete:
- *     summary: Delete an event
+ *     summary: Cancel an event
  *     tags: [Events]
  *     security:
  *       - BearerAuth: []
  *     description: |
- *       Delete an event permanently. This action cannot be undone.
+ *       Mark an event as canceled instead of removing it from the database. The event will
+ *       no longer accept registrations, but historical data remains intact.
  *
  *       **Requirements:**
  *       - Valid JWT token with admin role
@@ -789,7 +957,7 @@ export const updateEvent = async (
  *         description: Event ID
  *     responses:
  *       200:
- *         description: Event deleted successfully
+ *         description: Event canceled successfully
  *         content:
  *           application/json:
  *             schema:
@@ -797,7 +965,7 @@ export const updateEvent = async (
  *               properties:
  *                 message:
  *                   type: string
- *                   example: Event deleted successfully
+ *                   example: Event canceled successfully
  *       401:
  *         description: Authentication required
  *         content:
@@ -838,9 +1006,22 @@ export const deleteEvent = async (
       return;
     }
 
-    await Event.findByIdAndDelete(id);
+    if (event.status !== EventStatus.UPCOMING) {
+      res.status(400).json({
+        error: "EVENT_NOT_CANCELABLE",
+        message: "Only upcoming events can be canceled",
+        status: event.status,
+      });
+      return;
+    }
 
-    // Publish RabbitMQ message: event.deleted
+    event.status = EventStatus.CANCELED;
+    if (userId) {
+      (event as any).updatedBy = userId;
+    }
+    await event.save();
+
+    // Publish RabbitMQ message: event.deleted (logical delete)
     try {
       await messageQueueService.publishEvent("deleted", {
         eventId: id,
@@ -848,13 +1029,15 @@ export const deleteEvent = async (
         eventName: event.eventName,
         eventDate: event.eventDate,
         location: event.location,
+        venue: event.location,
+        status: EventStatus.CANCELED,
       });
     } catch (e) {
       console.error("Publish event.deleted failed:", e);
     }
 
     res.status(200).json({
-      message: "Event deleted successfully",
+      message: "Event canceled successfully",
     });
   } catch (error) {
     console.error("Delete event error:", error);
@@ -924,8 +1107,15 @@ export const getEventStatus = async (
     }
 
     const availableSlots = event.capacity.availableSlots;
-    const isAcceptingRegistrations = event.status === "active" && availableSlots > 0;
-    const waitlistActive = (event.capacity.waitlistEnabled === true) && (event.status === "active") && (availableSlots <= 0);
+    const isAcceptingRegistrations =
+      (event.status === EventStatus.UPCOMING ||
+        event.status === EventStatus.IN_PROGRESS) &&
+      availableSlots > 0;
+    const waitlistActive =
+      event.capacity.waitlistEnabled === true &&
+      (event.status === EventStatus.UPCOMING ||
+        event.status === EventStatus.IN_PROGRESS) &&
+      availableSlots <= 0;
 
     res.status(200).json({
       id: event.id,

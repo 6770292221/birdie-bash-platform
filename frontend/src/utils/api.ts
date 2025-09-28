@@ -6,7 +6,7 @@ import axios, { AxiosError, AxiosInstance } from "axios";
 const GATEWAY_URL =
   (import.meta.env.VITE_GATEWAY_URL as string) || "http://localhost:3000";
 
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   success: boolean;
   data?: T;
   message?: string;
@@ -90,7 +90,7 @@ class ApiClient {
     this.http.interceptors.request.use((config) => {
       if (this.token) {
         config.headers = config.headers || {};
-        (config.headers as any)["Authorization"] = `Bearer ${this.token}`;
+        config.headers["Authorization"] = `Bearer ${this.token}`;
       }
       return config;
     });
@@ -108,12 +108,12 @@ class ApiClient {
 
   private async request<T>(
     endpoint: string,
-    options: { method?: string; data?: any; params?: any; headers?: Record<string, string> } = {}
+    options: { method?: string; data?: unknown; params?: Record<string, unknown>; headers?: Record<string, string> } = {}
   ): Promise<ApiResponse<T>> {
     try {
       const res = await this.http.request({
         url: endpoint,
-        method: (options.method || "GET") as any,
+        method: options.method || "GET",
         data: options.data,
         params: options.params,
         headers: options.headers,
@@ -126,12 +126,45 @@ class ApiClient {
         message: data?.message,
       };
     } catch (err) {
-      const axErr = err as AxiosError<any>;
+      const axErr = err as AxiosError<{ message?: string; details?: unknown }>;
       const statusText = axErr.response?.status
         ? `HTTP ${axErr.response.status}`
         : "Network error";
-      const message = (axErr.response?.data as any)?.message || axErr.message || statusText;
-      return { success: false, error: message };
+
+      const responseData = axErr.response?.data;
+      let errorMessage = responseData?.message || axErr.message || statusText;
+
+      // Only use details if there's no message
+      if (!responseData?.message && responseData?.details) {
+        if (typeof responseData.details === 'string') {
+          errorMessage = responseData.details;
+        } else if (typeof responseData.details === 'object') {
+          // Extract specific error messages from details object
+          const detailValues = Object.values(responseData.details);
+          if (detailValues.length > 0) {
+            // Find the first string value in details
+            const firstDetailMessage = detailValues.find(v => typeof v === 'string');
+            if (firstDetailMessage) {
+              errorMessage = firstDetailMessage;
+            } else {
+              // If details contain nested objects, try to extract meaningful messages
+              const nestedMessages = detailValues
+                .filter(v => typeof v === 'object' && v !== null)
+                .map(obj => {
+                  const objValues = Object.values(obj as Record<string, unknown>);
+                  return objValues.find(val => typeof val === 'string');
+                })
+                .filter(Boolean);
+
+              if (nestedMessages.length > 0) {
+                errorMessage = nestedMessages[0] as string;
+              }
+            }
+          }
+        }
+      }
+
+      return { success: false, error: errorMessage };
     }
   }
 
@@ -167,12 +200,12 @@ class ApiClient {
       const res = await this.http.get("/api/auth/verify");
       return {
         success: true,
-        data: res.data?.user as User,
+        data: res.data?.user,
         message: res.data?.message,
       };
     } catch (err) {
-      const axErr = err as AxiosError<any>;
-      const message = (axErr.response?.data as any)?.message || axErr.message || "Network error";
+      const axErr = err as AxiosError<{ message?: string; details?: unknown }>;
+      const message = (axErr.response?.data as { message?: string })?.message || axErr.message || "Network error";
       return { success: false, error: message };
     }
   }
@@ -194,7 +227,7 @@ class ApiClient {
     offset?: number;
     status?: string;
     date?: string;
-  }): Promise<ApiResponse<any>> {
+  }): Promise<ApiResponse<{ events: unknown[] }>> {
     return this.request(`/api/events`, {
       params: {
         limit: params?.limit,
@@ -254,6 +287,18 @@ class ApiClient {
     });
   }
 
+  async getUserRegistrations(
+    params?: { includeCanceled?: boolean }
+  ): Promise<ApiResponse<{ registrations: PlayerItem[] }>> {
+    const query: Record<string, any> = {};
+    if (typeof params?.includeCanceled === 'boolean') {
+      query.includeCanceled = params.includeCanceled;
+    }
+    return this.request(`/api/registration/users/registrations`, {
+      params: Object.keys(query).length ? query : undefined,
+    });
+  }
+
   async cancelPlayer(eventId: string, playerId: string): Promise<ApiResponse<any>> {
     return this.request(`/api/registration/events/${eventId}/players/${playerId}/cancel`, {
       method: "POST",
@@ -282,6 +327,92 @@ class ApiClient {
 
   async getEventRegistrations(eventId: string): Promise<ApiResponse<any>> {
     return this.request(`/api/registration/events/${eventId}/registrations`);
+  }
+
+    // Settlement endpoints
+  async issueSettlement(eventId: string, data: {
+    currency?: string;
+    shuttlecockCount?: number;
+    absentPlayerIds?: string[];
+  }): Promise<ApiResponse<unknown>> {
+    return this.request(`/api/settlements/issue`, {
+      method: "POST",
+      data: {
+        event_id: eventId,
+        currency: data.currency || 'THB',
+        shuttlecockCount: data.shuttlecockCount || 0,
+        absentPlayerIds: data.absentPlayerIds || []
+      }
+    });
+  }
+
+  async calculateSettlement(eventId: string): Promise<ApiResponse<unknown>> {
+    return this.request(`/api/settlements/calculate`, {
+      method: "POST",
+      data: {
+        event_id: eventId
+      }
+    });
+  }
+
+  // Settlement detail endpoint (mocked for now)
+  async getSettlements(eventId: string): Promise<ApiResponse<unknown>> {
+    // Mock data for now - replace with real API call later
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        // Mock data - ใช้ player IDs จริงจากข้อมูล API ล่าสุด
+        const mockPayments = [
+          // Guest ไม่มีค่าปรับ (isPenalty: false)
+          { playerId: "68d7b9e9744183cc4927b403", playerName: "mind_guest", amount: 250, status: "paid", paidAt: "2024-01-15T10:30:00Z", hasPenalty: false },
+          // Guest มีค่าปรับ (isPenalty: true)
+          { playerId: "68d7b9f2744183cc4927b40e", playerName: "mind_guest_2", amount: 300, status: "pending", paidAt: null, hasPenalty: true, penaltyAmount: 50 },
+          // Member ยังไม่จ่าย ไม่มีค่าปรับ (isPenalty: false)
+          { playerId: "68d7ba9f744183cc4927b41e", playerName: "mind2@gmail.com", amount: 250, status: "pending", paidAt: null, hasPenalty: false },
+        ];
+        resolve({
+          success: true,
+          data: {
+            eventId,
+            totalAmount: 1000,
+            paidAmount: 500,
+            pendingAmount: 500,
+            payments: mockPayments
+          }
+        });
+      }, 500); // Simulate network delay
+    });
+  }
+
+  // Mark player as paid endpoint (mocked for now)
+  async markPlayerAsPaid(eventId: string, playerId: string): Promise<ApiResponse<unknown>> {
+    // Mock response for now - replace with real API call later
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        resolve({
+          success: true,
+          data: {
+            playerId,
+            status: "paid",
+            paidAt: new Date().toISOString(),
+            message: "Player marked as paid successfully"
+          }
+        });
+      }, 300);
+    });
+  }
+
+  // Venue endpoints
+  async getVenues(params?: {
+    name?: string;
+    rating?: number;
+    limit?: number;
+    offset?: number;
+  }): Promise<ApiResponse<unknown>> {
+    return this.request("/api/event/venues", { params });
+  }
+
+  async getVenue(venueId: string): Promise<ApiResponse<unknown>> {
+    return this.request(`/api/event/venues/${venueId}`);
   }
 }
 

@@ -4,6 +4,10 @@ import { useToast } from '@/hooks/use-toast';
 import CreateEventForm from '@/components/CreateEventForm';
 import { apiClient } from '@/utils/api';
 import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import LanguageToggle from '@/components/LanguageToggle';
+import { ArrowLeft, Check, AlertCircle } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 // Minimal Event and Court shape expected by CreateEventForm props
 export interface Court { courtNumber: number; startTime: string; endTime: string; }
@@ -15,6 +19,7 @@ export interface Event {
   maxPlayers: number; // mapped to capacity.maxParticipants
   shuttlecockPrice: number;
   courtHourlyRate: number;
+  penaltyFee?: number;
   courts: Court[];
   status: string;
   createdBy?: string;
@@ -25,6 +30,7 @@ const CreateEventPage = () => {
   const { isAdmin } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { t } = useLanguage();
 
   if (!isAdmin) {
     return (
@@ -53,6 +59,7 @@ const CreateEventPage = () => {
         },
         shuttlecockPrice: data.shuttlecockPrice,
         courtHourlyRate: data.courtHourlyRate,
+        penaltyFee: data.penaltyFee,
         courts: data.courts.map((c) => ({
           courtNumber: c.courtNumber,
           startTime: c.startTime,
@@ -62,18 +69,66 @@ const CreateEventPage = () => {
 
       const res = await apiClient.createEvent(payload as any);
       if (res.success) {
-        toast({ title: 'สร้างอีเวนต์สำเร็จ', description: 'บันทึกข้อมูลเรียบร้อย' });
+        toast({
+          title: (
+            <div className="flex items-center gap-2">
+              <Check className="w-4 h-4 text-green-600" />
+              {t('create_event.success')}
+            </div>
+          ),
+          description: t('create_event.success_desc'),
+          className: 'border-green-200 bg-green-50',
+          duration: 4000
+        });
         navigate('/');
       } else {
-        toast({ title: 'สร้างอีเวนต์ไม่สำเร็จ', description: res.error || 'เกิดข้อผิดพลาด', variant: 'destructive' });
+        toast({
+          title: (
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-red-600" />
+              {t('create_event.failed')}
+            </div>
+          ),
+          description: res.error || t('create_event.failed_desc'),
+          className: 'border-red-200 bg-red-50',
+          duration: 5000
+        });
       }
     } catch (e: any) {
-      toast({ title: 'สร้างอีเวนต์ไม่สำเร็จ', description: e?.message || 'เกิดข้อผิดพลาด', variant: 'destructive' });
+      toast({
+        title: (
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-red-600" />
+            {t('create_event.failed')}
+          </div>
+        ),
+        description: e?.message || t('create_event.failed_desc'),
+        className: 'border-red-200 bg-red-50',
+        duration: 5000
+      });
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-green-50 py-6 px-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-green-50 py-6 px-4 relative">
+      {/* Language Toggle */}
+      <div className="absolute top-4 right-4 z-10">
+        <LanguageToggle />
+      </div>
+
+      {/* Back Button */}
+      <div className="absolute top-4 left-4 z-10">
+        <Button
+          onClick={() => navigate('/')}
+          variant="outline"
+          size="sm"
+          className="bg-white/80 hover:bg-white border-gray-300 text-gray-700 hover:text-gray-900 shadow-lg backdrop-blur-sm"
+        >
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          Back to Home
+        </Button>
+      </div>
+
       <div className="max-w-3xl mx-auto">
         <CreateEventForm onSubmit={handleSubmit} onCancel={() => navigate('/')} />
       </div>

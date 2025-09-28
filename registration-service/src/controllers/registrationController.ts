@@ -1,10 +1,11 @@
 import { Request, Response } from "express";
-import Player from "../models/Player";
-import { RegisterByUser, RegisterByGuest } from "../types/event";
+import Player, { IPlayerDocument } from "../models/Player";
+import { RegisterByUser, RegisterByGuest, EventStatus } from "../types/event";
 import http from "http";
 import https from "https";
 import messageQueueService from "../queue/publisher";
 import { EVENTS } from "../queue/events";
+import { PENALTY_CONFIG } from '../config/penaltyConfig';
 
 interface ExtendedRequest extends Request {
   headers: Request["headers"] & {
@@ -17,7 +18,7 @@ interface ExtendedRequest extends Request {
 }
 
 async function fetchEventById(eventId: string): Promise<any | null> {
-  const base = process.env.EVENT_SERVICE_URL || "http://localhost:3002";
+  const base = process.env.EVENT_SERVICE_URL || "http://localhost:3003";
   const target = new URL(`/api/events/${eventId}`, base);
   console.log(`[fetchEventById] Calling: ${target.toString()}`);
   const lib = target.protocol === "https:" ? https : http;
@@ -64,7 +65,7 @@ async function fetchEventById(eventId: string): Promise<any | null> {
 }
 
 async function fetchEventStatus(eventId: string): Promise<any | null> {
-  const base = process.env.EVENT_SERVICE_URL || "http://localhost:3002";
+  const base = process.env.EVENT_SERVICE_URL || "http://localhost:3003";
   const target = new URL(`/api/events/${eventId}/status`, base);
   const lib = target.protocol === "https:" ? https : http;
   return new Promise((resolve) => {
@@ -109,6 +110,94 @@ async function fetchEventStatus(eventId: string): Promise<any | null> {
   });
 }
 
+const ACCEPTING_EVENT_STATUSES: ReadonlySet<EventStatus> = new Set([
+  "upcoming",
+  "in_progress",
+]);
+
+// These statuses explicitly block registration
+const BLOCKING_EVENT_STATUSES: ReadonlySet<EventStatus> = new Set([
+  "calculating",
+  "awaiting_payment",
+  "completed",
+  "canceled",
+]);
+
+async function fetchEventsByIds(
+  eventIds: string[]
+): Promise<Record<string, any | null>> {
+  const uniqueIds = Array.from(new Set(eventIds.filter(Boolean)));
+  if (uniqueIds.length === 0) return {};
+
+  const results = await Promise.all(
+    uniqueIds.map(async (id) => {
+      const event = await fetchEventById(id);
+      return { id, event };
+    })
+  );
+
+  return results.reduce<Record<string, any | null>>((acc, { id, event }) => {
+    acc[id] = event ?? null;
+    return acc;
+  }, {});
+}
+
+const mapPlayerResponse = (player: IPlayerDocument) => ({
+  playerId: player.id,
+  eventId: player.eventId?.toString() ?? null,
+  userId: player.userId || null,
+  name: player.name || null,
+  email: player.email || null,
+  phoneNumber: (player as any).phoneNumber,
+  startTime: player.startTime || null,
+  endTime: player.endTime || null,
+  userType: (player as any).userType ?? (player.userId ? "member" : "guest"),
+  status: player.status,
+  isPenalty: player.isPenalty,
+  createdBy: (player as any).createdBy || null,
+  registrationTime: player.registrationTime
+    ? player.registrationTime.toISOString()
+    : null,
+});
+
+function extractEventStatus(status: any): {
+  state?: EventStatus;
+  isAcceptingRegistrations?: boolean;
+} {
+  if (!status) return {};
+  if (typeof status === "string") {
+    return { state: status as EventStatus };
+  }
+  if (typeof status === "object") {
+    const state =
+      typeof (status as any).state === "string"
+        ? ((status as any).state as EventStatus)
+        : undefined;
+    const flag =
+      typeof (status as any).isAcceptingRegistrations === "boolean"
+        ? Boolean((status as any).isAcceptingRegistrations)
+        : undefined;
+    return { state, isAcceptingRegistrations: flag };
+  }
+  return {};
+}
+
+function isRegistrationOpenFromStatus(status: any): {
+  accepting: boolean;
+  state?: EventStatus;
+} {
+  const { state, isAcceptingRegistrations } = extractEventStatus(status);
+
+  // Explicitly block registration for certain statuses
+  if (state && BLOCKING_EVENT_STATUSES.has(state)) {
+    return { accepting: false, state };
+  }
+
+  const baseAccepting = state ? ACCEPTING_EVENT_STATUSES.has(state) : false;
+  const accepting = baseAccepting && (isAcceptingRegistrations ?? true);
+  return { accepting, state };
+}
+
 export const getPlayers = async (
   req: Request,
   res: Response
@@ -144,19 +233,7 @@ export const getPlayers = async (
 
     res.status(200).json({
       eventId,
-      players: players.map((player) => ({
-        playerId: player.id,
-        userId: player.userId || null,
-        name: player.name || null,
-        email: player.email || null,
-        phoneNumber: (player as any).phoneNumber,
-        startTime: player.startTime || null,
-        endTime: player.endTime || null,
-        userType: (player as any).userType ?? (player.userId ? 'member' : 'guest'),
-        status: player.status,
-        createdBy: (player as any).createdBy || null,
-        registrationTime: player.registrationTime.toISOString(),
-      })),
+      players: players.map(mapPlayerResponse),
       summary: {
         total,
         registered: groupedPlayers.registered.length,
@@ -171,6 +248,80 @@ export const getPlayers = async (
     });
   } catch (error) {
     console.error("Get players error:", error);
+    res.status(500).json({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Internal server error",
+      details: {},
+    });
+  }
+};
+
+export const getRegistrationsByUser = async (
+  req: ExtendedRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const pathUserId = req.params?.userId;
+    const headerUserId = req.headers["x-user-id"];
+    const userId = pathUserId || headerUserId;
+
+    if (!userId) {
+      res.status(401).json({
+        code: "AUTHENTICATION_REQUIRED",
+        message: "Authentication is required to fetch user registrations",
+        details: {},
+      });
+      return;
+    }
+
+    if (!headerUserId) {
+      res.status(401).json({
+        code: "AUTHENTICATION_REQUIRED",
+        message: "Authentication is required to fetch user registrations",
+        details: {},
+      });
+      return;
+    }
+
+    if (pathUserId && headerUserId !== pathUserId) {
+      res.status(403).json({
+        code: "INSUFFICIENT_PERMISSIONS",
+        message: "You can only view your own registrations",
+        details: { requesterId: headerUserId, userId: pathUserId },
+      });
+      return;
+    }
+
+    const includeCanceledParam = String(
+      req.query.includeCanceled ?? "false"
+    ).toLowerCase();
+    const includeCanceled = ["true", "1", "yes"].includes(includeCanceledParam);
+
+    const filter: any = { userId };
+    if (!includeCanceled) {
+      filter.status = { $ne: "canceled" };
+    }
+
+    const players = await Player.find(filter).sort({ registrationTime: -1 });
+    const eventIds = players
+      .map((player) => player.eventId?.toString())
+      .filter((id): id is string => Boolean(id));
+    const eventsMap = await fetchEventsByIds(eventIds);
+
+    const registrations = players.map((player) => {
+      const base = mapPlayerResponse(player);
+      const eventData = base.eventId ? eventsMap[base.eventId] ?? null : null;
+      return { ...base, event: eventData };
+    });
+
+    res.status(200).json({
+      userId,
+      includeCanceled,
+      total: registrations.length,
+      registrations,
+    });
+  } catch (error) {
+    console.error("Get registrations by user error:", error);
     res.status(500).json({
       code: "INTERNAL_SERVER_ERROR",
       message: "Internal server error",
@@ -247,6 +398,26 @@ export const cancelPlayerRegistration = async (
     }
 
     const wasRegistered = player.status === "registered";
+
+    // Check if cancellation incurs penalty
+    if (PENALTY_CONFIG.PENALTY_ENABLED) {
+      const now = new Date();
+      const eventDateTime = new Date(`${event.eventDate}T00:00:00`);
+
+      // If event has specific start time, use it; otherwise use event date
+      if (player.startTime) {
+        const [hours, minutes] = player.startTime.split(':').map(Number);
+        eventDateTime.setHours(hours, minutes, 0, 0);
+      }
+
+      const minutesUntilEvent = (eventDateTime.getTime() - now.getTime()) / (1000 * 60);
+
+      // Apply penalty if canceling within the penalty period
+      if (minutesUntilEvent <= PENALTY_CONFIG.CANCELLATION_PENALTY_MINUTES && minutesUntilEvent > 0) {
+        player.isPenalty = true;
+      }
+    }
+
     player.status = "canceled";
     await player.save();
     // Capacity updates and waitlist promotion are handled by Event Service in a decoupled architecture.
@@ -271,6 +442,7 @@ export const cancelPlayerRegistration = async (
         playerId: player.id,
         eventId: player.eventId.toString(),
         status: player.status,
+        isPenalty: player.isPenalty,
         canceledAt: new Date().toISOString(),
       },
     });
@@ -300,18 +472,14 @@ export const registerMember = async (
       });
       return;
     }
-    const statusVal: any = (event as any).status;
-    const isActive =
-      typeof statusVal === "string"
-        ? statusVal === "active"
-        : statusVal?.state === "active";
-    if (!isActive) {
+    const registrationGate = isRegistrationOpenFromStatus(event.status);
+    if (!registrationGate.accepting) {
       res.status(400).json({
         code: "REGISTRATION_CLOSED",
         message: "Event is not accepting registrations",
         details: {
           eventId,
-          status: event.status,
+          status: registrationGate.state ?? event.status,
           isAcceptingRegistrations: false,
         },
       });
@@ -319,8 +487,6 @@ export const registerMember = async (
     }
 
     const userId = req.headers["x-user-id"];
-    const userName = req.headers["x-user-name"];
-    const userEmail = req.headers["x-user-email"];
 
     if (!userId) {
       res.status(401).json({
@@ -345,14 +511,23 @@ export const registerMember = async (
       return;
     }
 
-    let playerData: any = {
+    const playerData: any = {
       eventId,
       userId,
-      name: userName || "",
-      email: userEmail || "",
       registrationTime: new Date(),
       userType: "member",
+      isPenalty: false,
+      penaltyFee: 0,
+      shuttlecockCount: 0,
     };
+
+    if (typeof req.headers["x-user-name"] === "string") {
+      playerData.name = req.headers["x-user-name"] as string;
+    }
+
+    if (typeof req.headers["x-user-email"] === "string") {
+      playerData.email = req.headers["x-user-email"] as string;
+    }
 
     const userPhoneNumber = req.headers["x-user-phone"] as string;
     if (userPhoneNumber) {
@@ -512,8 +687,8 @@ export const registerMember = async (
         eventId,
         playerId: player.id,
         userId: player.userId || undefined,
-        playerName: req.headers["x-user-name"] as string,
-        playerEmail: req.headers["x-user-email"] as string,
+        playerName: player.name || undefined,
+        playerEmail: player.email || undefined,
         status: playerData.status as "registered" | "waitlist",
         userType: "member",
       });
@@ -636,6 +811,60 @@ export const promoteWaitlist = async (
   }
 };
 
+/**
+ * @swagger
+ * /api/registration/events/{id}/guests:
+ *   post:
+ *     summary: Register a guest player for an event
+ *     description: Admin endpoint to register guest players. Requires admin privileges.
+ *     tags: [Registration]
+ *     parameters:
+ *       - $ref: '#/components/parameters/UserIdHeader'
+ *       - $ref: '#/components/parameters/UserRoleHeader'
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Event ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/RegisterGuestRequest'
+ *     responses:
+ *       201:
+ *         description: Guest registered successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Guest registered successfully"
+ *                 player:
+ *                   $ref: '#/components/schemas/Player'
+ *       400:
+ *         description: Bad request (validation error, player already registered, etc.)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       403:
+ *         description: Insufficient permissions (admin required)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
 export const registerGuest = async (
   req: ExtendedRequest,
   res: Response
@@ -673,18 +902,14 @@ export const registerGuest = async (
       return;
     }
 
-    const statusVal: any = (event as any).status;
-    const isActive =
-      typeof statusVal === "string"
-        ? statusVal === "active"
-        : statusVal?.state === "active";
-    if (!isActive) {
+    const registrationGate = isRegistrationOpenFromStatus(event.status);
+    if (!registrationGate.accepting) {
       res.status(400).json({
         code: "REGISTRATION_CLOSED",
         message: "Event is not accepting registrations",
         details: {
           eventId,
-          status: event.status,
+          status: registrationGate.state ?? event.status,
           isAcceptingRegistrations: false,
         },
       });
@@ -730,6 +955,9 @@ export const registerGuest = async (
       registrationTime: new Date(),
       createdBy: adminUserId,
       userType: "guest",
+      isPenalty: false,
+      penaltyFee: 0,
+      shuttlecockCount: 0,
     };
     if (registrationData.startTime)
       playerData.startTime = registrationData.startTime;

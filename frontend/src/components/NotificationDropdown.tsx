@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { Bell, X, CheckCircle, UserPlus, UserMinus, Clock, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -25,7 +25,7 @@ const NotificationDropdown = () => {
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Mock notifications based on the event data provided
-  const mockNotifications: Notification[] = [
+  const mockNotifications = useMemo((): Notification[] => [
     // User notifications
     {
       id: '1',
@@ -98,7 +98,7 @@ const NotificationDropdown = () => {
       priority: 'low',
       userType: 'admin'
     }
-  ];
+  ], []);
 
   useEffect(() => {
     // Filter notifications based on user type
@@ -108,7 +108,7 @@ const NotificationDropdown = () => {
       (!isAdmin && notif.userType === 'user')
     );
     setNotifications(filtered);
-  }, [isAdmin]);
+  }, [isAdmin, mockNotifications]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {

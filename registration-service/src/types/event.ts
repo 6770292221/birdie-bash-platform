@@ -1,4 +1,10 @@
-export type EventStatus = 'active' | 'canceled' | 'completed';
+export type EventStatus =
+  | 'upcoming'
+  | 'in_progress'
+  | 'calculating'
+  | 'awaiting_payment'
+  | 'completed'
+  | 'canceled';
 export type PlayerStatus = 'registered' | 'waitlist' | 'canceled';
 export type UserType = 'member' | 'guest';
 
@@ -55,7 +61,7 @@ export interface IPlayer {
   registrationTime: Date;
   status: PlayerStatus;
   userType: UserType;
+  isPenalty: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
-

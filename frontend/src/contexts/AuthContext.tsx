@@ -41,10 +41,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const response = await apiClient.getCurrentUser();
 
         if (response.success && response.data) {
-          const raw = response.data as any;
+          const raw = response.data as User & { skill?: string };
           const userData: UserProfile = {
-            ...(raw as any),
-            skillLevel: (raw as any)?.skill as SkillLevel,
+            ...raw,
+            skillLevel: raw.skill as SkillLevel,
           };
           setUser(userData);
           setSession({ user: userData });
@@ -73,10 +73,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // Set token in API client
         apiClient.setToken(response.data.token);
 
-        const raw = response.data.user as any;
+        const raw = response.data.user as User & { skill?: string };
         const userData: UserProfile = {
-          ...(raw as any),
-          skillLevel: (raw as any)?.skill as SkillLevel,
+          ...raw,
+          skillLevel: raw.skill as SkillLevel,
         };
         setUser(userData);
         setSession({ user: userData });
@@ -116,10 +116,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // Auto login after successful registration
         apiClient.setToken(response.data.token);
 
-        const raw = response.data.user as any;
+        const raw = response.data.user as User & { skill?: string };
         const userData: UserProfile = {
-          ...(raw as any),
-          skillLevel: (raw as any)?.skill as SkillLevel,
+          ...raw,
+          skillLevel: raw.skill as SkillLevel,
         };
         setUser(userData);
         setSession({ user: userData });
@@ -147,6 +147,33 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUser(null);
       setSession(null);
       apiClient.clearToken();
+
+      // Clear all caches
+      try {
+        // Clear localStorage (except for essential data like language preference)
+        const keysToKeep = ['language', 'theme']; // Keep essential preferences
+        const allKeys = Object.keys(localStorage);
+        allKeys.forEach(key => {
+          if (!keysToKeep.includes(key)) {
+            localStorage.removeItem(key);
+          }
+        });
+
+        // Clear sessionStorage completely
+        sessionStorage.clear();
+
+        // Clear browser cache if Cache API is available
+        if ('caches' in window) {
+          const cacheNames = await caches.keys();
+          await Promise.all(
+            cacheNames.map(cacheName => caches.delete(cacheName))
+          );
+        }
+
+        console.log('Cache cleared successfully on logout');
+      } catch (cacheError) {
+        console.error('Error clearing cache on logout:', cacheError);
+      }
     }
   };
 

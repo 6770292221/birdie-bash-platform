@@ -7,9 +7,11 @@ import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useForm } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Check, AlertCircle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { useLanguage } from '@/contexts/LanguageContext';
+import LanguageToggle from '@/components/LanguageToggle';
 
 interface RegisterFormData {
   name: string;
@@ -26,13 +28,14 @@ const RegisterForm = () => {
   const [isLoading, setIsLoading] = useState(false);
   const { register } = useAuth();
   const { toast } = useToast();
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const form = useForm<RegisterFormData>();
 
   const onSubmit = async (data: RegisterFormData) => {
     if (data.password !== data.confirmPassword) {
       form.setError('confirmPassword', {
-        message: 'รหัสผ่านไม่ตรงกัน'
+        message: t('validation.password_mismatch')
       });
       return;
     }
@@ -52,14 +55,27 @@ const RegisterForm = () => {
     
     if (error) {
       toast({
-        title: "ลงทะเบียนไม่สำเร็จ",
+        title: (
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-red-600" />
+            {t('register.failed')}
+          </div>
+        ),
         description: error,
-        variant: "destructive",
+        className: 'border-red-200 bg-red-50',
+        duration: 5000
       });
     } else {
       toast({
-        title: "ลงทะเบียนสำเร็จ",
-        description: "สามารถเข้าสู่ระบบได้ทันที",
+        title: (
+          <div className="flex items-center gap-2">
+            <Check className="w-4 h-4 text-green-600" />
+            {t('register.success')}
+          </div>
+        ),
+        description: t('register.success_desc'),
+        className: 'border-green-200 bg-green-50',
+        duration: 4000
       });
       navigate('/login');
     }
@@ -68,13 +84,23 @@ const RegisterForm = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold text-gray-900">
-            ลงทะเบียน
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-green-50 py-12 px-4 sm:px-6 lg:px-8 flex items-center justify-center relative">
+      {/* Language Toggle */}
+      <div className="absolute top-4 right-4 z-10">
+        <LanguageToggle />
+      </div>
+      <Card className="w-full max-w-md bg-white/80 backdrop-blur-md border-0 shadow-2xl overflow-hidden">
+        <div className="h-1 bg-gradient-to-r from-blue-600 via-purple-600 to-teal-600" />
+        <CardHeader className="text-center pb-6">
+          <CardTitle className="text-3xl font-bold text-gray-900 flex items-center justify-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-r from-green-500 to-teal-500 flex items-center justify-center">
+              <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+              </svg>
+            </div>
+            {t('register.title')}
           </CardTitle>
-          <p className="text-gray-600">สร้างบัญชีใหม่เพื่อจองคอร์ทแบดมินตัน</p>
+          <p className="text-gray-700 text-base">{t('register.subtitle')}</p>
         </CardHeader>
         <CardContent>
           <Form {...form}>
@@ -83,18 +109,18 @@ const RegisterForm = () => {
                 control={form.control}
                 name="name"
                 rules={{
-                  required: 'กรุณากรอกชื่อ',
+                  required: t('validation.required_name'),
                   minLength: {
                     value: 2,
-                    message: 'ชื่อต้องมีอย่างน้อย 2 ตัวอักษร'
+                    message: t('validation.min_name')
                   }
                 }}
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>ชื่อ</FormLabel>
+                    <FormLabel>{t('register.name')}</FormLabel>
                     <FormControl>
                       <Input
-                        placeholder="ชื่อของคุณ"
+                        placeholder={t('name_placeholder')}
                         {...field}
                       />
                     </FormControl>
@@ -107,29 +133,29 @@ const RegisterForm = () => {
                 control={form.control}
                 name="skill"
                 rules={{
-                  required: 'กรุณาเลือกระดับความเชี่ยวชาญ'
+                  required: t('validation.required_skill')
                 }}
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>ระดับความเชี่ยวชาญ</FormLabel>
+                    <FormLabel>{t('register.skill_level')}</FormLabel>
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="เลือกระดับความเชี่ยวชาญ" />
+                          <SelectValue placeholder={t('skill_placeholder')} />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="BG">0 - มือเปาะแปะ (BG - Beginner)</SelectItem>
-                        <SelectItem value="BG">1 - มือหน้าบ้าน (BG - Beginner)</SelectItem>
-                        <SelectItem value="S">2 - มือ S- (เริ่มเข้าฟอร์มมาตรฐาน)</SelectItem>
-                        <SelectItem value="S">3 - มือ S (ฟอร์มมาตรฐาน)</SelectItem>
-                        <SelectItem value="N">4 - มือ N (ฟอร์มเท่นื่อขึ้น)</SelectItem>
-                        <SelectItem value="P">5 - มือ P- (ฟอร์มใกล้เคียงโค้ชทั่วไป)</SelectItem>
-                        <SelectItem value="P">6 - มือ P (ฟอร์มโค้ชทั่วไป)</SelectItem>
-                        <SelectItem value="P">7 - มือ P+ (ฟอร์มนักกีฬาอภิวัฒน์/จังหวัด)</SelectItem>
-                        <SelectItem value="C">8 - มือ C (ฟอร์มนักกีฬาเขต/เยาวชนทีมชาติ)</SelectItem>
-                        <SelectItem value="B">9 - มือ B (ฟอร์มนักกีฬาทีมชาติระดับประเทศ)</SelectItem>
-                        <SelectItem value="A">10 - มือ A (ฟอร์มนักกีฬาทีมชาติระดับนานาชาติ)</SelectItem>
+                        <SelectItem value="BG">{t('skill.beginner_0')}</SelectItem>
+                        <SelectItem value="BG">{t('skill.beginner_1')}</SelectItem>
+                        <SelectItem value="S">{t('skill.s_minus')}</SelectItem>
+                        <SelectItem value="S">{t('skill.s')}</SelectItem>
+                        <SelectItem value="N">{t('skill.n')}</SelectItem>
+                        <SelectItem value="P">{t('skill.p_minus')}</SelectItem>
+                        <SelectItem value="P">{t('skill.p')}</SelectItem>
+                        <SelectItem value="P">{t('skill.p_plus')}</SelectItem>
+                        <SelectItem value="C">{t('skill.c')}</SelectItem>
+                        <SelectItem value="B">{t('skill.b')}</SelectItem>
+                        <SelectItem value="A">{t('skill.a')}</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -141,19 +167,19 @@ const RegisterForm = () => {
                 control={form.control}
                 name="email"
                 rules={{
-                  required: 'กรุณากรอกอีเมล',
+                  required: t('validation.required_email'),
                   pattern: {
                     value: /^\S+@\S+$/,
-                    message: 'รูปแบบอีเมลไม่ถูกต้อง'
+                    message: t('validation.invalid_email')
                   }
                 }}
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>อีเมล</FormLabel>
+                    <FormLabel>{t('login.email')}</FormLabel>
                     <FormControl>
                       <Input
                         type="email"
-                        placeholder="example@email.com"
+                        placeholder={t('email_placeholder')}
                         {...field}
                       />
                     </FormControl>
@@ -166,20 +192,20 @@ const RegisterForm = () => {
                 control={form.control}
                 name="phoneNumber"
                 rules={{
-                  required: 'กรุณากรอกหมายเลขโทรศัพท์',
+                  required: t('validation.required_phone'),
                   pattern: {
                     value: /^[0-9]{10}$/,
-                    message: 'หมายเลขโทรศัพท์ต้องเป็นตัวเลข 10 หลัก'
+                    message: t('validation.invalid_phone')
                   }
                 }}
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>หมายเลขโทรศัพท์</FormLabel>
+                    <FormLabel>{t('register.phone')}</FormLabel>
                     <FormControl>
                       <Input
                         type="tel"
                         inputMode="numeric"
-                        placeholder="0812345678"
+                        placeholder={t('phone_placeholder')}
                         maxLength={10}
                         {...field}
                         value={field.value || ''}
@@ -201,20 +227,20 @@ const RegisterForm = () => {
                 control={form.control}
                 name="password"
                 rules={{
-                  required: 'กรุณากรอกรหัสผ่าน',
+                  required: t('validation.required_password'),
                   minLength: {
                     value: 6,
-                    message: 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร'
+                    message: t('validation.min_password')
                   }
                 }}
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>รหัสผ่าน</FormLabel>
+                    <FormLabel>{t('login.password')}</FormLabel>
                     <FormControl>
                       <div className="relative">
                         <Input
                           type={showPassword ? 'text' : 'password'}
-                          placeholder="••••••••"
+                          placeholder={t('password_placeholder')}
                           {...field}
                         />
                         <button
@@ -239,16 +265,16 @@ const RegisterForm = () => {
                 control={form.control}
                 name="confirmPassword"
                 rules={{
-                  required: 'กรุณายืนยันรหัสผ่าน'
+                  required: t('validation.required_confirm_password')
                 }}
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>ยืนยันรหัสผ่าน</FormLabel>
+                    <FormLabel>{t('register.confirm_password')}</FormLabel>
                     <FormControl>
                       <div className="relative">
                         <Input
                           type={showConfirmPassword ? 'text' : 'password'}
-                          placeholder="••••••••"
+                          placeholder={t('password_placeholder')}
                           {...field}
                         />
                         <button
@@ -269,23 +295,36 @@ const RegisterForm = () => {
                 )}
               />
 
-              <Button 
-                type="submit" 
-                className="w-full"
+              <Button
+                type="submit"
+                className="w-full h-12 text-base font-bold bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 text-white shadow-lg hover:shadow-xl transition-all duration-200"
                 disabled={isLoading}
               >
-                {isLoading ? 'กำลังลงทะเบียน...' : 'ลงทะเบียน'}
+                {isLoading ? (
+                  <>
+                    <svg className="w-5 h-5 mr-2 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    {t('register.registering')}
+                  </>
+                ) : (
+                  t('register.title')
+                )}
               </Button>
 
-              <div className="text-center space-y-2">
-                <p className="text-sm text-gray-600">
-                  มีบัญชีอยู่แล้ว?{' '}
-                  <Link to="/login" className="text-blue-600 hover:text-blue-500 font-medium">
-                    เข้าสู่ระบบ
+              <div className="text-center space-y-4">
+                <p className="text-sm text-gray-700">
+                  {t('register.have_account')}{' '}
+                  <Link to="/login" className="text-blue-600 hover:text-blue-700 font-bold transition-colors">
+                    {t('register.login_link')}
                   </Link>
                 </p>
-                <Link to="/" className="text-sm text-gray-600 hover:text-gray-500">
-                  กลับหน้าหลัก
+                <Link
+                  to="/"
+                  className="inline-block text-sm text-gray-600 hover:text-gray-800 py-2 px-6 rounded-xl bg-gray-100/60 hover:bg-gray-200/70 border border-gray-200/50 transition-all duration-200 font-medium"
+                >
+                  {t('nav.back_home')}
                 </Link>
               </div>
             </form>

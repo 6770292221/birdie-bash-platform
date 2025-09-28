@@ -48,14 +48,16 @@ const swaggerDefinition = {
           createdBy: { type: "string", description: "User ID who created the event", readOnly: true },
           updatedBy: { type: "string", description: "User ID who last updated the event", readOnly: true },
           status: {
-            type: "object",
-            properties: {
-              state: {
-                type: "string",
-                enum: ["active", "canceled", "completed"],
-              },
-              isAcceptingRegistrations: { type: "boolean" },
-            },
+            type: "string",
+            enum: [
+              "upcoming",
+              "in_progress",
+              "calculating",
+              "awaiting_payment",
+              "completed",
+              "canceled"
+            ],
+            description: "Current event status",
           },
           capacity: {
             type: "object",
@@ -69,6 +71,8 @@ const swaggerDefinition = {
           },
           shuttlecockPrice: { type: "number" },
           courtHourlyRate: { type: "number" },
+          penaltyFee: { type: "number", minimum: 0, description: "Penalty fee amount" },
+          shuttlecockCount: { type: "number", minimum: 0, description: "Number of shuttlecocks" },
           courts: {
             type: "array",
             items: {
@@ -99,11 +103,6 @@ const swaggerDefinition = {
           eventName: { type: "string" },
           eventDate: { type: "string" },
           location: { type: "string" },
-          status: { 
-            type: "string",
-            enum: ["active", "canceled", "completed"],
-            default: "active"
-          },
           capacity: {
             type: "object",
             required: ["maxParticipants"],
@@ -114,19 +113,22 @@ const swaggerDefinition = {
           },
           shuttlecockPrice: { type: "number" },
           courtHourlyRate: { type: "number" },
+          penaltyFee: { type: "number", minimum: 0, description: "Penalty fee amount (optional)" },
+          shuttlecockCount: { type: "number", minimum: 0, description: "Number of shuttlecocks (optional)" },
           courts: { $ref: "#/components/schemas/Event/properties/courts" },
         },
         example: {
           eventName: "Weekend Badminton Meetup",
           eventDate: "2025-09-21",
           location: "Bangkok Sports Complex",
-          status: "active",
           capacity: {
             maxParticipants: 20,
             waitlistEnabled: true
           },
           shuttlecockPrice: 25,
           courtHourlyRate: 200,
+          penaltyFee: 50,
+          shuttlecockCount: 10,
           courts: [
             {
               courtNumber: 1,
@@ -151,6 +153,8 @@ const swaggerDefinition = {
           capacity: { $ref: "#/components/schemas/Event/properties/capacity" },
           shuttlecockPrice: { type: "number" },
           courtHourlyRate: { type: "number" },
+          penaltyFee: { type: "number", minimum: 0, description: "Penalty fee amount" },
+          shuttlecockCount: { type: "number", minimum: 0, description: "Number of shuttlecocks" },
           courts: { $ref: "#/components/schemas/Event/properties/courts" },
         },
       },
@@ -158,7 +162,17 @@ const swaggerDefinition = {
         type: "object",
         properties: {
           id: { type: "string" },
-          status: { type: "string", enum: ["active", "canceled", "completed"] },
+          status: { 
+            type: "string", 
+            enum: [
+              "upcoming",
+              "in_progress",
+              "calculating",
+              "awaiting_payment",
+              "completed",
+              "canceled"
+            ] 
+          },
           maxParticipants: { type: "number" },
           currentParticipants: { type: "number" },
           availableSlots: { type: "number" },

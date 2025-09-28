@@ -18,32 +18,13 @@ export enum TransactionType {
   AUTHORIZATION = 'authorization'
 }
 
+// Main Settlement interface - includes player data
 export interface ISettlement extends Document {
   settlementId: string;
-  eventId: string;
-  eventData: {
-    courts: Array<{
-      courtNumber: number;
-      startTime: string;
-      endTime: string;
-      hourlyRate: number;
-    }>;
-    costs: {
-      shuttlecockPrice: number;
-      shuttlecockCount: number;
-      penaltyFee: number;
-    };
-    currency: string;
-  };
-  calculationResults: Array<{
+  eventId: string; // Reference to Event Service
+  // Player settlement breakdown data
+  breakdown: Array<{
     playerId: string;
-    userId?: string;
-    startTime: string;
-    endTime: string;
-    status: 'played' | 'canceled' | 'waitlist';
-    role: 'member' | 'admin' | 'guest';
-    name?: string;
-    phoneNumber?: string;
     courtFee: number;
     shuttlecockFee: number;
     penaltyFee: number;
@@ -59,6 +40,7 @@ export interface ISettlement extends Document {
       }>;
     };
   }>;
+  // Summary statistics
   totalCollected: number;
   successfulCharges: number;
   failedCharges: number;
@@ -66,6 +48,35 @@ export interface ISettlement extends Document {
   createdAt: Date;
   updatedAt: Date;
   lastStatusChange: Date;
+}
+
+// Individual player settlement result
+export interface ISettlementPlayer extends Document {
+  settlementId: string; // Reference to Settlement
+  playerId: string; // Reference to Registration Service player
+
+  // Calculation results
+  courtFee: number;
+  shuttlecockFee: number;
+  penaltyFee: number;
+  totalAmount: number;
+
+  // Payment information
+  paymentId?: string;
+  paymentStatus?: string;
+
+  // Calculation breakdown
+  breakdown: {
+    hoursPlayed: number;
+    courtSessions: Array<{
+      hour: string;
+      playersInSession: number;
+      costPerPlayer: number;
+    }>;
+  };
+
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface ISettlementTransaction {
@@ -96,33 +107,13 @@ const SettlementTransactionSchema: Schema = new Schema({
   metadata: { type: Schema.Types.Mixed }
 });
 
+// Settlement Schema - includes player data
 const SettlementSchema: Schema = new Schema({
   settlementId: { type: String, required: true, unique: true },
-  eventId: { type: String, required: true },
-  eventData: {
-    courts: [{
-      courtNumber: { type: Number, required: true },
-      startTime: { type: String, required: true },
-      endTime: { type: String, required: true },
-      hourlyRate: { type: Number, required: true }
-    }],
-    costs: {
-      shuttlecockPrice: { type: Number, required: true },
-      shuttlecockCount: { type: Number, required: true },
-      penaltyFee: { type: Number, required: true }
-    },
-    currency: { type: String, required: true, default: 'THB' }
-  },
-  calculationResults: [{
+  eventId: { type: String, required: true, index: true },
+  // Player settlement breakdown data
+  breakdown: [{
     playerId: { type: String, required: true },
-    userId: { type: String },
-    startTime: { type: String, required: true },
-    endTime: { type: String, required: true },
-    status: { type: String, required: true, enum: ['played', 'canceled', 'waitlist'] },
-    role: { type: String, required: true, enum: ['member', 'admin', 'guest'] },
-    name: { type: String },
-    phoneNumber: { type: String },
-    // Settlement calculation results
     courtFee: { type: Number, required: true },
     shuttlecockFee: { type: Number, required: true },
     penaltyFee: { type: Number, required: true },
@@ -140,6 +131,7 @@ const SettlementSchema: Schema = new Schema({
     },
     _id: false
   }],
+  // Summary statistics
   totalCollected: { type: Number, required: true },
   successfulCharges: { type: Number, default: 0 },
   failedCharges: { type: Number, default: 0 },
@@ -147,18 +139,50 @@ const SettlementSchema: Schema = new Schema({
     type: String,
     required: true,
     enum: Object.values(SettlementStatus),
-    default: SettlementStatus.PENDING
+    default: SettlementStatus.PENDING,
+    index: true
   },
   lastStatusChange: { type: Date, default: Date.now }
 }, {
   timestamps: true
 });
 
+// SettlementPlayer Schema - individual player calculation results
+const SettlementPlayerSchema: Schema = new Schema({
+  settlementId: { type: String, required: true, index: true },
+  playerId: { type: String, required: true, index: true },
+
+  // Calculation results
+  courtFee: { type: Number, required: true },
+  shuttlecockFee: { type: Number, required: true },
+  penaltyFee: { type: Number, required: true },
+  totalAmount: { type: Number, required: true },
+
+  // Payment information
+  paymentId: { type: String, index: true },
+  paymentStatus: { type: String, index: true },
+
+  // Calculation breakdown
+  breakdown: {
+    hoursPlayed: { type: Number, required: true },
+    courtSessions: [{
+      hour: { type: String, required: true },
+      playersInSession: { type: Number, required: true },
+      costPerPlayer: { type: Number, required: true },
+      _id: false
+    }]
+  }
+}, {
+  timestamps: true
+});
+
 // Indexes for better query performance
-SettlementSchema.index({ eventId: 1 });
-SettlementSchema.index({ status: 1 });
-SettlementSchema.index({ createdAt: -1 });
 SettlementSchema.index({ settlementId: 1 });
-SettlementSchema.index({ 'calculationResults.playerId': 1 });
+SettlementSchema.index({ createdAt: -1 });
+
+SettlementPlayerSchema.index({ settlementId: 1, playerId: 1 }, { unique: true });
+SettlementPlayerSchema.index({ paymentId: 1 });
+SettlementPlayerSchema.index({ createdAt: -1 });
 
 export const Settlement = mongoose.model<ISettlement>('Settlement', SettlementSchema);
+export const SettlementPlayer = mongoose.model<ISettlementPlayer>('SettlementPlayer', SettlementPlayerSchema);
