@@ -18,24 +18,8 @@ export interface RefundRequest {
 export interface PaymentConfirmation {
   payment_id: string;
 }
-
-export enum PaymentStatus {
-  PENDING = 'pending',
-  PROCESSING = 'processing',
-  COMPLETED = 'completed',
-  FAILED = 'failed',
-  REFUNDED = 'refunded',
-  PARTIALLY_REFUNDED = 'partially_refunded',
-  CANCELLED = 'cancelled'
-}
-
-export enum PaymentType {
-  EVENT_REGISTRATION = 'event_registration',
-  MEMBERSHIP_FEE = 'membership_fee',
-  GUEST_FEE = 'guest_fee',
-  DEPOSIT = 'deposit',
-  PENALTY = 'penalty'
-}
+import { PAYMENT_STATUS, PaymentStatusValue } from '../constants/paymentStatus';
+export type PaymentStatus = PaymentStatusValue;
 
 export interface PaymentResponse {
   id: string;

@@ -2,7 +2,8 @@ import * as grpc from '@grpc/grpc-js';
 import * as protoLoader from '@grpc/proto-loader';
 import path from 'path';
 import { prisma } from './config/paymentDatabase';
-import { PaymentStatus, TransactionType } from './models/Payment';
+import { TransactionType } from './models/Payment';
+import { PAYMENT_STATUS, isPaymentStatus, PaymentStatusValue } from './constants/paymentStatus';
 import { omiseService } from './services/omiseService';
 import { v4 as uuidv4 } from 'uuid';
 import { Logger } from './utils/logger';
@@ -18,58 +19,15 @@ const packageDefinition = protoLoader.loadSync(PROTO_PATH, {
 });
 const paymentProto = grpc.loadPackageDefinition(packageDefinition).payment as any;
 
-// Convert PaymentStatus enum from proto to internal
-function convertStatusFromProto(protoStatus: number): PaymentStatus {
-  const statusMap = {
-    0: PaymentStatus.PENDING,
-    1: PaymentStatus.PROCESSING,
-    2: PaymentStatus.COMPLETED,
-    3: PaymentStatus.FAILED,
-    4: PaymentStatus.CANCELLED,
-  } as const;
-  return statusMap[protoStatus as keyof typeof statusMap] || PaymentStatus.PENDING;
-}
-
-// Convert PaymentStatus enum to proto format
-function convertStatusToProto(status: PaymentStatus): number {
-  switch (status) {
-    case PaymentStatus.PENDING: return 0;
-    case PaymentStatus.PROCESSING: return 1;
-    case PaymentStatus.COMPLETED: return 2;
-    case PaymentStatus.FAILED: return 3;
-    case PaymentStatus.CANCELLED: return 4;
-    default: return 0;
+// Validate status strictly (now using string constants)
+function validateStatusOrThrow(input: any): PaymentStatusValue {
+  if (input === undefined || input === null) {
+    throw new Error('Status value is required');
   }
-}
-
-// Accept either a numeric enum index or a string enum name and return PaymentStatus
-function parseStatusInput(input: any): PaymentStatus | undefined {
-  if (input === undefined || input === null) return undefined;
-  const raw = String(input).trim();
-
-  // If already matches a PaymentStatus key
-  const upper = raw.toUpperCase();
-  if ((PaymentStatus as any)[upper]) {
-    return (PaymentStatus as any)[upper] as PaymentStatus;
-  }
-
-  // If it's a number fall back to legacy proto numeric mapping
-  const maybeNum = Number(raw);
-  if (!isNaN(maybeNum)) {
-    return convertStatusFromProto(maybeNum);
-  }
-
-  return undefined;
-}
-
-// Validate status strictly (must be one of enum values or valid legacy numeric)
-function validateStatusOrThrow(input: any): PaymentStatus {
-  const parsed = parseStatusInput(input);
-  if (!parsed) {
-    const valid = Object.values(PaymentStatus).join(', ');
-    throw new Error(`Invalid status value. Allowed: ${valid}`);
-  }
-  return parsed;
+  const raw = String(input).trim().toUpperCase();
+  if (isPaymentStatus(raw)) return raw;
+  const valid = Object.values(PAYMENT_STATUS).join(', ');
+  throw new Error(`Invalid status value. Allowed: ${valid}`);
 }
 
 // gRPC service implementations
@@ -145,7 +103,7 @@ const grpcService = {
           playerId: request.player_id,
           amount: request.amount,
           currency: currency.toLowerCase(),
-          status: PaymentStatus.PENDING,
+          status: PAYMENT_STATUS.PENDING,
           description: request.description || null,
           paymentMethod: (request.payment_method || 'PROMPT_PAY'),
           qrCodeUri: omiseCharge.source?.scannable_code?.image?.download_uri || null,
@@ -156,7 +114,7 @@ const grpcService = {
               id: uuidv4(),
               type: TransactionType.charge,
               amount: request.amount,
-              status: PaymentStatus.PENDING,
+              status: PAYMENT_STATUS.PENDING,
               transactionId: omiseCharge.id,
               timestamp: new Date()
             }
@@ -167,7 +125,7 @@ const grpcService = {
 
       const response = {
         id: paymentId,
-        status: convertStatusToProto(payment.status),
+  status: payment.status,
         amount: payment.amount,
         currency: payment.currency,
         qr_code_uri: payment.qrCodeUri || '',
@@ -220,7 +178,7 @@ const grpcService = {
 
       const response = {
         payment_id: payment.id,
-        status: convertStatusToProto(payment.status),
+  status: payment.status,
         amount: payment.amount,
         currency: payment.currency,
         event_id: payment.eventId,
@@ -231,7 +189,7 @@ const grpcService = {
           id: tx.id,
           type: 0, // only 'charge'
           amount: tx.amount,
-          status: convertStatusToProto(tx.status),
+          status: tx.status,
           transaction_id: tx.transactionId,
           timestamp: tx.timestamp.toISOString()
         }))
@@ -281,7 +239,7 @@ const grpcService = {
       const response = {
         payments: payments.map((p) => ({
           payment_id: p.id,
-          status: convertStatusToProto(p.status),
+          status: p.status,
           amount: p.amount,
           currency: p.currency,
           event_id: p.eventId,
@@ -334,7 +292,7 @@ const grpcService = {
         payments: payments.map((p) => ({
           player_id: p.playerId,
           amount: p.amount,
-          status: convertStatusToProto(p.status)
+          status: p.status
         }))
       };
 

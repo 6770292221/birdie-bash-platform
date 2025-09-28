@@ -1,4 +1,5 @@
-import { PrismaClient, PaymentStatus, TransactionType } from '@prisma/client';
+import { PrismaClient, TransactionType } from '@prisma/client';
+import { PAYMENT_STATUS, PaymentStatusValue } from '../constants/paymentStatus';
 import { Logger } from '../utils/logger';
 import { OmiseWebhookEvent, WebhookResponse } from '../types/payment';
 import { Request, Response } from 'express';
@@ -10,7 +11,7 @@ export interface WebhookProcessingResult {
   success: boolean;
   message: string;
   paymentId?: string;
-  updatedStatus?: PaymentStatus;
+  updatedStatus?: PaymentStatusValue;
   error?: string;
 }
 
@@ -162,19 +163,19 @@ export class WebhookService {
     }
 
     // Only update if payment is not already completed
-    if (payment.status === 'COMPLETED') {
+  if (payment.status === PAYMENT_STATUS.COMPLETED) {
       Logger.info('Payment already completed', { payment_id: payment.id });
       return {
         success: true,
         message: 'Payment already completed',
         paymentId: payment.id,
-        updatedStatus: 'COMPLETED' as PaymentStatus
+  updatedStatus: PAYMENT_STATUS.COMPLETED
       };
     }
 
     // Idempotency: if a COMPLETED transaction already exists for this charge, skip creating another
     const existingCompletedTx = await prisma.paymentTransaction.findFirst({
-      where: { paymentId: payment.id, transactionId: chargeId, status: 'COMPLETED' }
+  where: { paymentId: payment.id, transactionId: chargeId, status: PAYMENT_STATUS.COMPLETED }
     });
 
     let updatedPayment;
@@ -184,13 +185,13 @@ export class WebhookService {
       updatedPayment = await prisma.payment.update({
         where: { id: payment.id },
         data: {
-          status: 'COMPLETED',
+          status: PAYMENT_STATUS.COMPLETED,
           transactions: {
             create: {
               id: uuidv4(),
               type: 'charge',
               amount: payment.amount,
-              status: 'COMPLETED',
+              status: PAYMENT_STATUS.COMPLETED,
               transactionId: chargeId,
               timestamp: new Date()
             }
@@ -211,7 +212,7 @@ export class WebhookService {
       success: true,
       message: 'Payment completed successfully',
       paymentId: updatedPayment.id,
-      updatedStatus: 'COMPLETED' as PaymentStatus
+  updatedStatus: PAYMENT_STATUS.COMPLETED
     };
   }
 
@@ -239,19 +240,19 @@ export class WebhookService {
 
     // Idempotency: avoid duplicate FAILED transaction
     const existingFailedTx = await prisma.paymentTransaction.findFirst({
-      where: { paymentId: payment.id, transactionId: chargeId, status: 'FAILED' }
+  where: { paymentId: payment.id, transactionId: chargeId, status: PAYMENT_STATUS.FAILED }
     });
 
     const updatedPayment = await prisma.payment.update({
       where: { id: payment.id },
       data: {
-        status: 'FAILED',
+  status: PAYMENT_STATUS.FAILED,
         transactions: existingFailedTx ? undefined : {
           create: {
             id: uuidv4(),
             type: 'charge',
             amount: payment.amount,
-            status: 'FAILED',
+            status: PAYMENT_STATUS.FAILED,
             transactionId: chargeId,
             timestamp: new Date()
           }
@@ -271,7 +272,7 @@ export class WebhookService {
       success: true,
       message: 'Payment marked as failed',
       paymentId: updatedPayment.id,
-      updatedStatus: 'FAILED' as PaymentStatus
+  updatedStatus: PAYMENT_STATUS.FAILED
     };
   }
 
@@ -297,7 +298,7 @@ export class WebhookService {
 
     // Only create a pending transaction if one doesn't already exist for this charge
     const existingPendingTx = await prisma.paymentTransaction.findFirst({
-      where: { paymentId: payment.id, transactionId: chargeId, status: 'PENDING' }
+  where: { paymentId: payment.id, transactionId: chargeId, status: PAYMENT_STATUS.PENDING }
     });
 
     if (!existingPendingTx) {
@@ -307,7 +308,7 @@ export class WebhookService {
           paymentId: payment.id,
           type: 'charge',
           amount: payment.amount,
-          status: 'PENDING',
+          status: PAYMENT_STATUS.PENDING,
           transactionId: chargeId,
           timestamp: new Date()
         }
@@ -324,7 +325,7 @@ export class WebhookService {
       success: true,
       message: 'Payment pending status updated',
       paymentId: payment.id,
-      updatedStatus: 'PENDING' as PaymentStatus
+  updatedStatus: PAYMENT_STATUS.PENDING
     };
   }
 

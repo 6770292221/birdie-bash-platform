@@ -1,7 +1,8 @@
-import { Payment as PrismaPayment, PaymentTransaction as PrismaPaymentTransaction, PaymentStatus, TransactionType } from '@prisma/client';
+import { Payment as PrismaPayment, PaymentTransaction as PrismaPaymentTransaction, TransactionType } from '@prisma/client';
+import { PaymentStatusValue } from '../constants/paymentStatus';
 
 // Export Prisma types directly
-export { PaymentStatus, TransactionType };
+export { TransactionType };
 
 // Extended interfaces that include relations
 export interface IPayment extends PrismaPayment {
@@ -19,7 +20,7 @@ export interface CreatePaymentData {
   player_id: string;
   amount: number;
   currency?: string;
-  status?: PaymentStatus;
+  status?: PaymentStatusValue;
   payment_method?: string; // PROMPT_PAY default
   qr_code_uri?: string;
   omise_charge_id?: string;
@@ -33,6 +34,6 @@ export interface CreatePaymentTransactionData {
   payment_id: string;
   type: TransactionType;
   amount: number;
-  status: PaymentStatus;
+  status: PaymentStatusValue;
   transaction_id?: string;
 }

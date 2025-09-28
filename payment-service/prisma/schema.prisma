@@ -22,7 +22,7 @@ model Payment {
   qrCodeUri      String?  @map("qr_code_uri")
   omiseChargeId  String?  @map("omise_charge_id")
   omiseSourceId  String?  @map("omise_source_id")
-  status         PaymentStatus @default(PENDING)
+  status         String   @default("PENDING") @db.VarChar(32)
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
@@ -39,7 +39,7 @@ model PaymentTransaction {
   paymentId     String   @map("payment_id")
   type          TransactionType
   amount        Float
-  status        PaymentStatus
+  status        String   @db.VarChar(32)
   transactionId String?  @map("transaction_id")
   timestamp     DateTime @default(now())
 
@@ -50,16 +50,6 @@ model PaymentTransaction {
   @@index([timestamp])
   @@map("payment_transaction")
 }
-
-enum PaymentStatus {
-  PENDING
-  PROCESSING
-  COMPLETED
-  FAILED
-  CANCELLED
-}
-
-// Removed PaymentType to simplify schema per new requirements
 
 enum TransactionType {
   charge
