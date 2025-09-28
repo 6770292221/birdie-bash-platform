@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Calendar, MapPin, Users, Clock, Plus, LogOut, Shield, Menu, CreditCard, History, TrendingUp, X, Bell, ChevronDown, Loader2, Receipt, Sparkles, Trophy, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -92,10 +92,25 @@ const IndexContent = () => {
     setEventsLoading(false);
   };
 
+  // Initial load effect
   useEffect(() => {
-    fetchEvents();
+    if (user) {
+      fetchEvents();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, isAdmin, searchFilters]);
+  }, [user, isAdmin]);
+
+  // Debounced search effect
+  useEffect(() => {
+    if (!user) return;
+
+    const timeoutId = setTimeout(() => {
+      fetchEvents();
+    }, 300); // 300ms debounce
+
+    return () => clearTimeout(timeoutId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchFilters]);
 
   const statusCounts = useMemo(() => {
     const base: Record<EventStatusType, number> = {

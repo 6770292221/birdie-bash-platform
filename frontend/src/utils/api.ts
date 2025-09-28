@@ -227,6 +227,7 @@ class ApiClient {
     offset?: number;
     status?: string;
     date?: string;
+    eventName?: string;
   }): Promise<ApiResponse<{ events: unknown[] }>> {
     return this.request(`/api/events`, {
       params: {
@@ -234,6 +235,7 @@ class ApiClient {
         offset: params?.offset,
         status: params?.status,
         date: params?.date,
+        eventName: params?.eventName,
       },
     });
   }

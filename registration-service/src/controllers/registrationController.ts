@@ -421,26 +421,14 @@ export const cancelPlayerRegistration = async (
         return /^([01]?\d|2[0-3]):[0-5]\d$/.test(time) ? time : undefined;
       };
 
-      let effectiveStartTime = parseValidTime(player.startTime);
+      const courts = Array.isArray((event as any).courts) ? (event as any).courts : [];
+      const validStartMinutes = courts
+        .map((court: any) => parseValidTime(court?.startTime))
+        .filter((time: string | undefined): time is string => Boolean(time))
+        .map((time: string) => parseTimeToMinutes(time))
+        .filter((minutes: number | null): minutes is number => minutes !== null);
 
-      if (!effectiveStartTime) {
-        const courts = Array.isArray((event as any).courts) ? (event as any).courts : [];
-        type CourtTimeSummary = { time: string; minutes: number };
-
-        const earliest = courts
-          .map((court: any) => parseValidTime(court?.startTime))
-          .filter((time: string | undefined): time is string => Boolean(time))
-          .map((time: string): CourtTimeSummary => ({
-            time,
-            minutes: parseTimeToMinutes(time) ?? Number.POSITIVE_INFINITY,
-          }))
-          .filter((item: CourtTimeSummary) => Number.isFinite(item.minutes))
-          .sort((a: CourtTimeSummary, b: CourtTimeSummary) => a.minutes - b.minutes)[0];
-
-        if (earliest) {
-          effectiveStartTime = earliest.time;
-        }
-      }
+      const earliestMinutes = validStartMinutes.length > 0 ? Math.min(...validStartMinutes) : null;
 
       const eventDateParts = typeof event.eventDate === 'string' ? event.eventDate.split('-') : [];
       const year = Number(eventDateParts[0]);
@@ -448,26 +436,23 @@ export const cancelPlayerRegistration = async (
       const day = Number(eventDateParts[2]);
 
       if (
-        effectiveStartTime &&
+        earliestMinutes !== null &&
         !Number.isNaN(year) &&
         !Number.isNaN(month) &&
         !Number.isNaN(day)
       ) {
-        const totalMinutes = parseTimeToMinutes(effectiveStartTime);
-        if (typeof totalMinutes === 'number') {
-          const startHours = Math.floor(totalMinutes / 60);
-          const startMinutes = totalMinutes % 60;
+        const startHours = Math.floor(earliestMinutes / 60);
+        const startMinutes = earliestMinutes % 60;
 
-          const eventStartUtcMillis =
-            Date.UTC(year, month - 1, day, startHours, startMinutes) - BANGKOK_OFFSET_MILLIS;
-          const minutesUntilEvent = (eventStartUtcMillis - Date.now()) / (1000 * 60);
+        const eventStartUtcMillis =
+          Date.UTC(year, month - 1, day, startHours, startMinutes) - BANGKOK_OFFSET_MILLIS;
+        const minutesUntilEvent = (eventStartUtcMillis - Date.now()) / (1000 * 60);
 
-          if (
-            minutesUntilEvent <= PENALTY_CONFIG.CANCELLATION_PENALTY_MINUTES &&
-            minutesUntilEvent > 0
-          ) {
-            player.isPenalty = true;
-          }
+        if (
+          minutesUntilEvent <= PENALTY_CONFIG.CANCELLATION_PENALTY_MINUTES &&
+          minutesUntilEvent > 0
+        ) {
+          player.isPenalty = true;
         }
       }
     }
@@ -874,7 +859,6 @@ export const promoteWaitlist = async (
  *     tags: [Registration]
  *     parameters:
  *       - $ref: '#/components/parameters/UserIdHeader'
- *       - $ref: '#/components/parameters/UserRoleHeader'
  *       - in: path
  *         name: id
  *         required: true
@@ -937,7 +921,7 @@ export const registerGuest = async (
       });
       return;
     }
-    if (adminRole !== "admin") {
+    if (adminRole !== undefined && adminRole !== "admin") {
       res.status(403).json({
         code: "INSUFFICIENT_PERMISSIONS",
         message: "Admin privileges required to register guests",
