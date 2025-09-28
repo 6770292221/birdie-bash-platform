@@ -4,6 +4,7 @@ import { Logger } from '../utils/logger';
 import { OmiseWebhookEvent, WebhookResponse } from '../types/payment';
 import { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
+import axios from 'axios';
 
 const prisma = new PrismaClient();
 
@@ -208,11 +209,23 @@ export class WebhookService {
       currency: updatedPayment.currency
     });
 
+    // After marking a payment as completed, attempt to complete the parent event if applicable
+    if (updatedPayment.eventId) {
+      try {
+        await this.maybeMarkEventCompleted(updatedPayment.eventId);
+      } catch (err) {
+        Logger.warning('Failed to maybe mark event as completed', {
+          event_id: updatedPayment.eventId,
+          error: err instanceof Error ? err.message : err
+        });
+      }
+    }
+
     return {
       success: true,
       message: 'Payment completed successfully',
       paymentId: updatedPayment.id,
-  updatedStatus: PAYMENT_STATUS.COMPLETED
+	updatedStatus: PAYMENT_STATUS.COMPLETED
     };
   }
 
@@ -354,6 +367,59 @@ export class WebhookService {
       where: { transactionId: webhookEventId }
     });
     return !!existing;
+  }
+
+  /**
+   * Check if all payments linked to an event are COMPLETED. If yes, call Event Service to PATCH status.
+   * Idempotent: will only call if all are completed and we haven't attempted very recently.
+   */
+  private async maybeMarkEventCompleted(eventId: string): Promise<void> {
+    try {
+      // Fetch all payments for the event
+      const payments = await prisma.payment.findMany({ where: { eventId } });
+      if (!payments.length) {
+        Logger.warning('No payments found for event when attempting completion', { event_id: eventId });
+        return;
+      }
+
+      // If any payment not COMPLETED -> exit early
+      const allCompleted = payments.every(p => p.status === PAYMENT_STATUS.COMPLETED);
+      if (!allCompleted) {
+        Logger.info('Not all payments completed for event yet', {
+          event_id: eventId,
+          total: payments.length,
+          completed: payments.filter(p => p.status === PAYMENT_STATUS.COMPLETED).length
+        });
+        return;
+      }
+
+      const baseUrl = process.env.EVENT_SERVICE_URL?.replace(/\/$/, '');
+      if (!baseUrl) {
+        Logger.warning('EVENT_SERVICE_URL not configured; cannot PATCH event status');
+        return;
+      }
+
+      const url = `${baseUrl}/api/events/${eventId}`;
+      Logger.info('All payments completed; attempting to mark event completed', { event_id: eventId, url });
+
+      try {
+        const response = await axios.patch(url, { status: 'completed' }, { timeout: 5000 });
+        Logger.success('Event status update PATCH sent to Event Service', {
+          event_id: eventId,
+          status: 'completed',
+          http_status: response.status
+        });
+      } catch (httpErr: any) {
+        Logger.error('Failed to PATCH event status to Event Service', {
+          event_id: eventId,
+          error: httpErr?.message,
+          response_status: httpErr?.response?.status,
+          response_data: httpErr?.response?.data
+        });
+      }
+    } catch (err) {
+      Logger.error('Error during maybeMarkEventCompleted', err);
+    }
   }
 }
 
