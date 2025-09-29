@@ -23,7 +23,7 @@ const MatchingPage = () => {
   useEffect(() => {
     const load = async () => {
       if (!user) return;
-      const res = await apiClient.getEvents({ limit: 50, offset: 0 });
+      const res = await apiClient.getEvents({ status: 'in_progress', limit: 50, offset: 0 });
       if (res.success) {
         const list = (res.data as any).events || (res.data as any) || [];
         setEvents(list);
@@ -94,7 +94,7 @@ const MatchingPage = () => {
                 <Select value={selectedId} onValueChange={setSelectedId}>
                   <SelectTrigger>
                     <SelectValue placeholder="เลือกอีเวนต์จากชื่อ" />
-                  </SelectTrigger>
+                  </SelectTrigger>                 
                   <SelectContent>
                     {events.map((e) => (
                       <SelectItem key={e.id} value={e.id}>

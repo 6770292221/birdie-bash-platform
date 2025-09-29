@@ -248,12 +248,26 @@ async function logGameStart(
 
 // ---------- presenter ----------
 function serializeEventForClient(e: Event) {
-  const findName = (id: string) =>
-    e.players.find((p) => p.id === id)?.name ?? null;
+  const findName = (id: string) => {
+    const player = e.players.find((p) => p.id === id);
+    const name = player?.name ?? null;
+    
+    // 🔍 เพิ่ม log เพื่อดู
+    console.log(`[findName] Player ID: ${id}`);
+    console.log(`[findName] Player found:`, player);
+    console.log(`[findName] Name result:`, name);
+    
+    return name;
+  };
+
+  console.log(`[serializeEventForClient] All players:`, e.players.map(p => ({
+    id: p.id,
+    name: p.name,
+    email: (p as any).email
+  })));
 
   return {
     id: e.id,
-    // ส่ง startTime/endTime ของคอร์ท (HH:mm) ออกไปเสมอ
     courts: e.courts.map((c) => ({
       id: c.id,
       currentGameId: c.currentGameId ?? null,
@@ -270,17 +284,30 @@ function serializeEventForClient(e: Event) {
     queue: e.queue
       .map((pid) => {
         const p = e.players.find((x) => x.id === pid);
-        return p ? { ...p, runtime: getRt(e, pid) } : undefined;
+        return p ? { 
+          ...p, 
+          name: p.name,
+          runtime: getRt(e, pid) 
+        } : undefined;
       })
       .filter(Boolean),
-    players: e.players.map((p) => ({ ...p, runtime: getRt(e, p.id) })),
+    players: e.players.map((p) => ({ 
+      ...p, 
+      name: p.name,
+      runtime: getRt(e, p.id) 
+    })),
     games: e.games.map((g) => ({
       ...g,
-      // playerIds -> [{id, name}]
-      playerIds: g.playerIds.map((id) => ({ id, name: findName(id) })),
+      playerIds: g.playerIds.map((id) => ({ 
+        id, 
+        name: findName(id)
+      })),
     })),
   };
 }
+
+// ...existing code...
+
 
 // ---------- service ----------
 export const MatchingService = {

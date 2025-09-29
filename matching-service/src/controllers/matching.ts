@@ -94,9 +94,37 @@ async function buildPlayers(
 ): Promise<Player[]> {
   const players: Player[] = [];
   for (const r of regs) {
+
     let display = (r.name as string) || null;
-    if (!display && r.userId) display = await getUserName(r.userId, auth);
-    if (!display) display = r.email || r.phoneNumber || r.playerId;
+    
+    // ถ้า r.name เป็น email หรือไม่มีชื่อ ให้ไปหาชื่อจริงจาก userId
+    if (!display || display.includes('@')) {
+      if (r.userId) {
+        console.log(`🔍 Fetching name for userId: ${r.userId}`);
+        const realName = await getUserName(r.userId, auth);
+        if (realName && realName.trim()) {
+          display = realName;
+          console.log(`✅ Got real name: ${realName}`);
+        }
+      }
+    }
+    
+    // ถ้ายังไม่มีชื่อ ใช้ fallback (แต่ไม่ใช้ email)
+    if (!display || display.includes('@')) {
+      // ใช้ส่วนหน้า @ ของ email แทน email เต็ม
+      if (r.email) {
+        display = r.email.split('@')[0];
+        console.log(`📧 Using email prefix: ${display}`);
+      } else if (r.phoneNumber) {
+        display = r.phoneNumber;
+        console.log(`📱 Using phone: ${display}`);
+      } else {
+        display = r.playerId;
+        console.log(`🆔 Using playerId: ${display}`);
+      }
+    }
+
+    console.log(`✅ Final display name: ${display}`);
 
     players.push({
       id: r.playerId,
