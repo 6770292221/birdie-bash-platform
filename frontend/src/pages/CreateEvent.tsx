@@ -6,7 +6,8 @@ import { apiClient } from '@/utils/api';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import LanguageToggle from '@/components/LanguageToggle';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Check, AlertCircle } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 // Minimal Event and Court shape expected by CreateEventForm props
 export interface Court { courtNumber: number; startTime: string; endTime: string; }
@@ -29,6 +30,7 @@ const CreateEventPage = () => {
   const { isAdmin } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { t } = useLanguage();
 
   if (!isAdmin) {
     return (
@@ -67,13 +69,43 @@ const CreateEventPage = () => {
 
       const res = await apiClient.createEvent(payload as any);
       if (res.success) {
-        toast({ title: 'สร้างอีเวนต์สำเร็จ', description: 'บันทึกข้อมูลเรียบร้อย' });
+        toast({
+          title: (
+            <div className="flex items-center gap-2">
+              <Check className="w-4 h-4 text-green-600" />
+              {t('create_event.success')}
+            </div>
+          ),
+          description: t('create_event.success_desc'),
+          className: 'border-green-200 bg-green-50',
+          duration: 4000
+        });
         navigate('/');
       } else {
-        toast({ title: 'สร้างอีเวนต์ไม่สำเร็จ', description: res.error || 'เกิดข้อผิดพลาด', variant: 'destructive' });
+        toast({
+          title: (
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-red-600" />
+              {t('create_event.failed')}
+            </div>
+          ),
+          description: res.error || t('create_event.failed_desc'),
+          className: 'border-red-200 bg-red-50',
+          duration: 5000
+        });
       }
     } catch (e: any) {
-      toast({ title: 'สร้างอีเวนต์ไม่สำเร็จ', description: e?.message || 'เกิดข้อผิดพลาด', variant: 'destructive' });
+      toast({
+        title: (
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-red-600" />
+            {t('create_event.failed')}
+          </div>
+        ),
+        description: e?.message || t('create_event.failed_desc'),
+        className: 'border-red-200 bg-red-50',
+        duration: 5000
+      });
     }
   };
 

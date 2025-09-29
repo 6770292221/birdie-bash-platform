@@ -12,9 +12,9 @@ export const env = {
   nodeEnv: process.env.NODE_ENV || 'development',
   mongoUri: req('MONGODB_URI'),
   rabbitUrl: req('RABBIT_URL'),
-  exchangeName: process.env.EXCHANGE_NAME || 'events',
-  routingKey: process.env.ROUTING_KEY || 'events.notification',
-  queueName: process.env.QUEUE_NAME || 'notification.events',
+  exchangeName: process.env.RABBIT_EXCHANGE || 'events',
+  routingKey: process.env.RABBIT_NOTIFY_BIND_KEY || 'event.#',
+  queueName: process.env.RABBIT_NOTIFY_QUEUE || 'events.notification',
   emailFrom: process.env.EMAIL_FROM || 'no-reply@example.com',
   smtp: {
     host: req('SMTP_HOST'),

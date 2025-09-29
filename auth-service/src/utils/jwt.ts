@@ -4,6 +4,8 @@ export interface JWTPayload {
   userId: string;
   email: string;
   role: string;
+  name: string;
+  phoneNumber?: string | null;
 }
 
 export const generateToken = (payload: JWTPayload): string => {

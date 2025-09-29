@@ -41,10 +41,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const response = await apiClient.getCurrentUser();
 
         if (response.success && response.data) {
-          const raw = response.data as any;
+          const raw = response.data as User & { skill?: string };
           const userData: UserProfile = {
-            ...(raw as any),
-            skillLevel: (raw as any)?.skill as SkillLevel,
+            ...raw,
+            skillLevel: raw.skill as SkillLevel,
           };
           setUser(userData);
           setSession({ user: userData });
@@ -73,10 +73,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // Set token in API client
         apiClient.setToken(response.data.token);
 
-        const raw = response.data.user as any;
+        const raw = response.data.user as User & { skill?: string };
         const userData: UserProfile = {
-          ...(raw as any),
-          skillLevel: (raw as any)?.skill as SkillLevel,
+          ...raw,
+          skillLevel: raw.skill as SkillLevel,
         };
         setUser(userData);
         setSession({ user: userData });
@@ -116,10 +116,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // Auto login after successful registration
         apiClient.setToken(response.data.token);
 
-        const raw = response.data.user as any;
+        const raw = response.data.user as User & { skill?: string };
         const userData: UserProfile = {
-          ...(raw as any),
-          skillLevel: (raw as any)?.skill as SkillLevel,
+          ...raw,
+          skillLevel: raw.skill as SkillLevel,
         };
         setUser(userData);
         setSession({ user: userData });

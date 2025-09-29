@@ -14,7 +14,7 @@ async function bootstrap() {
   app.use(express.json());
 
   app.use('/health', health);
-  app.use('/docs', docs); // Swagger UI
+  app.use('/api-docs', docs); // Swagger UI
   app.use('/test', testPublisher); // helper endpoint to push events
 
   app.listen(env.port, () => log.info(`HTTP listening on :${env.port}`));

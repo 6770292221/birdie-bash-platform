@@ -36,6 +36,8 @@ export const register = async (req: Request, res: Response, next: NextFunction):
       userId: (user._id as any).toString(),
       email: user.email,
       role: user.role,
+      name: user.name,
+      phoneNumber: user.phoneNumber ?? null,
     });
 
     res.status(201).json({
@@ -72,6 +74,8 @@ export const login = async (req: Request, res: Response, next: NextFunction): Pr
       userId: (user._id as any).toString(),
       email: user.email,
       role: user.role,
+      name: user.name,
+      phoneNumber: user.phoneNumber ?? null,
     });
 
     res.status(200).json({
@@ -115,6 +119,63 @@ export const getUserById = async (req: Request, res: Response, next: NextFunctio
         phoneNumber: user.phoneNumber,
         role: user.role,
       },
+    });
+  } catch (error) { next(error as any); }
+};
+
+export const getAllUsers = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { limit = '25', offset = '0', role } = req.query as {
+      limit?: string;
+      offset?: string;
+      role?: string;
+    };
+
+    const parsedLimit = (() => {
+      const value = parseInt(limit ?? '25', 10);
+      if (Number.isNaN(value)) return 25;
+      return Math.max(1, Math.min(100, value));
+    })();
+
+    const parsedOffset = (() => {
+      const value = parseInt(offset ?? '0', 10);
+      if (Number.isNaN(value)) return 0;
+      return Math.max(0, value);
+    })();
+
+    const filters: Record<string, unknown> = {};
+    if (typeof role === 'string' && role.trim()) {
+      filters.role = role.trim();
+    }
+
+    const [users, total] = await Promise.all([
+      User.find(filters)
+        .sort({ createdAt: -1 })
+        .skip(parsedOffset)
+        .limit(parsedLimit)
+        .select('email name skill phoneNumber role createdAt updatedAt'),
+      User.countDocuments(filters),
+    ]);
+
+    res.status(200).json({
+      message: 'Users retrieved successfully',
+      users: users.map((user) => ({
+        id: user._id as any,
+        email: user.email,
+        name: user.name,
+        skill: user.skill,
+        phoneNumber: user.phoneNumber,
+        role: user.role,
+        createdAt: (user as any).createdAt,
+        updatedAt: (user as any).updatedAt,
+      })),
+      pagination: {
+        total,
+        limit: parsedLimit,
+        offset: parsedOffset,
+        hasMore: parsedOffset + users.length < total,
+      },
+      filters: filters.role ? { role: filters.role } : undefined,
     });
   } catch (error) { next(error as any); }
 };
