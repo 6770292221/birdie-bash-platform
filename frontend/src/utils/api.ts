@@ -109,16 +109,7 @@ class ApiClient {
 
   private async request<T>(
     endpoint: string,
-<<<<<<< HEAD
-    options: {
-      method?: string;
-      data?: any;
-      params?: any;
-      headers?: Record<string, string>;
-    } = {}
-=======
     options: { method?: string; data?: unknown; params?: Record<string, unknown>; headers?: Record<string, string> } = {}
->>>>>>> main
   ): Promise<ApiResponse<T>> {
     try {
       const res = await this.http.request({
@@ -146,32 +137,23 @@ class ApiClient {
 
       // Only use details if there's no message
       if (!responseData?.message && responseData?.details) {
-        if (typeof responseData.details === "string") {
+        if (typeof responseData.details === 'string') {
           errorMessage = responseData.details;
-        } else if (typeof responseData.details === "object") {
+        } else if (typeof responseData.details === 'object') {
           // Extract specific error messages from details object
           const detailValues = Object.values(responseData.details);
           if (detailValues.length > 0) {
             // Find the first string value in details
-            const firstDetailMessage = detailValues.find(
-              (v) => typeof v === "string"
-            );
+            const firstDetailMessage = detailValues.find(v => typeof v === 'string');
             if (firstDetailMessage) {
               errorMessage = firstDetailMessage;
             } else {
               // If details contain nested objects, try to extract meaningful messages
               const nestedMessages = detailValues
-<<<<<<< HEAD
-                .filter((v) => typeof v === "object" && v !== null)
-                .map((obj) => {
-                  const objValues = Object.values(obj as any);
-                  return objValues.find((val) => typeof val === "string");
-=======
                 .filter(v => typeof v === 'object' && v !== null)
                 .map(obj => {
                   const objValues = Object.values(obj as Record<string, unknown>);
                   return objValues.find(val => typeof val === 'string');
->>>>>>> main
                 })
                 .filter(Boolean);
 
@@ -223,16 +205,8 @@ class ApiClient {
         message: res.data?.message,
       };
     } catch (err) {
-<<<<<<< HEAD
-      const axErr = err as AxiosError<any>;
-      const message =
-        (axErr.response?.data as any)?.message ||
-        axErr.message ||
-        "Network error";
-=======
       const axErr = err as AxiosError<{ message?: string; details?: unknown }>;
       const message = (axErr.response?.data as { message?: string })?.message || axErr.message || "Network error";
->>>>>>> main
       return { success: false, error: message };
     }
   }
@@ -277,10 +251,7 @@ class ApiClient {
     eventId: string,
     eventData: any
   ): Promise<ApiResponse<any>> {
-    return this.request(`/api/events/${eventId}`, {
-      method: "PATCH",
-      data: eventData,
-    });
+    return this.request(`/api/events/${eventId}`, { method: "PATCH", data: eventData });
   }
 
   async deleteEvent(eventId: string): Promise<ApiResponse<any>> {
@@ -317,11 +288,11 @@ class ApiClient {
     });
   }
 
-  async getUserRegistrations(params?: {
-    includeCanceled?: boolean;
-  }): Promise<ApiResponse<{ registrations: PlayerItem[] }>> {
+  async getUserRegistrations(
+    params?: { includeCanceled?: boolean }
+  ): Promise<ApiResponse<{ registrations: PlayerItem[] }>> {
     const query: Record<string, any> = {};
-    if (typeof params?.includeCanceled === "boolean") {
+    if (typeof params?.includeCanceled === 'boolean') {
       query.includeCanceled = params.includeCanceled;
     }
     return this.request(`/api/registration/users/registrations`, {
@@ -329,16 +300,10 @@ class ApiClient {
     });
   }
 
-  async cancelPlayer(
-    eventId: string,
-    playerId: string
-  ): Promise<ApiResponse<any>> {
-    return this.request(
-      `/api/registration/events/${eventId}/players/${playerId}/cancel`,
-      {
-        method: "POST",
-      }
-    );
+  async cancelPlayer(eventId: string, playerId: string): Promise<ApiResponse<any>> {
+    return this.request(`/api/registration/events/${eventId}/players/${playerId}/cancel`, {
+      method: "POST",
+    });
   }
 
   async registerForEvent(
@@ -365,32 +330,20 @@ class ApiClient {
     return this.request(`/api/registration/events/${eventId}/registrations`);
   }
 
-<<<<<<< HEAD
-  // Settlement endpoints
-  async issueSettlement(
-    eventId: string,
-    data: {
-      currency?: string;
-      shuttlecockCount?: number;
-      absentPlayerIds?: string[];
-    }
-  ): Promise<ApiResponse<any>> {
-=======
     // Settlement endpoints
   async issueSettlement(eventId: string, data: {
     currency?: string;
     shuttlecockCount?: number;
     absentPlayerIds?: string[];
   }): Promise<ApiResponse<unknown>> {
->>>>>>> main
     return this.request(`/api/settlements/issue`, {
       method: "POST",
       data: {
         event_id: eventId,
-        currency: data.currency || "THB",
+        currency: data.currency || 'THB',
         shuttlecockCount: data.shuttlecockCount || 0,
-        absentPlayerIds: data.absentPlayerIds || [],
-      },
+        absentPlayerIds: data.absentPlayerIds || []
+      }
     });
   }
 
@@ -411,33 +364,11 @@ class ApiClient {
         // Mock data - ใช้ player IDs จริงจากข้อมูล API ล่าสุด
         const mockPayments = [
           // Guest ไม่มีค่าปรับ (isPenalty: false)
-          {
-            playerId: "68d7b9e9744183cc4927b403",
-            playerName: "mind_guest",
-            amount: 250,
-            status: "paid",
-            paidAt: "2024-01-15T10:30:00Z",
-            hasPenalty: false,
-          },
+          { playerId: "68d7b9e9744183cc4927b403", playerName: "mind_guest", amount: 250, status: "paid", paidAt: "2024-01-15T10:30:00Z", hasPenalty: false },
           // Guest มีค่าปรับ (isPenalty: true)
-          {
-            playerId: "68d7b9f2744183cc4927b40e",
-            playerName: "mind_guest_2",
-            amount: 300,
-            status: "pending",
-            paidAt: null,
-            hasPenalty: true,
-            penaltyAmount: 50,
-          },
+          { playerId: "68d7b9f2744183cc4927b40e", playerName: "mind_guest_2", amount: 300, status: "pending", paidAt: null, hasPenalty: true, penaltyAmount: 50 },
           // Member ยังไม่จ่าย ไม่มีค่าปรับ (isPenalty: false)
-          {
-            playerId: "68d7ba9f744183cc4927b41e",
-            playerName: "mind2@gmail.com",
-            amount: 250,
-            status: "pending",
-            paidAt: null,
-            hasPenalty: false,
-          },
+          { playerId: "68d7ba9f744183cc4927b41e", playerName: "mind2@gmail.com", amount: 250, status: "pending", paidAt: null, hasPenalty: false },
         ];
         resolve({
           success: true,
@@ -446,22 +377,15 @@ class ApiClient {
             totalAmount: 1000,
             paidAmount: 500,
             pendingAmount: 500,
-            payments: mockPayments,
-          },
+            payments: mockPayments
+          }
         });
       }, 500); // Simulate network delay
     });
   }
 
   // Mark player as paid endpoint (mocked for now)
-<<<<<<< HEAD
-  async markPlayerAsPaid(
-    eventId: string,
-    playerId: string
-  ): Promise<ApiResponse<any>> {
-=======
   async markPlayerAsPaid(eventId: string, playerId: string): Promise<ApiResponse<unknown>> {
->>>>>>> main
     // Mock response for now - replace with real API call later
     return new Promise((resolve) => {
       setTimeout(() => {
@@ -471,8 +395,8 @@ class ApiClient {
             playerId,
             status: "paid",
             paidAt: new Date().toISOString(),
-            message: "Player marked as paid successfully",
-          },
+            message: "Player marked as paid successfully"
+          }
         });
       }, 300);
     });
@@ -492,6 +416,7 @@ class ApiClient {
     return this.request(`/api/event/venues/${venueId}`);
   }
 
+  // Matching service integration
   private async matchingRequest<T>(
     endpoint: string,
     options: { method?: string; data?: any } = {}
@@ -541,16 +466,13 @@ class ApiClient {
     });
   }
 
-  async getMatchingStatus(eventId: string): Promise<ApiResponse<any>> {
-    return this.matchingRequest(`/api/matchings/${eventId}/status`);
-  }
-
   async closeMatching(eventId: string): Promise<ApiResponse<any>> {
     return this.matchingRequest("/api/matchings/close", {
       method: "POST",
       data: { eventId }
     });
   }
+
 }
 
 // Create and export singleton instance
