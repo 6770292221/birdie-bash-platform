@@ -19,6 +19,10 @@ export interface Player {
 export interface Court {
   id: string;
   currentGameId?: string | null;
+  availableStart?: ISODate | null;
+  availableEnd?: ISODate | null;  
+  startHHmm?: string | null;     
+  endHHmm?: string | null;        
 }
 
 export interface Game {

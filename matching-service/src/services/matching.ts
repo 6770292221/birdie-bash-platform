@@ -11,12 +11,21 @@ import { GameLog } from "../models/matchingLog";
 import { Store } from "../models/store";
 
 // ---------- time helpers ----------
-const toMs = (iso: string) => new Date(iso).getTime();
+const toMs = (iso: string | null | undefined) =>
+  iso ? new Date(iso).getTime() : Number.NaN;
 const nowIso = () => new Date().toISOString();
 
 function isAvailableAt(p: Player, tIso: string) {
   const t = toMs(tIso);
   return toMs(p.availableStart) <= t && t < toMs(p.availableEnd);
+}
+const isoToHHmm = (iso?: string | null) => (iso ? iso.slice(11, 16) : null);
+
+function courtActiveAt(c: Court, tIso: string) {
+  // ถ้าไม่ได้กำหนดช่วงเวลาในคอร์ท ถือว่าเปิดตลอด
+  if (!("availableStart" in (c as any)) || !(c as any).availableStart || !(c as any).availableEnd) return true;
+  const t = toMs(tIso);
+  return toMs((c as any).availableStart) <= t && t < toMs((c as any).availableEnd);
 }
 
 function randomShuffle<T>(arr: T[]): T[] {
@@ -120,15 +129,7 @@ function removeFromQueue(e: Event, ids: string[]) {
   e.queue = e.queue.filter((pid) => !rm.has(pid));
 }
 
-// ---------- preferred helpers ----------
-type PreferredItem = { playerId?: string; userId?: string; name?: string };
-
-function moveToFrontQueue(e: Event, playerIds: string[]) {
-  const uniq = Array.from(new Set(playerIds));
-  const rm = new Set(uniq);
-  e.queue = e.queue.filter((pid) => !rm.has(pid));
-  e.queue = [...uniq, ...e.queue];
-}
+// ---------- fairness ----------
 function fairnessKey(e: Event, id: string, at: string) {
   const rt = getRt(e, id);
   const ws = rt.waitingSince ?? at;
@@ -201,6 +202,10 @@ function markPlaying(e: Event, players: Player[], at: string) {
   }
 }
 
+// สำหรับ controller ที่อยากแปลง HH:mm เป็น ISO ก่อนส่งเข้ามา
+export const hhmmToISO = (eventDate: string, hhmm?: string | null) =>
+  hhmm ? `${eventDate}T${hhmm}:00+07:00` : null;
+
 // ---------- logging ----------
 async function logGameStart(
   e: Event,
@@ -248,7 +253,19 @@ function serializeEventForClient(e: Event) {
 
   return {
     id: e.id,
-    courts: e.courts,
+    // ส่ง startTime/endTime ของคอร์ท (HH:mm) ออกไปเสมอ
+    courts: e.courts.map((c) => ({
+      id: c.id,
+      currentGameId: c.currentGameId ?? null,
+      startTime:
+        (c as any).startHHmm ??
+        isoToHHmm((c as any).availableStart) ??
+        null,
+      endTime:
+        (c as any).endHHmm ??
+        isoToHHmm((c as any).availableEnd) ??
+        null,
+    })),
     createdAt: e.createdAt,
     queue: e.queue
       .map((pid) => {
@@ -259,6 +276,7 @@ function serializeEventForClient(e: Event) {
     players: e.players.map((p) => ({ ...p, runtime: getRt(e, p.id) })),
     games: e.games.map((g) => ({
       ...g,
+      // playerIds -> [{id, name}]
       playerIds: g.playerIds.map((id) => ({ id, name: findName(id) })),
     })),
   };
@@ -268,13 +286,46 @@ function serializeEventForClient(e: Event) {
 export const MatchingService = {
   defaultCourts: 2,
 
-  createEvent(id: string, courts: number, players: Player[]): Event {
+  /**
+   * รองรับ 2 รูปแบบ:
+   *  - createEvent(id, numberOfCourts, players)
+   *  - createEvent(id, courtsArray, players)  // courts มี availableStart/availableEnd (ISO) และ/หรือ startHHmm/endHHmm
+   */
+  createEvent(
+    id: string,
+    courts:
+      | number
+      | Array<
+          Pick<
+            Court,
+            "id" | "availableStart" | "availableEnd" | "startHHmm" | "endHHmm"
+          >
+        >,
+    players: Player[]
+  ): Event {
+    const normCourts: Court[] =
+      typeof courts === "number"
+        ? Array.from({ length: courts }, (_, i) => ({
+            id: `c${i + 1}`,
+            currentGameId: null,
+            // ไม่มีเวลา → ถือว่าเปิดตลอด
+            availableStart: undefined as any,
+            availableEnd: undefined as any,
+            startHHmm: undefined as any,
+            endHHmm: undefined as any,
+          }))
+        : courts.map((c) => ({
+            id: c.id,
+            currentGameId: null,
+            availableStart: (c as any).availableStart,
+            availableEnd: (c as any).availableEnd,
+            startHHmm: (c as any).startHHmm,
+            endHHmm: (c as any).endHHmm,
+          })) as any;
+
     const e: Event = {
       id,
-      courts: Array.from({ length: courts }, (_, i) => ({
-        id: `c${i + 1}`,
-        currentGameId: null,
-      })),
+      courts: normCourts,
       createdAt: nowIso(),
       queue: [],
       games: [],
@@ -310,6 +361,8 @@ export const MatchingService = {
     reorderQueueByFairness(e, at);
 
     for (const court of e.courts) {
+      // ข้ามคอร์ทที่ไม่เปิดตามเวลานี้
+      if (!courtActiveAt(court, at)) continue;
       if (court.currentGameId) continue;
 
       const anchors = dequeueUpTo(e, 2, at);
@@ -345,6 +398,12 @@ export const MatchingService = {
     if (!e) throw new Error("Event not found");
     const court = e.courts.find((c) => c.id === courtId);
     if (!court) throw new Error("Court not found");
+
+    // ถ้าเวลานี้คอร์ทไม่เปิด ก็ไม่ทำอะไร (หรือจะ throw ก็ได้)
+    if (!courtActiveAt(court, at)) {
+      Store.upsertEvent(e);
+      return serializeEventForClient(e) as any;
+    }
 
     // end current game
     if (court.currentGameId) {
@@ -405,8 +464,10 @@ export const MatchingService = {
     }
     purgeQueue(e, at);
 
-    // refill all courts
+    // refill all courts (เฉพาะคอร์ทที่เปิดเวลา at)
     for (const court of e.courts) {
+      if (!courtActiveAt(court, at)) continue;
+
       const anchors = dequeueUpTo(e, 2, at);
       let group: Player[] | null = null;
 
@@ -435,22 +496,19 @@ export const MatchingService = {
     return serializeEventForClient(e) as any;
   },
 
-  /** ปิดงาน/กลับบ้าน: ปิดทุกเกมที่ยังเล่นอยู่, ล้างคิว, เซ็ตทุกคน Idle */
+  /** ปิดงาน/กลับบ้าน */
   async closeEvent(eventId: string, at: string) {
     const e = Store.getEvent(eventId);
     if (!e) throw new Error("Event not found");
 
-    // ปิดทุกคอร์ท (ถ้ามีเกมค้าง)
     for (const court of e.courts) {
       if (!court.currentGameId) continue;
       const g = e.games.find((x) => x.id === court.currentGameId)!;
       if (!g.endTime) g.endTime = at;
 
       const players = takeById(g.playerIds, e.players);
-      // เขียน log ปิดเกม
       await logGameStart(e, court.id, g, [], [...e.queue], [...e.queue], "close", at);
 
-      // reset runtime
       for (const p of players) {
         const rt = getRt(e, p.id);
         rt.state = RuntimeState.Idle;
@@ -459,7 +517,6 @@ export const MatchingService = {
       court.currentGameId = null;
     }
 
-    // ล้างคิว และรีเซ็ตทุกคนเป็น Idle
     e.queue = [];
     for (const p of e.players) {
       const rt = getRt(e, p.id);
