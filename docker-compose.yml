@@ -192,6 +192,19 @@ services:
     networks:
       - birdie-network
 
+  # Payment Service
+  payment-service:
+    build: ./payment-service
+    container_name: birdie-payment-service
+    restart: unless-stopped
+    ports:
+      - "3002:3002"   # HTTP endpoint
+      - "50051:50051" # gRPC endpoint
+    env_file:
+      - ./payment-service/.env.docker
+    networks:
+      - birdie-network
+
 volumes:
   mongodb_data:
     driver: local
