@@ -5,6 +5,7 @@ import { OmiseWebhookEvent, WebhookResponse } from '../types/payment';
 import { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import axios from 'axios';
+import { publishPaymentCompletedEvent } from '../queue/publisher';
 
 const prisma = new PrismaClient();
 
@@ -208,6 +209,19 @@ export class WebhookService {
       amount: updatedPayment.amount,
       currency: updatedPayment.currency
     });
+
+    // Publish payment.completed event (fire-and-forget) only when we actually have completed status
+    if (updatedPayment.status === PAYMENT_STATUS.COMPLETED) {
+      publishPaymentCompletedEvent({
+        payment_id: updatedPayment.id,
+        event_id: updatedPayment.eventId || null,
+        player_id: updatedPayment.playerId,
+        amount: updatedPayment.amount,
+        currency: updatedPayment.currency || 'thb',
+        payment_status: updatedPayment.status,
+        updated_at: updatedPayment.updatedAt.toISOString()
+      }).catch(err => Logger.error('Failed to publish payment.completed event', err));
+    }
 
     // After marking a payment as completed, attempt to complete the parent event if applicable
     if (updatedPayment.eventId) {

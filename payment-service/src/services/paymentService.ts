@@ -4,6 +4,7 @@ import { omiseService } from './omiseService';
 import { TransactionType } from '../models/Payment';
 import { v4 as uuidv4 } from 'uuid';
 import { Logger } from '../utils/logger';
+import { publishPaymentCreatedEvent } from '../queue/publisher';
 
 export interface IssueChargeInput {
   player_id: string;
@@ -83,6 +84,18 @@ export async function issueCharge(input: IssueChargeInput): Promise<IssueChargeR
   });
 
   Logger.success('IssueCharge stored payment record', { paymentId });
+
+  // Fire-and-forget publish of payment.created event
+  publishPaymentCreatedEvent({
+    payment_id: paymentId,
+    event_id: payment.eventId || null,
+    player_id: payment.playerId,
+    amount: payment.amount,
+    currency: (payment.currency ?? currency.toLowerCase()),
+    qr_code_uri: payment.qrCodeUri || null,
+    payment_status: payment.status,
+    created_at: payment.createdAt.toISOString()
+  }).catch(err => Logger.error('Failed to publish payment.created event', err));
 
   return {
     id: paymentId,
