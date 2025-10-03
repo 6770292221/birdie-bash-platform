@@ -2,10 +2,8 @@ import * as grpc from '@grpc/grpc-js';
 import * as protoLoader from '@grpc/proto-loader';
 import path from 'path';
 import { prisma } from './config/paymentDatabase';
-import { TransactionType } from './models/Payment';
 import { PAYMENT_STATUS, isPaymentStatus, PaymentStatusValue } from './constants/paymentStatus';
-import { omiseService } from './services/omiseService';
-import { v4 as uuidv4 } from 'uuid';
+import { issueCharge } from './services/paymentService';
 import { Logger } from './utils/logger';
 
 // Load the protobuf definition
@@ -35,114 +33,16 @@ const grpcService = {
   async issueCharges(call: grpc.ServerUnaryCall<any, any>, callback: grpc.sendUnaryData<any>) {
     try {
       const request = call.request;
-      
-      Logger.grpc('IssueCharges request received', {
+      Logger.grpc('IssueCharges request received', request);
+      const result = await issueCharge({
         player_id: request.player_id,
         amount: request.amount,
-        currency: request.currency,
         event_id: request.event_id,
-        payment_method: request.payment_method
+        currency: request.currency,
+        payment_method: request.payment_method,
+        description: request.description
       });
-
-      // Validate required fields
-      if (!request.player_id || !request.amount || !request.event_id) {
-        Logger.error('Invalid IssueCharges request - missing required fields', {
-          player_id: request.player_id,
-          amount: request.amount,
-          event_id: request.event_id
-        });
-        callback({
-          code: grpc.status.INVALID_ARGUMENT,
-          message: 'Missing required fields: player_id, event_id and amount are required'
-        });
-        return;
-      }
-
-      // Convert amount to satang (smallest unit for THB)
-      const amountInSatang = Math.round(request.amount * 100);
-      const currency = (request.currency || 'THB').toUpperCase();
-
-      Logger.info('Creating Omise source', {
-        amount: amountInSatang,
-        currency: currency
-      });
-
-      // Step 1: Create Omise source for PromptPay
-      const omiseSource = await omiseService.createSource(amountInSatang, currency);
-      
-      Logger.success('Omise source created', {
-        sourceId: omiseSource.id,
-        type: omiseSource.type,
-        amount: omiseSource.amount
-      });
-
-      // Step 2: Create Omise charge using the source
-      const omiseCharge = await omiseService.createCharge(
-        amountInSatang, 
-        currency, 
-        omiseSource.id
-      );
-
-      Logger.success('Omise charge created', {
-        chargeId: omiseCharge.id,
-        status: omiseCharge.status,
-        amount: omiseCharge.amount
-      });
-
-      // Step 3: Display QR code in console
-      if (omiseCharge.source?.scannable_code?.image?.download_uri) {
-        await omiseService.displayQRCode(omiseCharge.source.scannable_code.image.download_uri);
-      }
-
-      // Step 4: Create payment record in database
-      const paymentId = uuidv4();
-      const payment = await prisma.payment.create({
-        data: {
-          id: paymentId,
-          eventId: request.event_id,
-          playerId: request.player_id,
-          amount: request.amount,
-          currency: currency.toLowerCase(),
-          status: PAYMENT_STATUS.PENDING,
-          description: request.description || null,
-          paymentMethod: (request.payment_method || 'PROMPT_PAY'),
-          qrCodeUri: omiseCharge.source?.scannable_code?.image?.download_uri || null,
-          omiseChargeId: omiseCharge.id,
-          omiseSourceId: omiseSource.id,
-          transactions: {
-            create: {
-              id: uuidv4(),
-              type: TransactionType.charge,
-              amount: request.amount,
-              status: PAYMENT_STATUS.PENDING,
-              transactionId: omiseCharge.id,
-              timestamp: new Date()
-            }
-          }
-        },
-        include: { transactions: true }
-      });
-
-      const response = {
-        id: paymentId,
-  status: payment.status,
-        amount: payment.amount,
-        currency: payment.currency,
-        qr_code_uri: payment.qrCodeUri || '',
-        created_at: payment.createdAt.toISOString(),
-        updated_at: payment.updatedAt.toISOString()
-      };
-
-      Logger.success('IssueCharges completed successfully with Omise', {
-        paymentId,
-        omiseChargeId: omiseCharge.id,
-        omiseSourceId: omiseSource.id,
-        amount: payment.amount,
-        currency: payment.currency,
-        qrCodeUri: omiseCharge.source?.scannable_code?.image?.download_uri
-      });
-
-      callback(null, response);
+      callback(null, result);
     } catch (error) {
       Logger.error('gRPC issueCharges error', error);
       callback({

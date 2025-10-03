@@ -4,6 +4,7 @@ import cors from "cors";
 import { connectPaymentDB } from "./config/paymentDatabase";
 import { errorHandler } from "./middleware/errorHandler";
 import { startGrpcServer } from "./grpcServer";
+import { startPaymentIssueConsumer } from './consumers/paymentIssueConsumer';
 import { Logger } from "./utils/logger";
 import { webhookService } from "./services/webhookService";
 
@@ -43,6 +44,9 @@ connectPaymentDB();
 
 // Start gRPC server
 startGrpcServer();
+
+// Start RabbitMQ consumer for payment.issue queue (fire & forget)
+startPaymentIssueConsumer().catch(err => Logger.error('Failed to start payment issue consumer', err));
 
 // Start HTTP server (only for health checks)
 app.listen(BASE_PORT, () => {
