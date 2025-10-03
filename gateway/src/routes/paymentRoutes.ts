@@ -1,5 +1,5 @@
 import { Express } from 'express';
-import { requireAuth } from '../middleware/auth';
+import { requireAuth, allowPublicIfEventScoped } from '../middleware/auth';
 import { getPlayerPayments, getEventPayments } from '../controllers/paymentController';
 
 // Registers payment related REST routes backed by gRPC PaymentService.
@@ -30,7 +30,8 @@ export function registerPaymentRoutes(app: Express) {
    *       200:
    *         description: List of payments
    */
-  app.get('/api/payments/player/:playerId', requireAuth as any, getPlayerPayments as any);
+  // Publicly accessible if eventId query param is present; otherwise requires auth
+  app.get('/api/payments/player/:playerId', allowPublicIfEventScoped as any, getPlayerPayments as any);
 
   /**
    * @swagger

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
@@ -26,9 +26,13 @@ const PaymentsPage = () => {
   const { toast } = useToast();
   const { t } = useLanguage();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const urlEventId = searchParams.get('eventId') || '';
+  const urlPlayerId = searchParams.get('playerId') || '';
 
-  const [events, setEvents] = useState<any[]>([]);
-  const [eventId, setEventId] = useState<string>('');
+  type EventSummary = { id: string; eventName?: string; eventDate?: string };
+  const [events, setEvents] = useState<EventSummary[]>([]);
+  const [eventId, setEventId] = useState<string>(urlEventId || '');
   type Capacity = number | { maxParticipants?: number; currentParticipants?: number; availableSlots?: number; waitlistEnabled?: boolean };
   type CourtInterval = { courtNumber?: number; startTime?: string; endTime?: string };
   type EventDetail = { id: string; eventName?: string; eventDate?: string; capacity?: Capacity; courts?: CourtInterval[] };
@@ -37,9 +41,10 @@ const PaymentsPage = () => {
   const [payableIds, setPayableIds] = useState<string[]>([]);
   const [payment, setPayment] = useState<PlayerPayment>(null);
   const [loadingPayment, setLoadingPayment] = useState(false);
+  const isGuestView = !user && !!urlEventId && !!urlPlayerId;
 
   // Helper: determine if a registration belongs to the current user
-  const isMyRegistration = useCallback((p: PlayerItem | any) => {
+  const isMyRegistration = useCallback((p: Partial<PlayerItem> | undefined | null) => {
     if (!user || !p) return false;
     // 1) Strong match by userId (member registrations)
     if (p.userId && user.id && String(p.userId) === String(user.id)) return true;
@@ -54,16 +59,35 @@ const PaymentsPage = () => {
   }, [user]);
 
   useEffect(() => {
+    if (isGuestView) return; // Do not load events in guest view
     const load = async () => {
       const res = await apiClient.getEvents({ limit: 50, offset: 0 });
       if (res.success) {
-        const list = (res.data as any).events || (res.data as any) || [];
+        const raw = res.data;
+        const listUnknown: unknown[] = (raw && typeof raw === 'object' && raw !== null && 'events' in (raw as Record<string, unknown>) && Array.isArray((raw as { events: unknown[] }).events))
+          ? (raw as { events: unknown[] }).events
+          : Array.isArray(raw)
+            ? (raw as unknown[])
+            : [];
+        const list: EventSummary[] = listUnknown
+          .filter((e): e is { id: string; eventName?: string; eventDate?: string } => !!e && typeof e === 'object' && 'id' in (e as Record<string, unknown>))
+          .map((e) => {
+            const obj = e as Record<string, unknown>;
+            return {
+              id: String(obj.id),
+              eventName: typeof obj.eventName === 'string' ? obj.eventName : undefined,
+              eventDate: typeof obj.eventDate === 'string' ? obj.eventDate : undefined,
+            };
+          });
         setEvents(list);
-        if (user && list.length) {
+        // If URL specifies eventId, prefer that
+        if (urlEventId) {
+          setEventId(urlEventId);
+        } else if (user && list.length) {
           const checks = await Promise.all(
-            list.map(async (e: any) => {
+            list.map(async (e: EventSummary) => {
               const r = await apiClient.getPlayers(e.id, { status: 'registered', limit: 200, offset: 0 });
-              const mine = r.success ? ((r.data as any).players || []).some((p: any) => isMyRegistration(p)) : false;
+              const mine = r.success ? ((r.data?.players || []) as PlayerItem[]).some((p) => isMyRegistration(p)) : false;
               return mine ? e.id : null;
             })
           );
@@ -77,9 +101,10 @@ const PaymentsPage = () => {
       }
     };
     load();
-  }, [user, isMyRegistration, toast]);
+  }, [user, isMyRegistration, toast, urlEventId, isGuestView]);
 
   useEffect(() => {
+    if (isGuestView) return; // Do not load event detail/players in guest view
     const loadDetail = async () => {
       if (!eventId) { setEventDetail(null); setPlayers([]); return; }
       const [dRes, pRes] = await Promise.all([
@@ -96,10 +121,10 @@ const PaymentsPage = () => {
         })();
         setEventDetail(detail);
       }
-  setPlayers(pRes.success ? ((pRes.data as any).players || []) : []);
+      setPlayers(pRes.success ? (pRes.data?.players || []) : []);
     };
     loadDetail();
-  }, [eventId]);
+  }, [eventId, isGuestView]);
 
   const [myReg, setMyReg] = useState<PlayerItem | null>(null);
 
@@ -113,9 +138,9 @@ const PaymentsPage = () => {
       // Fallback: query all registrations for this user and match by eventId
       const regsResp = await apiClient.getUserRegistrations();
       if (regsResp.success) {
-        const regs = (regsResp.data as any)?.registrations || [];
-        const match = regs.find((r: any) => r.eventId === eventId) || null;
-        if (!cancelled) setMyReg(match);
+        const regs = (regsResp.data?.registrations || []) as Array<PlayerItem & { eventId?: string }>
+        const match = regs.find((r) => r.eventId === eventId) || null;
+        if (!cancelled) setMyReg(match as PlayerItem | null);
       } else {
         if (!cancelled) setMyReg(null);
       }
@@ -127,19 +152,23 @@ const PaymentsPage = () => {
   // Fetch player's payment for the selected event
   useEffect(() => {
     const fetchPayment = async () => {
-      if (!user || !myReg?.playerId || !eventId) { setPayment(null); console.log('No user or registration found', { user, myReg, eventId }); return; }
+      const effectivePlayerId = urlPlayerId || myReg?.playerId;
+      if ((!user && !urlPlayerId) || !effectivePlayerId || !eventId) {
+        setPayment(null);
+        return;
+      }
       setLoadingPayment(true);
-      const resp = await apiClient.getPlayerPayments(myReg.playerId, { eventId });
+      const resp = await apiClient.getPlayerPayments(effectivePlayerId, { eventId });
       setLoadingPayment(false);
       if (resp.success) {
-        const list = (resp.data as any)?.payments || [];
+        const list = resp.data?.payments || [];
         setPayment(list.length ? list[0] : null);
       } else {
         setPayment(null);
       }
     };
     fetchPayment();
-  }, [user, myReg, eventId]);
+  }, [user, myReg, eventId, urlPlayerId]);
 
   const participantCount = useMemo(() => {
     const total = players.length;
@@ -168,7 +197,8 @@ const PaymentsPage = () => {
     return start && end ? `${start} - ${end}` : '';
   }, [eventDetail]);
 
-  if (!user) {
+  // Allow guest access when eventId & playerId are provided via URL
+  if (!user && (!urlEventId || !urlPlayerId)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">กรุณาล็อกอิน</div>
     );
@@ -196,23 +226,25 @@ const PaymentsPage = () => {
           <p className="text-gray-600">ชำระค่าใช้จ่ายสำหรับกิจกรรมแบดมินตัน</p>
         </div>
 
-        {/* Event Selection */}
-        <Card className="bg-white/90 shadow-lg">
-          <CardContent className="p-6">
-            <Select value={eventId} onValueChange={setEventId}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="เลือกอีเวนต์" />
-              </SelectTrigger>
-              <SelectContent>
-                {events.map((e) => (
-                  <SelectItem key={e.id} value={e.id}>
-                    {e.eventName} — {e.eventDate}{payableIds.includes(e.id) ? '' : ' (ไม่มีรายการของคุณ)'}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </CardContent>
-        </Card>
+        {/* Event Selection (hidden in guest view) */}
+        {!isGuestView && (
+          <Card className="bg-white/90 shadow-lg">
+            <CardContent className="p-6">
+              <Select value={eventId} onValueChange={setEventId}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="เลือกอีเวนต์" />
+                </SelectTrigger>
+                <SelectContent>
+                  {events.map((e) => (
+                    <SelectItem key={e.id} value={e.id}>
+                      {e.eventName} — {e.eventDate}{user ? (payableIds.includes(e.id) ? '' : ' (ไม่มีรายการของคุณ)') : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Payment Details */}
         <Card className="bg-white/90 shadow-lg">
@@ -223,12 +255,14 @@ const PaymentsPage = () => {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
-            {/* Event Info */}
+            {/* Event Info (hide date and participant count in guest view, keep status badge) */}
             <div className="flex items-center justify-between text-sm">
-              <div className="space-y-1">
-                <div className="font-medium">วันที่ {eventDetail?.eventDate || '-'}</div>
-                <div className="text-gray-600">ผู้เข้าร่วม {participantCount}</div>
-              </div>
+              {!isGuestView && (
+                <div className="space-y-1">
+                  <div className="font-medium">วันที่ {eventDetail?.eventDate || '-'}</div>
+                  <div className="text-gray-600">ผู้เข้าร่วม {participantCount}</div>
+                </div>
+              )}
               <Badge
                 variant="outline"
                 className={`${payment?.status === 'COMPLETED' ? 'bg-green-50 text-green-700 border-green-300' : 'bg-amber-50 text-amber-700 border-amber-300'}`}
@@ -241,7 +275,7 @@ const PaymentsPage = () => {
             {/* Payment Breakdown */}
             <div className="bg-gray-50 rounded-lg p-4">
               <h3 className="font-semibold text-gray-900 mb-3">ยอดที่ต้องชำระ</h3>
-              {playTime && (
+              {!isGuestView && playTime && (
                 <div className="text-sm text-gray-600 mb-4">ช่วงเวลา {playTime}</div>
               )}
               {loadingPayment ? (
