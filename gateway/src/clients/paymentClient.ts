@@ -66,6 +66,7 @@ export function mapPlayerPaymentsGrpcToRest(grpcResp: any) {
     status: p.status,
     amount: p.amount,
     currency: p.currency,
+    qrCodeUri: p.qr_code_uri,
     eventId: p.event_id,
     createdAt: new Date(p.created_at).toISOString(),
     updatedAt: new Date(p.updated_at).toISOString(),

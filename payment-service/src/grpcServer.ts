@@ -142,6 +142,7 @@ const grpcService = {
           status: p.status,
           amount: p.amount,
           currency: p.currency,
+          qr_code_uri: p.qrCodeUri,
           event_id: p.eventId,
           created_at: p.createdAt.toISOString(),
           updated_at: p.updatedAt.toISOString()

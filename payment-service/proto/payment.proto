@@ -80,9 +80,10 @@ message PaymentSummary {
   string status = 2;
   double amount = 3;
   string currency = 4;
-  string event_id = 5;
-  string created_at = 6;
-  string updated_at = 7;
+  string qr_code_uri = 5;
+  string event_id = 6;
+  string created_at = 7;
+  string updated_at = 8;
 }
 
 message EventPaymentSummary {
