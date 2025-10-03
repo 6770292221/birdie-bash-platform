@@ -29,7 +29,10 @@ const PaymentsPage = () => {
 
   const [events, setEvents] = useState<any[]>([]);
   const [eventId, setEventId] = useState<string>('');
-  const [eventDetail, setEventDetail] = useState<any | null>(null);
+  type Capacity = number | { maxParticipants?: number; currentParticipants?: number; availableSlots?: number; waitlistEnabled?: boolean };
+  type CourtInterval = { courtNumber?: number; startTime?: string; endTime?: string };
+  type EventDetail = { id: string; eventName?: string; eventDate?: string; capacity?: Capacity; courts?: CourtInterval[] };
+  const [eventDetail, setEventDetail] = useState<EventDetail | null>(null);
   const [players, setPlayers] = useState<PlayerItem[]>([]);
   const [payableIds, setPayableIds] = useState<string[]>([]);
   const [payment, setPayment] = useState<PlayerPayment>(null);
@@ -83,7 +86,16 @@ const PaymentsPage = () => {
         apiClient.getEvent(eventId),
         apiClient.getPlayers(eventId, { limit: 200, offset: 0 }),
       ]);
-      if (dRes.success) setEventDetail((dRes.data as any).event || dRes.data);
+      if (dRes.success) {
+        const data = dRes.data as unknown;
+        const detail = ((): EventDetail | null => {
+          if (data && typeof data === 'object' && 'event' in (data as Record<string, unknown>)) {
+            return (data as { event?: EventDetail }).event ?? null;
+          }
+          return (data as EventDetail) ?? null;
+        })();
+        setEventDetail(detail);
+      }
   setPlayers(pRes.success ? ((pRes.data as any).players || []) : []);
     };
     loadDetail();
@@ -131,16 +143,26 @@ const PaymentsPage = () => {
 
   const participantCount = useMemo(() => {
     const total = players.length;
-    const capacity = (eventDetail as any)?.capacity || undefined;
-    return capacity ? `${total} / ${capacity}` : `${total}`;
+    const ev = (eventDetail as { capacity?: Capacity } | null) || null;
+    const capacity = ev?.capacity;
+    // Handle both numeric and object-shaped capacity
+    const maxParticipants = typeof capacity === 'number'
+      ? capacity
+      : typeof capacity === 'object' && capacity
+        ? (capacity.maxParticipants as number | undefined)
+        : undefined;
+    return typeof maxParticipants === 'number' && !Number.isNaN(maxParticipants)
+      ? `${total} / ${maxParticipants}`
+      : `${total}`;
   }, [players, eventDetail]);
 
   const playTime = useMemo(() => {
-    const courts = (eventDetail as any)?.courts || [];
+    const ev = (eventDetail as { courts?: CourtInterval[] } | null) || null;
+    const courts: CourtInterval[] = ev?.courts ?? [];
     if (!courts.length) return '';
     // Use min start and max end across courts
-    const starts = courts.map((c: any) => c.startTime).filter(Boolean);
-    const ends = courts.map((c: any) => c.endTime).filter(Boolean);
+    const starts = courts.map((c) => c.startTime).filter(Boolean) as string[];
+    const ends = courts.map((c) => c.endTime).filter(Boolean) as string[];
     const start = starts.sort()[0];
     const end = ends.sort().slice(-1)[0];
     return start && end ? `${start} - ${end}` : '';
