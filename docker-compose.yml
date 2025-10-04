@@ -89,6 +89,7 @@ services:
       - EVENT_SERVICE_URL=http://event-service:3003
       - REGISTRATION_SERVICE_URL=http://registration-service:3005
       - SETTLEMENT_SERVICE_URL=http://settlement-service:3006
+      - PAYMENT_SERVICE_GRPC_URL=payment-service:50051
     depends_on:
       - auth-service
       - event-service
