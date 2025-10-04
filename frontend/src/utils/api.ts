@@ -5,6 +5,7 @@ import axios, { AxiosError, AxiosInstance, AxiosRequestHeaders } from "axios";
 // Vite only exposes variables prefixed with VITE_
 const GATEWAY_URL =
   (import.meta.env.VITE_GATEWAY_URL as string) || "http://localhost:3000";
+const MATCHING_SERVICE_URL = "http://localhost:3008";
 
 export interface ApiResponse<T = unknown> {
   success: boolean;
@@ -66,7 +67,7 @@ export interface PlayerItem {
   startTime?: string;
   endTime?: string;
   status?: string;
-  userType?: 'member' | 'guest';
+  userType?: "member" | "guest";
 }
 
 class ApiClient {
@@ -432,6 +433,64 @@ class ApiClient {
   async getVenue(venueId: string): Promise<ApiResponse<unknown>> {
     return this.request(`/api/event/venues/${venueId}`);
   }
+
+  // Matching service integration
+  private async matchingRequest<T>(
+    endpoint: string,
+    options: { method?: string; data?: any } = {}
+  ): Promise<ApiResponse<T>> {
+    try {
+      const response = await axios.request({
+        url: `${MATCHING_SERVICE_URL}${endpoint}`,
+        method: (options.method || "GET") as any,
+        data: options.data,
+        headers: {
+          "Content-Type": "application/json",
+          ...(this.token ? { Authorization: `Bearer ${this.token}` } : {})
+        },
+        timeout: 10000
+      });
+
+      return {
+        success: true,
+        data: response.data?.data ?? response.data,
+        message: response.data?.message,
+      };
+    } catch (err) {
+      const axErr = err as AxiosError<any>;
+      const errorMessage = axErr.response?.data?.message || axErr.message || "Matching service error";
+      return { success: false, error: errorMessage };
+    }
+  }
+
+  // Matching endpoints
+  async seedMatching(eventId: string): Promise<ApiResponse<any>> {
+    return this.matchingRequest("/api/matchings/seed", {
+      method: "POST",
+      data: { eventId }
+    });
+  }
+
+  async advanceMatching(eventId: string, data?: {
+    courtId?: string;
+    at?: string;
+  }): Promise<ApiResponse<any>> {
+    return this.matchingRequest("/api/matchings/advance", {
+      method: "POST",
+      data: {
+        eventId,
+        ...data
+      }
+    });
+  }
+
+  async closeMatching(eventId: string): Promise<ApiResponse<any>> {
+    return this.matchingRequest("/api/matchings/close", {
+      method: "POST",
+      data: { eventId }
+    });
+  }
+
 }
 
 // Create and export singleton instance
