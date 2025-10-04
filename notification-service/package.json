@@ -8,7 +8,9 @@
     "start": "node dist/server.js",
     "dev": "nodemon --exec ts-node src/server.ts",
     "worker": "ts-node src/worker/notificationWorker.ts",
-    "build:worker": "tsc && node dist/worker/notificationWorker.js"
+    "build:worker": "tsc && node dist/worker/notificationWorker.js",
+    "start:api": "node dist/server.js",
+    "start:worker": "node dist/worker/notificationWorker.js"
   },
   "dependencies": {
     "amqplib": "^0.10.9",
