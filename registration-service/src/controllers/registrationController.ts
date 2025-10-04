@@ -350,6 +350,14 @@ export const cancelPlayerRegistration = async (
   try {
     const { id: eventId, pid: playerId } = req.params;
     const userId = req.headers["x-user-id"];
+    if (!userId) {
+      res.status(401).json({
+        code: "AUTHENTICATION_REQUIRED",
+        message: "User ID is required",
+      });
+      return;
+    }
+
     const event = await fetchEventById(eventId);
     if (!event) {
       res.status(404).json({
@@ -379,26 +387,14 @@ export const cancelPlayerRegistration = async (
       return;
     }
 
-    const userRole = req.headers["x-user-role"];
-    const isAdmin = userRole === "admin";
-
-    if (!isAdmin) {
-      if (!player.userId) {
-        res.status(403).json({
-          code: "INSUFFICIENT_PERMISSIONS",
-          message: "Only admin can cancel guest registrations",
-          details: { playerId, playerType: "guest" },
-        });
-        return;
-      }
-      if (userId && player.userId !== userId) {
-        res.status(403).json({
-          code: "INSUFFICIENT_PERMISSIONS",
-          message: "You can only cancel your own registration",
-          details: { playerId, requesterId: userId, ownerId: player.userId },
-        });
-        return;
-      }
+    // Only check ownership for member registrations
+    if (player.userId && userId && player.userId !== userId) {
+      res.status(403).json({
+        code: "INSUFFICIENT_PERMISSIONS",
+        message: "You can only cancel your own registration",
+        details: { playerId, requesterId: userId, ownerId: player.userId },
+      });
+      return;
     }
 
     if (player.status === "canceled") {
