@@ -38,6 +38,7 @@ import { Venue } from "../models/Venue";
  * @swagger
  * /api/event/venues:
  *   get:
+ *     tags: [Venues]
  *     summary: Get all badminton venues
  *     description: |
  *       Retrieve a list of all available badminton venues with their details.
@@ -61,7 +62,7 @@ import { Venue } from "../models/Venue";
  *         name: limit
  *         schema:
  *           type: number
- *           default: 50
+ *           venues: 50
  *           minimum: 1
  *           maximum: 100
  *         description: Number of venues to return
@@ -169,6 +170,7 @@ export const getVenues = async (req: Request, res: Response): Promise<void> => {
  * @swagger
  * /api/event/venues/{id}:
  *   get:
+ *     tags: [Venues]
  *     summary: Get venue by ID
  *     description: Retrieve a specific venue by its ID
  *     parameters:

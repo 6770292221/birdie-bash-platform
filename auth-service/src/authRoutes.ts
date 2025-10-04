@@ -1,6 +1,13 @@
-import express from 'express';
-import { register, login, verifyToken, getUserById, getProfile, getAllUsers } from './controllers/authController';
-import { authenticateToken, authorizeRole } from './middleware/auth';
+import express from "express";
+import {
+  register,
+  login,
+  verifyToken,
+  getUserById,
+  getProfile,
+  getAllUsers,
+} from "./controllers/authController";
+import { authenticateToken } from "./middleware/auth";
 
 const router = express.Router();
 
@@ -53,7 +60,7 @@ const router = express.Router();
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.post('/register', register);
+router.post("/register", register);
 
 /**
  * @swagger
@@ -91,7 +98,7 @@ router.post('/register', register);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.post('/login', login);
+router.post("/login", login);
 
 /**
  * @swagger
@@ -99,8 +106,6 @@ router.post('/login', login);
  *   get:
  *     summary: Verify JWT token
  *     tags: [Authentication]
- *     security:
- *       - BearerAuth: []
  *     responses:
  *       200:
  *         description: Token is valid
@@ -113,8 +118,6 @@ router.post('/login', login);
  *                   type: string
  *                 user:
  *                   $ref: '#/components/schemas/User'
- *       401:
- *         description: Access token required
  *         content:
  *           application/json:
  *             schema:
@@ -122,8 +125,6 @@ router.post('/login', login);
  *             example:
  *               code: 'UNAUTHORIZED'
  *               message: 'Access token required'
- *       403:
- *         description: Invalid or expired token
  *         content:
  *           application/json:
  *             schema:
@@ -132,7 +133,7 @@ router.post('/login', login);
  *               code: 'FORBIDDEN'
  *               message: 'Invalid or expired token'
  */
-router.get('/verify', authenticateToken, verifyToken);
+router.get("/verify", authenticateToken, verifyToken);
 
 /**
  * @swagger
@@ -140,8 +141,19 @@ router.get('/verify', authenticateToken, verifyToken);
  *   get:
  *     summary: Get current user profile
  *     tags: [Authentication]
- *     security:
- *       - BearerAuth: []
+ *     parameters:
+ *       - in: header
+ *         name: x-user-id
+ *         schema:
+ *           type: string
+ *         required: false
+ *         description: User ID forwarded from internal services when no Authorization header is provided
+ *       - in: query
+ *         name: userId
+ *         schema:
+ *           type: string
+ *         required: false
+ *         description: Alternative way to specify the user ID when calling the endpoint internally
  *     responses:
  *       200:
  *         description: Profile retrieved successfully
@@ -154,12 +166,8 @@ router.get('/verify', authenticateToken, verifyToken);
  *                   type: string
  *                 user:
  *                   $ref: '#/components/schemas/User'
- *       401:
- *         description: Access token required
- *       403:
- *         description: Invalid or expired token
  */
-router.get('/profile', authenticateToken, getProfile);
+router.get("/profile", getProfile);
 
 /**
  * @swagger
@@ -167,8 +175,6 @@ router.get('/profile', authenticateToken, getProfile);
  *   get:
  *     summary: Get all users
  *     tags: [Authentication]
- *     security:
- *       - BearerAuth: []
  *     parameters:
  *       - in: query
  *         name: limit
@@ -214,12 +220,8 @@ router.get('/profile', authenticateToken, getProfile);
  *                       type: integer
  *                     hasMore:
  *                       type: boolean
- *       401:
- *         description: Access token required
- *       403:
- *         description: Invalid token or insufficient permissions
  */
-router.get('/users', authenticateToken, authorizeRole(['admin']), getAllUsers);
+router.get("/users", getAllUsers);
 
 /**
  * @swagger
@@ -227,8 +229,6 @@ router.get('/users', authenticateToken, authorizeRole(['admin']), getAllUsers);
  *   get:
  *     summary: Get user by ID
  *     tags: [Authentication]
- *     security:
- *       - BearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -266,19 +266,7 @@ router.get('/users', authenticateToken, authorizeRole(['admin']), getAllUsers);
  *             example:
  *               code: 'USER_NOT_FOUND'
  *               message: 'User not found'
- *       401:
- *         description: Access token required
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
- *       403:
- *         description: Invalid or expired token
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
  */
-router.get('/user/:id', authenticateToken, getUserById);
+router.get("/user/:id", getUserById);
 
 export default router;

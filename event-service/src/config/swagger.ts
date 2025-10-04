@@ -10,6 +10,10 @@ const swaggerDefinition = {
   servers: [
     { url: "http://localhost:3003", description: "Event Service (local)" },
   ],
+  tags: [
+    { name: "Events", description: "Event management" },
+    { name: "Venues", description: "Badminton venue information" }
+  ],
   components: {
     securitySchemes: {
       BearerAuth: { type: "http", scheme: "bearer", bearerFormat: "JWT" },
