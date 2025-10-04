@@ -128,6 +128,7 @@ services:
       - RABBIT_EXCHANGE=events
       - ENABLE_CAPACITY_WORKER=true
       - REGISTRATION_SERVICE_URL=http://registration-service:3005
+      - RABBIT_ENABLE_NOTIFY_BIND=true
     depends_on:
       mongodb:
         condition: service_started
