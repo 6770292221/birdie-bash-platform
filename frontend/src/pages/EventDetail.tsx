@@ -477,17 +477,37 @@ const EventDetail = () => {
       // Add 1-second delay for loading effect after updating state
       await new Promise(resolve => setTimeout(resolve, 1000));
 
-      toast({
-        title: (
-          <div className="flex items-center gap-2">
-            <Target className="w-4 h-4 text-green-600" />
-            {t('success.player_cancelled')}
-          </div>
-        ),
-        description: t('success.player_cancelled_desc'),
-        className: 'border-green-200 bg-green-50',
-        duration: 4000
-      });
+      // Check if there's a penalty
+      const hasPenalty = res.data?.player?.isPenalty || false;
+
+      if (hasPenalty) {
+        // Show warning toast for penalty
+        toast({
+          title: (
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-orange-600" />
+              {t('warning.cancellation_penalty')}
+            </div>
+          ),
+          description: t('warning.cancellation_penalty_desc'),
+          className: 'border-orange-200 bg-orange-50',
+          duration: 8000 // Show longer for important warning
+        });
+      } else {
+        // Show normal success toast
+        toast({
+          title: (
+            <div className="flex items-center gap-2">
+              <Target className="w-4 h-4 text-green-600" />
+              {t('success.player_cancelled')}
+            </div>
+          ),
+          description: t('success.player_cancelled_desc'),
+          className: 'border-green-200 bg-green-50',
+          duration: 4000
+        });
+      }
+
       setCancelingPlayerId(null);
       setOverlayAction(null);
     } else {

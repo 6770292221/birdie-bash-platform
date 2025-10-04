@@ -160,6 +160,19 @@ const mapPlayerResponse = (player: IPlayerDocument) => ({
     : null,
 });
 
+function parseTimeToMinutes(time: string): number | null {
+  if (typeof time !== 'string') {
+    return null;
+  }
+
+  const [hours, minutes] = time.split(':').map(Number);
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) {
+    return null;
+  }
+
+  return hours * 60 + minutes;
+}
+
 function extractEventStatus(status: any): {
   state?: EventStatus;
   isAcceptingRegistrations?: boolean;
@@ -401,20 +414,46 @@ export const cancelPlayerRegistration = async (
 
     // Check if cancellation incurs penalty
     if (PENALTY_CONFIG.PENALTY_ENABLED) {
-      const now = new Date();
-      const eventDateTime = new Date(`${event.eventDate}T00:00:00`);
+      const BANGKOK_OFFSET_MILLIS = 7 * 60 * 60 * 1000; // UTC+7
 
-      // If event has specific start time, use it; otherwise use event date
-      if (player.startTime) {
-        const [hours, minutes] = player.startTime.split(':').map(Number);
-        eventDateTime.setHours(hours, minutes, 0, 0);
-      }
+      const parseValidTime = (time?: unknown): string | undefined => {
+        if (typeof time !== 'string') return undefined;
+        return /^([01]?\d|2[0-3]):[0-5]\d$/.test(time) ? time : undefined;
+      };
 
-      const minutesUntilEvent = (eventDateTime.getTime() - now.getTime()) / (1000 * 60);
+      const courts = Array.isArray((event as any).courts) ? (event as any).courts : [];
+      const validStartMinutes = courts
+        .map((court: any) => parseValidTime(court?.startTime))
+        .filter((time: string | undefined): time is string => Boolean(time))
+        .map((time: string) => parseTimeToMinutes(time))
+        .filter((minutes: number | null): minutes is number => minutes !== null);
 
-      // Apply penalty if canceling within the penalty period
-      if (minutesUntilEvent <= PENALTY_CONFIG.CANCELLATION_PENALTY_MINUTES && minutesUntilEvent > 0) {
-        player.isPenalty = true;
+      const earliestMinutes = validStartMinutes.length > 0 ? Math.min(...validStartMinutes) : null;
+
+      const eventDateParts = typeof event.eventDate === 'string' ? event.eventDate.split('-') : [];
+      const year = Number(eventDateParts[0]);
+      const month = Number(eventDateParts[1]);
+      const day = Number(eventDateParts[2]);
+
+      if (
+        earliestMinutes !== null &&
+        !Number.isNaN(year) &&
+        !Number.isNaN(month) &&
+        !Number.isNaN(day)
+      ) {
+        const startHours = Math.floor(earliestMinutes / 60);
+        const startMinutes = earliestMinutes % 60;
+
+        const eventStartUtcMillis =
+          Date.UTC(year, month - 1, day, startHours, startMinutes) - BANGKOK_OFFSET_MILLIS;
+        const minutesUntilEvent = (eventStartUtcMillis - Date.now()) / (1000 * 60);
+
+        if (
+          minutesUntilEvent <= PENALTY_CONFIG.CANCELLATION_PENALTY_MINUTES &&
+          minutesUntilEvent > 0
+        ) {
+          player.isPenalty = true;
+        }
       }
     }
 
@@ -820,7 +859,6 @@ export const promoteWaitlist = async (
  *     tags: [Registration]
  *     parameters:
  *       - $ref: '#/components/parameters/UserIdHeader'
- *       - $ref: '#/components/parameters/UserRoleHeader'
  *       - in: path
  *         name: id
  *         required: true
@@ -883,7 +921,7 @@ export const registerGuest = async (
       });
       return;
     }
-    if (adminRole !== "admin") {
+    if (adminRole !== undefined && adminRole !== "admin") {
       res.status(403).json({
         code: "INSUFFICIENT_PERMISSIONS",
         message: "Admin privileges required to register guests",

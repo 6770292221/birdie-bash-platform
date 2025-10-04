@@ -6,6 +6,7 @@ import {
   attachUserFromJwt,
   requireAuth,
   requireAdmin,
+  requireAdminForMethods,
   forwardUserHeaders,
 } from "./middleware/auth";
 import { getRoutes } from "./routesConfig";
@@ -147,6 +148,10 @@ routes.forEach((route) => {
 
   if (route.adminRequired) {
     middlewares.push(requireAdmin as any);
+  }
+
+  if (route.adminForMethods && route.adminForMethods.length > 0) {
+    middlewares.push(requireAdminForMethods(route.adminForMethods) as any);
   }
 
   middlewares.push(createProxyMiddleware(proxyOptions));
