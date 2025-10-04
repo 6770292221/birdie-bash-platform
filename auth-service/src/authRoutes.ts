@@ -118,6 +118,8 @@ router.post("/login", login);
  *                   type: string
  *                 user:
  *                   $ref: '#/components/schemas/User'
+ *       401:
+ *         description: Access token required
  *         content:
  *           application/json:
  *             schema:
@@ -125,6 +127,8 @@ router.post("/login", login);
  *             example:
  *               code: 'UNAUTHORIZED'
  *               message: 'Access token required'
+ *       403:
+ *         description: Invalid or expired token
  *         content:
  *           application/json:
  *             schema:
