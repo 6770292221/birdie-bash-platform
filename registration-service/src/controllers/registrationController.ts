@@ -350,6 +350,14 @@ export const cancelPlayerRegistration = async (
   try {
     const { id: eventId, pid: playerId } = req.params;
     const userId = req.headers["x-user-id"];
+    if (!userId) {
+      res.status(401).json({
+        code: "AUTHENTICATION_REQUIRED",
+        message: "User ID is required",
+      });
+      return;
+    }
+
     const event = await fetchEventById(eventId);
     if (!event) {
       res.status(404).json({
@@ -379,26 +387,14 @@ export const cancelPlayerRegistration = async (
       return;
     }
 
-    const userRole = req.headers["x-user-role"];
-    const isAdmin = userRole === "admin";
-
-    if (!isAdmin) {
-      if (!player.userId) {
-        res.status(403).json({
-          code: "INSUFFICIENT_PERMISSIONS",
-          message: "Only admin can cancel guest registrations",
-          details: { playerId, playerType: "guest" },
-        });
-        return;
-      }
-      if (userId && player.userId !== userId) {
-        res.status(403).json({
-          code: "INSUFFICIENT_PERMISSIONS",
-          message: "You can only cancel your own registration",
-          details: { playerId, requesterId: userId, ownerId: player.userId },
-        });
-        return;
-      }
+    // Only check ownership for member registrations
+    if (player.userId && userId && player.userId !== userId) {
+      res.status(403).json({
+        code: "INSUFFICIENT_PERMISSIONS",
+        message: "You can only cancel your own registration",
+        details: { playerId, requesterId: userId, ownerId: player.userId },
+      });
+      return;
     }
 
     if (player.status === "canceled") {
@@ -526,12 +522,10 @@ export const registerMember = async (
     }
 
     const userId = req.headers["x-user-id"];
-
     if (!userId) {
       res.status(401).json({
         code: "AUTHENTICATION_REQUIRED",
-        message: "User authentication required for player registration",
-        details: { endpoint: "/api/events/{id}/players" },
+        message: "User ID is required",
       });
       return;
     }
@@ -554,6 +548,7 @@ export const registerMember = async (
       eventId,
       userId,
       registrationTime: new Date(),
+      createdBy: userId,
       userType: "member",
       isPenalty: false,
       penaltyFee: 0,
@@ -911,21 +906,11 @@ export const registerGuest = async (
     const { id: eventId } = req.params;
     const registrationData: RegisterByGuest = req.body;
 
-    const adminUserId = req.headers["x-user-id"];
-    const adminRole = req.headers["x-user-role"];
-    if (!adminUserId) {
+    const userId = req.headers["x-user-id"];
+    if (!userId) {
       res.status(401).json({
         code: "AUTHENTICATION_REQUIRED",
-        message: "Admin authentication required for guest registration",
-        details: { endpoint: "/api/events/{id}/guests" },
-      });
-      return;
-    }
-    if (adminRole !== undefined && adminRole !== "admin") {
-      res.status(403).json({
-        code: "INSUFFICIENT_PERMISSIONS",
-        message: "Admin privileges required to register guests",
-        details: { currentRole: adminRole, requiredRole: "admin" },
+        message: "User ID is required",
       });
       return;
     }
@@ -991,7 +976,7 @@ export const registerGuest = async (
       name: registrationData.name,
       phoneNumber: registrationData.phoneNumber,
       registrationTime: new Date(),
-      createdBy: adminUserId,
+      createdBy: userId,
       userType: "guest",
       isPenalty: false,
       penaltyFee: 0,

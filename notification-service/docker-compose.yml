@@ -1,14 +1,72 @@
-version: '3.9'
 services:
+  api:
+    build: .
+    image: notification-service:latest
+    container_name: notif-api
+    command: ["node", "dist/server.js"]
+    ports:
+      - "3009:3009"
+    env_file:
+      - .env
+    environment:
+      PORT: "${PORT:-3009}"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:3009/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  worker:
+    image: notification-service:latest
+    container_name: notif-worker
+    command: ["node", "dist/worker/notificationWorker.js"]
+    env_file:
+      - .env
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+
   mongo:
     image: mongo:7
-    ports: ["27017:27017"]
+    container_name: mongo
+    ports:
+      - "27017:27017"
     volumes:
       - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ ping: 1 }).ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
   rabbitmq:
-    image: rabbitmq:3.13-management
+    image: rabbitmq:4.1.4-management
+    container_name: rabbitmq
     ports:
       - "5672:5672"
       - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    container_name: mailhog
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
 volumes:
-  mongo_data: {}
+  mongo_data:

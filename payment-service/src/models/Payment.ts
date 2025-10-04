@@ -1,7 +1,8 @@
-import { Payment as PrismaPayment, PaymentTransaction as PrismaPaymentTransaction, PaymentStatus, PaymentType, TransactionType } from '@prisma/client';
+import { Payment as PrismaPayment, PaymentTransaction as PrismaPaymentTransaction, TransactionType } from '@prisma/client';
+import { PaymentStatusValue } from '../constants/paymentStatus';
 
 // Export Prisma types directly
-export { PaymentStatus, PaymentType, TransactionType };
+export { TransactionType };
 
 // Extended interfaces that include relations
 export interface IPayment extends PrismaPayment {
@@ -15,27 +16,24 @@ export interface IPaymentTransaction extends PrismaPaymentTransaction {
 // Helper type for creating payments (without auto-generated fields)
 export interface CreatePaymentData {
   id?: string;
-  eventId?: string;
-  playerId: string;
+  event_id?: string;
+  player_id: string;
   amount: number;
   currency?: string;
-  status?: PaymentStatus;
-  paymentType: PaymentType;
-  paymentIntentId?: string;
-  paymentMethodId?: string;
-  chargeId?: string;
+  status?: PaymentStatusValue;
+  payment_method?: string; // PROMPT_PAY default
+  qr_code_uri?: string;
+  omise_charge_id?: string;
+  omise_source_id?: string;
   description?: string;
-  refundedAmount?: number;
-  metadata?: any;
 }
 
 // Helper type for creating payment transactions
 export interface CreatePaymentTransactionData {
   id?: string;
-  paymentId: string;
+  payment_id: string;
   type: TransactionType;
   amount: number;
-  status: PaymentStatus;
-  transactionId?: string;
-  metadata?: any;
+  status: PaymentStatusValue;
+  transaction_id?: string;
 }

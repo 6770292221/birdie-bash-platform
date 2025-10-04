@@ -35,6 +35,23 @@ export function requireAuth(
   next();
 }
 
+// Allows unauthenticated access only when a specific scoping query is present.
+// For player payments we allow public read if eventId is provided to prevent broad enumeration.
+export function allowPublicIfEventScoped(
+  req: RequestWithUser,
+  res: Response,
+  next: NextFunction
+) {
+  if (req.user) return next();
+  const hasPlayerId = typeof (req.params as any)?.playerId === 'string' && !!(req.params as any)?.playerId;
+  const hasEventId = typeof (req.query as any)?.eventId === 'string' && !!(req.query as any)?.eventId;
+  if (hasPlayerId && hasEventId) return next();
+  res.status(401).json({
+    error: "Authentication required or provide eventId to access this resource",
+    code: "AUTH_OR_EVENT_ID_REQUIRED",
+  });
+}
+
 export function requireAdmin(
   req: RequestWithUser,
   res: Response,

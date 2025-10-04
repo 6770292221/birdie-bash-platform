@@ -1,6 +1,6 @@
 // API utility functions for gateway integration (axios version)
 
-import axios, { AxiosError, AxiosInstance } from "axios";
+import axios, { AxiosError, AxiosInstance, AxiosRequestHeaders } from "axios";
 
 // Vite only exposes variables prefixed with VITE_
 const GATEWAY_URL =
@@ -90,8 +90,10 @@ class ApiClient {
     // Attach token automatically
     this.http.interceptors.request.use((config) => {
       if (this.token) {
-        config.headers = config.headers || {};
-        config.headers["Authorization"] = `Bearer ${this.token}`;
+        if (!config.headers) {
+          config.headers = {} as AxiosRequestHeaders;
+        }
+        (config.headers as AxiosRequestHeaders)["Authorization"] = `Bearer ${this.token}`;
       }
       return config;
     });
@@ -384,6 +386,20 @@ class ApiClient {
         });
       }, 500); // Simulate network delay
     });
+  }
+
+  // Payments: fetch payments by event from real payment service
+  async getEventPayments(eventId: string): Promise<ApiResponse<{ payments: { playerId: string; amount: number; status: 'PENDING' | 'COMPLETED' }[] }>> {
+    // Call absolute URL to payment service (port 8080)
+    return this.request<{ payments: { playerId: string; amount: number; status: 'PENDING' | 'COMPLETED' }[] }>(`http://localhost:8080/api/payments/event/${eventId}`);
+  }
+
+  // Payments: fetch payments by player (optionally filter by event)
+  async getPlayerPayments(playerId: string, params?: { eventId?: string; status?: string }): Promise<ApiResponse<{ payments: Array<{ id: string; status: string; amount: number; currency: string; qrCodeUri?: string | null; eventId?: string; createdAt?: string; updatedAt?: string }> }>> {
+    const query: Record<string, any> = {};
+    if (params?.eventId) query.eventId = params.eventId;
+    if (params?.status) query.status = params.status;
+    return this.request(`/api/payments/player/${playerId}`, { params: Object.keys(query).length ? query : undefined });
   }
 
   // Mark player as paid endpoint (mocked for now)

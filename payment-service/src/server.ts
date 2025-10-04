@@ -4,8 +4,8 @@ import cors from "cors";
 import { connectPaymentDB } from "./config/paymentDatabase";
 import { errorHandler } from "./middleware/errorHandler";
 import { startGrpcServer } from "./grpcServer";
+import { startPaymentIssueConsumer } from './consumers/paymentIssueConsumer';
 import { Logger } from "./utils/logger";
-import { OmiseWebhookEvent, WebhookResponse } from "./types/payment";
 import { webhookService } from "./services/webhookService";
 
 dotenv.config();
@@ -31,82 +31,22 @@ app.get('/health', (req: Request, res: Response) => {
 });
 
 // Omise Webhook endpoint - now processes events and updates payment status
-app.post('/webhooks/omise', async (req: Request, res: Response) => {
-  try {
-    const webhookEvent: OmiseWebhookEvent = req.body;
-    
-    Logger.success('Omise webhook received', {
-      event_id: webhookEvent.id,
-      event_type: webhookEvent.key,
-      livemode: webhookEvent.livemode,
-      data_object: webhookEvent.data?.object,
-      data_id: webhookEvent.data?.id,
-      amount: webhookEvent.data?.amount,
-      currency: webhookEvent.data?.currency,
-      status: webhookEvent.data?.status,
-      created_at: webhookEvent.created_at
-    });
-
-    // Process the webhook event and update payment status
-    const result = await webhookService.processWebhookEvent(webhookEvent);
-
-    if (result.success) {
-      const response: WebhookResponse = {
-        received: true,
-        timestamp: new Date().toISOString(),
-        event_type: webhookEvent.key || 'unknown',
-        event_id: webhookEvent.id || 'unknown',
-        message: result.message
-      };
-
-      Logger.success('Webhook processed successfully', {
-        event_id: webhookEvent.id,
-        payment_id: result.paymentId,
-        updated_status: result.updatedStatus,
-        message: result.message
-      });
-
-      res.status(200).json(response);
-    } else {
-      Logger.error('Webhook processing failed', {
-        event_id: webhookEvent.id,
-        error: result.error,
-        message: result.message
-      });
-
-      const errorResponse: WebhookResponse = {
-        received: false,
-        timestamp: new Date().toISOString(),
-        event_type: webhookEvent.key || 'unknown',
-        event_id: webhookEvent.id || 'unknown',
-        message: result.message || 'Failed to process webhook'
-      };
-
-      res.status(400).json(errorResponse);
-    }
-  } catch (error) {
-    Logger.error('Error processing Omise webhook', error);
-    
-    const errorResponse: WebhookResponse = {
-      received: false,
-      timestamp: new Date().toISOString(),
-      event_type: 'error',
-      event_id: 'unknown',
-      message: 'Error processing webhook'
-    };
-
-    res.status(500).json(errorResponse);
-  }
-});
+app.post('/webhooks/omise', (req: Request, res: Response) => webhookService.handleOmiseWebhookHttp(req, res));
 
 // Error handling middleware
 app.use(errorHandler);
+
+// Display banner on startup
+Logger.displayBanner();
 
 // Database connection
 connectPaymentDB();
 
 // Start gRPC server
 startGrpcServer();
+
+// Start RabbitMQ consumer for payment.issue queue (fire & forget)
+startPaymentIssueConsumer().catch(err => Logger.error('Failed to start payment issue consumer', err));
 
 // Start HTTP server (only for health checks)
 app.listen(BASE_PORT, () => {
