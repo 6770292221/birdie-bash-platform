@@ -99,6 +99,7 @@ function buildGatewaySpec() {
         description:
           "JWT is validated at gateway; user context forwarded via x-user-* headers",
       },
+      { name: "Payments", description: "Payment queries proxied via gRPC to payment-service" },
     ],
     components: {
       securitySchemes: {
@@ -110,6 +111,43 @@ function buildGatewaySpec() {
           properties: {
             error: { type: "string" },
             code: { type: "string" },
+          },
+        },
+        PaymentStatus: {
+          type: "string",
+          description: "Payment status enum",
+          enum: ["PENDING", "PROCESSING", "COMPLETED", "FAILED", "CANCELLED"],
+        },
+        PaymentSummary: {
+          type: "object",
+          properties: {
+            id: { type: "string" },
+            status: { $ref: "#/components/schemas/PaymentStatus" },
+            amount: { type: "number" },
+            currency: { type: "string" },
+            eventId: { type: "string" },
+            createdAt: { type: "string", format: "date-time" },
+            updatedAt: { type: "string", format: "date-time" },
+          },
+        },
+        EventPaymentSummary: {
+          type: "object",
+          properties: {
+            playerId: { type: "string" },
+            amount: { type: "number" },
+            status: { $ref: "#/components/schemas/PaymentStatus" },
+          },
+        },
+        PlayerPaymentsResponse: {
+          type: "object",
+          properties: {
+            payments: { type: "array", items: { $ref: "#/components/schemas/PaymentSummary" } },
+          },
+        },
+        EventPaymentsResponse: {
+          type: "object",
+          properties: {
+            payments: { type: "array", items: { $ref: "#/components/schemas/EventPaymentSummary" } },
           },
         },
       },
@@ -135,6 +173,67 @@ function buildGatewaySpec() {
                 },
               },
             },
+          },
+        },
+      },
+      "/api/payments/player/{playerId}": {
+        get: {
+          summary: "Get payments for a player",
+            description: "Returns payments for a player (optionally filtered by status/event). Backed by gRPC GetPlayerPayments.",
+          tags: ["Payments"],
+          security: [{ BearerAuth: [] }],
+          parameters: [
+            {
+              in: "path",
+              name: "playerId",
+              required: true,
+              schema: { type: "string" },
+            },
+            {
+              in: "query",
+              name: "status",
+              required: false,
+              schema: { type: "string", enum: ["PENDING", "PROCESSING", "COMPLETED", "FAILED", "CANCELLED"] },
+              description: "Filter by payment status",
+            },
+            {
+              in: "query",
+              name: "eventId",
+              required: false,
+              schema: { type: "string" },
+            },
+          ],
+          responses: {
+            200: {
+              description: "List of payments",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/PlayerPaymentsResponse" },
+                },
+              },
+            },
+            401: { description: "Unauthorized" },
+            502: { description: "Upstream payment service error", content: { "application/json": { schema: { $ref: "#/components/schemas/GatewayError" } } } },
+          },
+        },
+      },
+      "/api/payments/event/{eventId}": {
+        get: {
+          summary: "Get payments for an event",
+          description: "Returns aggregated payments for an event by player. Backed by gRPC GetEventPayments.",
+          tags: ["Payments"],
+          security: [{ BearerAuth: [] }],
+          parameters: [
+            { in: "path", name: "eventId", required: true, schema: { type: "string" } },
+            { in: "query", name: "status", required: false, schema: { type: "string", enum: ["PENDING", "PROCESSING", "COMPLETED", "FAILED", "CANCELLED"] }, description: "Filter by payment status" },
+          ],
+          responses: {
+            200: {
+              description: "Event payments aggregated by player",
+              content: { "application/json": { schema: { $ref: "#/components/schemas/EventPaymentsResponse" } } },
+            },
+            401: { description: "Unauthorized" },
+            502: { description: "Upstream payment service error", content: { "application/json": { schema: { $ref: "#/components/schemas/GatewayError" } } } },
           },
         },
       },

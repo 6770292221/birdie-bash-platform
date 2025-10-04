@@ -147,29 +147,32 @@ export class Logger {
   }
 
   static displayPaymentStatus(status: string, paymentId: string): void {
+    const normalized = status.toUpperCase();
     const statusColors: { [key: string]: any } = {
-      'pending': chalk.yellow,
-      'processing': chalk.blue,
-      'completed': chalk.green,
-      'failed': chalk.red,
-      'cancelled': chalk.gray,
-      'refunded': chalk.yellowBright
+      PENDING: chalk.yellow,
+      PROCESSING: chalk.blue,
+      COMPLETED: chalk.green,
+      FAILED: chalk.red,
+      CANCELLED: chalk.gray,
+      REFUNDED: chalk.yellowBright,
+      PARTIALLY_REFUNDED: chalk.yellowBright
     };
-    
+
     const statusIcons: { [key: string]: string } = {
-      'pending': '⏳',
-      'processing': '🔄',
-      'completed': '✅',
-      'failed': '❌',
-      'cancelled': '🚫',
-      'refunded': '↩️'
+      PENDING: '⏳',
+      PROCESSING: '🔄',
+      COMPLETED: '✅',
+      FAILED: '❌',
+      CANCELLED: '🚫',
+      REFUNDED: '↩️',
+      PARTIALLY_REFUNDED: '🟡'
     };
-    
-    const color = statusColors[status.toLowerCase()] || chalk.white;
-    const icon = statusIcons[status.toLowerCase()] || '📋';
-    
+
+    const color = statusColors[normalized] || chalk.white;
+    const icon = statusIcons[normalized] || '📋';
+
     console.log(chalk.cyan.bold('\n💳 PAYMENT STATUS UPDATE:'));
-    console.log(`   ${icon} Status: ${color.bold(status.toUpperCase())}`);
+    console.log(`   ${icon} Status: ${color.bold(normalized)}`);
     console.log(`   🆔 Payment ID: ${chalk.blue.bold(paymentId)}`);
     console.log(chalk.cyan.bold('─'.repeat(40)) + '\n');
   }
