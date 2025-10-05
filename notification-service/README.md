@@ -1,244 +1,320 @@
-# Notification Microservice
+# Badminton Notification Service
 
-Consumes `events` from **RabbitMQ** and delivers notifications via **email**, **sms**, and **line**, then writes a delivery history to **MongoDB**. Ships with **Swagger UI** for testing.
+Event-driven notification service (Email/SMS) for BBP. It listens to **RabbitMQ** events, fetches event details, selects recipients, and sends notifications. It uses **MongoDB** for idempotency and throttling. A **Swagger** UI is included for quick testing.
 
-> The repo contains two processes:
-> - **HTTP API (Express)** → `/docs`, `/health`, `/test/publish` (+ `/debug/rabbit` if present)
-> - **Worker** → consumes from the queue and calls providers; persists results in MongoDB
+- Supported events: `created`, `updated`, `deleted`
+- Channels: **Email** (SMTP/MailHog) and **SMS** (SMSOK)
+- Duplicate protection: **Idempotent lock (TTL)** + **Throttle**
+- Recipient selection:
+  - `created`, `updated` → all users (role = `user`)
+  - `deleted` → only players who joined the event **+ the event creator**
 
 ---
 
-## Architecture (at a glance)
+## Architecture (overview)
 
-- **Exchange**: `RABBIT_EXCHANGE` (default: `events`, type **topic**)
-- **Queue**: `RABBIT_NOTIFY_QUEUE` (default: `events.notification`)
-- **Binding key**: `RABBIT_NOTIFY_BIND_KEY` (default: `event.#`)
-- **MongoDB**: collection `NotificationLog`
-- **Providers**: Nodemailer (SMTP), Twilio (SMS), LINE Notify (Line)
-- **Templates**: lightweight `{{var}}` rendering in `src/templates/templates.ts`
+```
+Event Service ──► RabbitMQ (topic: events)
+                      │
+                      ▼
+         notification-service
+            ├─ fetch Event detail (EVENTS_API_BASE)
+            ├─ select recipients (Users DB / Registration API)
+            ├─ dedupe (ProcessedEvent) + throttle (EventThrottle)
+            ├─ send Email (SMTP/MailHog)
+            └─ send SMS (SMSOK)
+```
 
 ---
 
 ## Requirements
 
-- Node.js 18+
-- Docker (for local MongoDB, RabbitMQ, MailHog)
-- TypeScript
+- Node.js 20+ (if running locally without Docker)
+- MongoDB (Atlas or local)
+- RabbitMQ 3.12+ (management UI at 15672 is convenient)
+- MailHog for dev (SMTP: 1025, Web UI: 8025)
 
 ---
 
-## Install dependencies
+## Environment Variables
 
+| KEY | Example / Recommended | Purpose |
+|---|---|---|
+| `PORT` | `3007` | HTTP port |
+| `NODE_ENV` | `development` | Node environment |
+| `DRY_RUN` | `false` | `true` = simulate; do not actually send |
+| `BROADCAST_CHANNELS` | `email,sms` | Enable channels |
+| `MONGODB_URI` | `.../registration?...` | Main DB for this service (stores locks/throttles) |
+| `USERS_DB_URI` | `.../user?...` | If Users are stored in a separate DB, set this |
+| `RABBIT_URL` | `amqp://admin:password123@rabbitmq:5672` | AMQP URL |
+| `RABBIT_EXCHANGE` | `events` | Topic exchange name |
+| `RABBIT_QUEUE` | `events.notification` | Queue name |
+| `RABBIT_BIND_KEY` | `event.#` | Binding key |
+| `CONSUMER_RETRY_MS` | `5000` | Reconnect delay (ms) |
+| `DEDUP_TTL_SECONDS` | `604800` | Lock TTL (7d default) |
+| `CONSUME_MIN_INTERVAL_MS` | `60000` | Throttle window per `<type>:<eventId>` (ms) |
+| `THROTTLE_TTL_SECONDS` | `2592000` | TTL to garbage-collect throttle docs |
+| `SMTP_HOST` | `mailhog` | In Docker use **service name**, not `localhost` |
+| `SMTP_PORT` | `1025` | SMTP port |
+| `EMAIL_FROM` | `BBP Notify <no-reply@bbp.local>` | From header |
+| `SMSOK_BASE` | `https://api.smsok.co` | SMS OK base URL |
+| `SMSOK_AUTH` | `Basic …` | Authorization header for SMSOK |
+| `SMS_SENDER` | `SMSOK` | Sender (must be approved by provider) |
+| `FORCE_NO_SENDER` | `false` | `true` = do not send `sender` field (workaround for error 114) |
+| `SMS_CALLBACK_URL` | `https://…/sms/callback` | Provider callback URL |
+| `EVENTS_API_BASE` | `http://event-service:3003` | Event API base (do **not** use `localhost` in container) |
+| `EVENTS_API_PATH` | `/api/events/:id` | Event detail path template |
+| `REG_API_BASE` | `http://registration-service:3005` | Registration API base |
+| `REG_API_PLAYERS_PATH` | `/api/registration/events/:id/players?limit=1000&offset=0` | Players path template |
+
+> In Docker, **never** call other services via `localhost`. Use **service names**: `event-service`, `mailhog`, `rabbitmq`, etc.
+
+---
+
+## Quick Start (Docker recommended)
+
+Example service block in `docker-compose.yml`:
+
+```yaml
+notification-service:
+  build: ./notification-service
+  container_name: birdie-notification-service
+  restart: unless-stopped
+  ports: ["3007:3007"]
+  environment:
+    - PORT=3007
+    - NODE_ENV=development
+    - DRY_RUN=false
+    - BROADCAST_CHANNELS=email,sms
+    - MONGODB_URI=mongodb+srv://.../registration?...
+    # - USERS_DB_URI=mongodb+srv://.../user?...
+    - RABBIT_URL=amqp://admin:password123@rabbitmq:5672
+    - RABBIT_EXCHANGE=events
+    - RABBIT_QUEUE=events.notification
+    - RABBIT_BIND_KEY=event.#
+    - DEDUP_TTL_SECONDS=604800
+    - CONSUME_MIN_INTERVAL_MS=60000
+    - THROTTLE_TTL_SECONDS=2592000
+    - SMTP_HOST=mailhog
+    - SMTP_PORT=1025
+    - EMAIL_FROM=BBP Notify <no-reply@bbp.local>
+    - SMSOK_BASE=https://api.smsok.co
+    - SMSOK_AUTH=Basic XXXXX
+    - SMS_SENDER=SMSOK
+    - SMS_CALLBACK_URL=https://your-callback-url.com/sms/callback
+    - FORCE_NO_SENDER=false
+    - EVENTS_API_BASE=http://event-service:3003
+    - EVENTS_API_PATH=/api/events/:id
+    - REG_API_BASE=http://registration-service:3005
+    - REG_API_PLAYERS_PATH=/api/registration/events/:id/players?limit=1000&offset=0
+  depends_on:
+    - rabbitmq
+    - mailhog
+```
+
+Run:
 ```bash
-npm init -y
-npm i amqplib dotenv express mongoose swagger-jsdoc swagger-ui-express nodemailer twilio axios pino pino-pretty
-npm i -D typescript ts-node nodemon @types/node @types/express @types/nodemailer @types/swagger-jsdoc @types/swagger-ui-express
-npx tsc --init
+docker compose build --no-cache notification-service
+docker compose up -d notification-service
+docker compose logs -f notification-service
 ```
 
-> **TypeScript + amqplib**
-> - Use `import * as amqp from 'amqplib'`.
-> - If your environment fails to load types, install `npm i -D @types/amqplib` or add a shim at `src/types/amqplib-shim.d.ts`.
+You should see:
+```
+[rabbit] connected ...
+[rabbit] bound queue=events.notification → exchange=events key=event.#
+notification-consumer ready.
+```
 
----
-
-## Dev Infra (Docker)
-
+Check runtime ENV:
 ```bash
-docker compose up -d  # starts MongoDB, RabbitMQ (with UI), MailHog
-# RabbitMQ UI: http://localhost:15672  (guest/guest)
-# MailHog UI : http://localhost:8025   (captures dev emails)
+docker compose exec notification-service sh -lc 'echo DRY_RUN=$DRY_RUN SMTP_HOST=$SMTP_HOST EVENTS_API_BASE=$EVENTS_API_BASE'
 ```
-
-If you run containers manually:
-- rabbitmq:4.1.4-management → map `5672:5672`, `15672:15672`
-- mongo:7 → map `27017:27017`
-- mailhog:v1.0.1 → map `1025:1025`, `8025:8025`
 
 ---
 
-## Configuration (.env)
+## API & Swagger
 
-Use the following keys (exact names expected by the code):
+Open: `http://localhost:3007/api-docs`
 
-```ini
-# Core
-PORT=3009
-NODE_ENV=development
+### `POST /test/publish`
+Publish a test event to RabbitMQ (routing key: `event.created`).
 
-# MongoDB
-MONGODB_URI=mongodb://localhost:27017/notification_db
-
-# RabbitMQ
-RABBIT_URL=amqp://guest:guest@localhost:5672
-RABBIT_EXCHANGE=events
-RABBIT_NOTIFY_QUEUE=events.notification
-RABBIT_NOTIFY_BIND_KEY="event.#"
-
-# Providers
-# Email (Nodemailer SMTP or Ethereal for dev)
-SMTP_HOST=localhost
-SMTP_PORT=1025
-SMTP_USER=
-SMTP_PASS=
-EMAIL_FROM="Notifier <no-reply@example.com>"
-
-# Twilio (SMS)
-TWILIO_ACCOUNT_SID=ACxxxx
-TWILIO_AUTH_TOKEN=xxxx
-TWILIO_FROM=+15005550006
-
-# LINE Notify or Messaging API (use Notify for simplicity)
-LINE_NOTIFY_TOKEN=your_line_notify_token
-```
-
-**Notes**
-- When Node runs **outside** Docker, keep hosts as `localhost` (don’t use container names).
-- SMTP auth is **optional** for MailHog; leave `SMTP_USER/SMTP_PASS` blank.
-
----
-
-## Run
-
-`package.json` (scripts should look like this):
 ```json
 {
-  "scripts": {
-    "dev": "nodemon --exec ts-node src/server.ts",
-    "worker": "ts-node src/worker/notificationWorker.ts"
-  }
+  "eventType": "created",
+  "data": {
+    "eventId": "68e0b551313553447ad5d360",
+    "eventName": "WBM 3",
+    "eventDate": "2025-10-29",
+    "location": "71 Sport Club",
+    "venue": "71 Sport Club",
+    "createdBy": "68dfaa4ce7e2ded0efa24fad"
+  },
+  "timestamp": "2025-10-04T05:49:05.664Z",
+  "service": "event-service"
 }
 ```
 
-Start both processes in separate terminals:
-```bash
-# A) HTTP API + Swagger
-npm run dev
+### `POST /test/broadcast/{eventId}/{type}`
+Trigger broadcast directly (bypass queue) for testing.  
+`type ∈ { created, updated, deleted }`
 
-# B) Queue worker
-npm run worker
-```
-
-Once running:
-- Swagger → `http://localhost:3009/api-docs`
-- Health  → `GET http://localhost:3009/health` → `{"status":"ok"}`
-- Debug   → `GET http://localhost:3009/debug/rabbit` (if the route exists) shows `messageCount` / `consumerCount`
+### `GET /health`
+Service health check.
 
 ---
 
-## Test the flow
+## Message Schema
 
-### 1) Plain message (no template)
-```bash
-curl -X POST http://localhost:3009/test/publish \
-  -H "Content-Type: application/json" \
-  -d '{
-    "channels": ["email", "sms", "line"],
-    "payload": {
-      "to": { "email": "someone@example.com", "phone": "+66961234567" },
-      "message": "Hello from queue",
-      "source": "manual-test"
-    },
-    "meta": { "correlationId": "abc-123" }
-  }'
-```
-> The API publishes to the exchange with a sample routing key like `event.created` (your binding `event.#` will match it). The worker processes the message and inserts a document into `NotificationLog`.
+```ts
+type EventType = "created" | "updated" | "deleted";
 
-### 2) Using templates
-We ship `messageTemplates` and a tiny `render()` that supports `{{var}}`. Example:
-```bash
-curl -X POST http://localhost:3009/test/publish \
-  -H "Content-Type: application/json" \
-  -d '{
-    "channels": ["email","sms","line"],
-    "template": {
-      "id": "event.created",
-      "data": { "eventName": "Birdie Bash #2", "eventDate": "2025-10-05", "location": "CU Stadium" }
-    },
-    "payload": {
-      "to": { "email": "someone@example.com", "phone": "+66961234567" },
-      "source": "birdie-bash"
-    },
-    "meta": { "correlationId": "tmpl-001" }
-  }'
+interface EventBase<T extends EventType> {
+  eventType: T;
+  timestamp: string;            // ISO date-time
+  service: "event-service";
+}
+
+interface EventCreated extends EventBase<"created"> {
+  data: { eventId: string; eventName?: string; eventDate?: string; location?: string; venue?: string; createdBy?: string; };
+}
+interface EventUpdated extends EventBase<"updated"> {
+  data: { eventId: string; updatedBy?: string; eventName?: string; eventDate?: string; location?: string; venue?: string; };
+}
+interface EventDeleted extends EventBase<"deleted"> {
+  data: { eventId: string; deletedBy?: string; eventName?: string; eventDate?: string; location?: string; venue?: string; status?: string; };
+}
 ```
 
-**Where to see results**
-- Email → MailHog UI at `http://localhost:8025`
-- DB → `NotificationLog` in MongoDB
-  ```bash
-  docker exec -it $(docker ps -qf name=mongo) mongosh notification_db --eval 'db.notificationlogs.find().sort({_id:-1}).limit(5).pretty()'
-  ```
+Example `deleted` message:
+```json
+{
+  "eventType": "deleted",
+  "data": {
+    "eventId": "68dfd1e3df959c525a83319e",
+    "deletedBy": "68dfaa4ce7e2ded0efa24fad",
+    "eventName": "Weekend Badminton Meetup",
+    "eventDate": "2025-10-21",
+    "location": "Bangkok Sports Complex",
+    "venue": "Bangkok Sports Complex",
+    "status": "canceled"
+  },
+  "timestamp": "2025-10-04T05:30:56.456Z",
+  "service": "event-service"
+}
+```
 
 ---
 
-## File layout (important for navigation)
+## Recipient Logic
 
-```
-src/
-  config/
-    env.ts           # loads .env (SMTP auth optional)
-    rabbit.ts        # connect + assert (exchange/queue/bind) + publish/consume
-    mongo.ts         # Mongo connection
-  providers/
-    emailProvider.ts # sendEmail(to, subject, message)
-    smsProvider.ts   # Twilio (optional in dev)
-    lineProvider.ts  # LINE Notify (optional)
-  templates/
-    templates.ts     # render {{var}}, messageTemplates, buildMessages()
-  models/
-    NotificationLog.ts
-  routes/
-    health.ts        # GET /health  (mounted with app.use('/health', ...))
-    testPublisher.ts # POST /test/publish (mounted with app.use('/test', ...))
-    docs.ts          # Swagger UI (mounted with app.use('/docs', ...))
-    debug.ts         # (optional) GET /debug/rabbit
-  worker/
-    notificationWorker.ts  # consume -> dispatch -> log
-  server.ts          # API bootstrap
-```
+| Event | Recipients |
+|---|---|
+| `created`, `updated` | All users (role = `user`) from Users DB |
+| `deleted` | Players who joined the event (Registration API) **+ the creator** (`createdBy`) |
 
-> **Route prefix rule**: Inside routers, use local paths like `router.post('/publish', ...)`. Mount with `app.use('/test', router)` so the final path is `/test/publish` (avoid `/test/test/publish`).
+> Recipients are deduplicated by `email|phone` to avoid double sends.
 
 ---
 
-## RabbitMQ topology
+## Idempotency & Throttle
 
-The worker asserts topology on startup, but the equivalent manual setup is:
-- Exchange: `events` (topic, durable) — from `RABBIT_EXCHANGE`
-- Queue: `events.notification` (durable) — from `RABBIT_NOTIFY_QUEUE`
-- Binding: `event.#` — from `RABBIT_NOTIFY_BIND_KEY`
+- **Idempotent lock (`ProcessedEvent`)**  
+  Key = `<type>:<eventId>`, persisted with `expireAt` TTL (from `DEDUP_TTL_SECONDS`).  
+  - First insert wins → that consumer owns the send.  
+  - Duplicate key (E11000) → already processed → skip.  
+  - If sending fails → remove the key and `nack(requeue)` so it can be retried.
 
-In the Rabbit UI, the `Consumers` count on the queue should be **> 0** while the worker is running.
+- **Throttle (`EventThrottle`)**  
+  Rate-limit per `<type>:<eventId>` using `CONSUME_MIN_INTERVAL_MS`.  
+  Messages within the window are skipped to avoid bursts.
+
+> Want to allow “re-send sooner”? Decrease `DEDUP_TTL_SECONDS`, or set it very low and rely mainly on throttle.
+
+---
+
+## Email & SMS
+
+- **Email (SMTP/MailHog)**  
+  - In Docker: `SMTP_HOST=mailhog`, `SMTP_PORT=1025`  
+  - UI: `http://localhost:8025` (use the **HTML** tab)
+
+- **SMS (SMSOK)**  
+  - If you get `ERROR_FORM_SENDER_FAILURE (114)`, temporarily set `FORCE_NO_SENDER=true`  
+  - Direct provider test:
+    ```bash
+    curl -X POST https://api.smsok.co/s       -H 'Content-Type: application/json'       -H 'Authorization: Basic <YOUR_TOKEN>'       -d '{
+        "sender": "SMSOK",
+        "text": "Test Message. From BBP !!!",
+        "destinations": [{ "destination": "+669XXXXXXXX" }],
+        "callback_url": "https://your-callback-url.com/sms/callback",
+        "callback_method": "POST"
+      }'
+    ```
+
+---
+
+## Testing Checklist
+
+1) Ensure `DRY_RUN=false` (to actually send to MailHog/SMSOK):
+```bash
+docker compose exec notification-service sh -lc 'echo DRY_RUN=$DRY_RUN'
+```
+
+2) Verify consumer is bound to the queue:
+- RabbitMQ UI (15672) → Queue `events.notification` shows **Consumers = 1**
+
+3) Trigger events:
+- Swagger `/test/publish` or `/test/broadcast/{eventId}/{type}`
+
+4) Validate results:
+- MailHog UI shows HTML emails
+- Service logs: `broadcast result: { emails: X, sms: Y, people: K }`
+
+5) Re-send to test dedupe/throttle:
+- Rapid repeats → `[throttle] skip burst`
+- After 60s but still within TTL → `[idempotent] already processed, skip`
+
+> To re-test the same event immediately, remove the dedupe key:
+```js
+// In mongosh (DB referred by MONGODB_URI)
+db.ProcessedEvents.deleteMany({ key: { $in: [
+  "created:<eventId>", "updated:<eventId>", "deleted:<eventId>"
+]}});
+```
 
 ---
 
 ## Troubleshooting
 
-- **Swagger shows “No operations defined in spec!”**  
-  Add `paths` directly in `swaggerDef`, or configure `swagger-jsdoc` with `definition:` and `apis: ['./src/**/*.ts']` so it scans route JSDoc.
-- **`GET /health` → 404**  
-  Ensure `health.ts` uses `router.get('/')` and `server.ts` mounts `app.use('/health', health)`.
-- **Published but the worker doesn’t log**  
-  Check `/debug/rabbit`: `consumerCount` must be > 0. Verify `.env` points to the correct broker and that exchange/queue/binding exist.
-- **No email in MailHog**  
-  When Node runs outside Docker, use `SMTP_HOST=localhost`; leave `SMTP_USER/PASS` empty for MailHog.
-- **TypeScript errors with `amqplib`**  
-  Use `import * as amqp from 'amqplib'` with `@types/amqplib` or add the shim.
+- **Container name conflict**  
+  `docker rm -f birdie-notification-service && docker compose up -d notification-service`
+
+- **SMTP `ECONNREFUSED 127.0.0.1:1025` (in Docker)**  
+  Use `SMTP_HOST=mailhog` (not `localhost`).
+
+- **MailHog `452 Unable to store message` (Windows + maildir)**  
+  Use in-memory storage (remove `-storage=maildir` and related volumes).
+
+- **Users list is empty**  
+  Notification service connects to DB `registration` while Users are in DB `user`. Set `USERS_DB_URI` correctly (or point `MONGODB_URI` to `user`).
+
+- **EVENTS_API refused (`http://localhost:3003`) in container**  
+  Use `http://event-service:3003` or `http://host.docker.internal:3003`.
+
+- **API returns `{ emails: 0, sms: 0, people: 0, dryRun: true }`**  
+  `DRY_RUN` is still `true`, or you’re calling a different instance.
 
 ---
 
-## Hardening / Next steps
+## Security
 
-- DLX + retry for transient provider failures
-- Schema validation (zod/Joi) on publish/consume
-- Per-channel rate limiting + exponential backoff
-- Move LINE to Messaging API (push by userId) when you have consent/tokens
-- Protect `/test/publish` in production (AuthN/Z)
-- Observability: metrics, tracing, readiness/liveness probes
+- Keep secrets in `.env` or a secret manager.
+- Service logs avoid dumping full email/SMS payloads to reduce PII leakage.
 
 ---
 
 ## License
 
-MIT (or choose your own)
+Internal / Project use only.
