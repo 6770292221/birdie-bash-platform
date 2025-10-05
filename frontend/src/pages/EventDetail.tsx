@@ -87,7 +87,9 @@ const EventDetail = () => {
   const [memberTime, setMemberTime] = useState({ startTime: '', endTime: '' });
   const [isRegisteringMember, setIsRegisteringMember] = useState(false);
   const [overlayAction, setOverlayAction] = useState<'cancel' | 'register' | 'guest' | 'payment' | null>(null);
-  const [settlements, setSettlements] = useState<any>(null);
+  // Payments for awaiting_payment stage
+  type PaymentItem = { playerId: string; amount: number; status: 'PENDING' | 'COMPLETED' };
+  const [settlements, setSettlements] = useState<{ payments?: PaymentItem[] } | null>(null);
   const [loadingPayments, setLoadingPayments] = useState(false);
   const [markingPaid, setMarkingPaid] = useState<string | null>(null);
 
@@ -102,9 +104,9 @@ const EventDetail = () => {
       // fetch players list: only registered and waitlist
       await fetchPlayersFiltered();
 
-            // AWAITING PAYMENT: Fetch settlement data for payment status display
+            // AWAITING PAYMENT: Fetch payments data for payment status display
       if ((data?.event || data)?.status === 'awaiting_payment') {
-        await fetchSettlements();
+        await fetchPayments();
       }
     } else {
       toast({
@@ -169,17 +171,20 @@ const EventDetail = () => {
     fetchDetail();
   }, [id, toast, t]);
 
-  // AWAITING PAYMENT: Fetch mock settlement data to display payment status
-  const fetchSettlements = async () => {
+  // AWAITING PAYMENT: Fetch payments from real API
+  const fetchPayments = async () => {
     if (!id) return;
     setLoadingPayments(true);
     try {
-      const res = await apiClient.getSettlements(id);
+      const res = await apiClient.getEventPayments(id);
       if (res.success) {
-        setSettlements(res.data);
+        // normalize and de-duplicate by playerId
+        const raw = (res.data as { payments: PaymentItem[] } | undefined)?.payments ?? [];
+        const dedup = Array.from(new Map(raw.map((p) => [p.playerId, p])).values()) as PaymentItem[];
+        setSettlements({ payments: dedup });
       }
     } catch (error) {
-      console.error('Error fetching settlements:', error);
+      console.error('Error fetching payments:', error);
     } finally {
       setLoadingPayments(false);
     }
@@ -205,8 +210,8 @@ const EventDetail = () => {
           className: 'border-green-200 bg-green-50',
           duration: 4000
         });
-        // Refresh settlements data
-        await fetchSettlements();
+        // Refresh payments data
+        await fetchPayments();
       } else {
         toast({
           title: (
@@ -477,17 +482,37 @@ const EventDetail = () => {
       // Add 1-second delay for loading effect after updating state
       await new Promise(resolve => setTimeout(resolve, 1000));
 
-      toast({
-        title: (
-          <div className="flex items-center gap-2">
-            <Target className="w-4 h-4 text-green-600" />
-            {t('success.player_cancelled')}
-          </div>
-        ),
-        description: t('success.player_cancelled_desc'),
-        className: 'border-green-200 bg-green-50',
-        duration: 4000
-      });
+      // Check if there's a penalty
+      const hasPenalty = res.data?.player?.isPenalty || false;
+
+      if (hasPenalty) {
+        // Show warning toast for penalty
+        toast({
+          title: (
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-orange-600" />
+              {t('warning.cancellation_penalty')}
+            </div>
+          ),
+          description: t('warning.cancellation_penalty_desc'),
+          className: 'border-orange-200 bg-orange-50',
+          duration: 8000 // Show longer for important warning
+        });
+      } else {
+        // Show normal success toast
+        toast({
+          title: (
+            <div className="flex items-center gap-2">
+              <Target className="w-4 h-4 text-green-600" />
+              {t('success.player_cancelled')}
+            </div>
+          ),
+          description: t('success.player_cancelled_desc'),
+          className: 'border-green-200 bg-green-50',
+          duration: 4000
+        });
+      }
+
       setCancelingPlayerId(null);
       setOverlayAction(null);
     } else {
@@ -1033,18 +1058,20 @@ const EventDetail = () => {
                     <div className="space-y-3">
                       {players.filter((p:any)=>p.status==='registered').map((p:any)=>(
                         <div key={p.playerId || p.id || p._id} className={`rounded-xl p-4 border ${(() => {
-                          const payment = settlements?.payments?.find((payment: any) => payment.playerId === (p.playerId || p.id || p._id));
-                          return payment?.hasPenalty
-                            ? "bg-gradient-to-r from-red-50 to-pink-50 border-red-200/50"
-                            : "bg-gradient-to-r from-green-50 to-teal-50 border-green-200/50";
+                          const payment = settlements?.payments?.find((payment: PaymentItem) => payment.playerId === (p.playerId || p.id || p._id));
+                          const isCompleted = payment?.status === 'COMPLETED';
+                          return isCompleted
+                            ? "bg-gradient-to-r from-green-50 to-teal-50 border-green-200/50"
+                            : "bg-gradient-to-r from-amber-50 to-orange-50 border-amber-200/50";
                         })()}`}>
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
                               <div className={`w-10 h-10 rounded-full flex items-center justify-center ${(() => {
-                                const payment = settlements?.payments?.find((payment: any) => payment.playerId === (p.playerId || p.id || p._id));
-                                return payment?.hasPenalty
-                                  ? "bg-gradient-to-r from-red-500 to-pink-500"
-                                  : "bg-gradient-to-r from-green-500 to-teal-500";
+                                const payment = settlements?.payments?.find((payment: PaymentItem) => payment.playerId === (p.playerId || p.id || p._id));
+                                const isCompleted = payment?.status === 'COMPLETED';
+                                return isCompleted
+                                  ? "bg-gradient-to-r from-green-500 to-teal-500"
+                                  : "bg-gradient-to-r from-amber-500 to-orange-500";
                               })()}`}>
                                 <Users className="w-4 h-4 text-white" />
                               </div>
@@ -1057,15 +1084,7 @@ const EventDetail = () => {
                                   }>
                                     {p.userType === 'member' ? t('user.member_badge') : t('user.guest_badge')}
                                   </Badge>
-                                  {(() => {
-                                    const payment = settlements?.payments?.find((payment: any) => payment.playerId === (p.playerId || p.id || p._id));
-                                    return payment?.hasPenalty && (
-                                      <Badge className="bg-red-100 text-red-800 border border-red-300">
-                                        <AlertTriangle className="w-3 h-3 mr-1" />
-                                        มีค่าปรับ
-                                      </Badge>
-                                    );
-                                  })()}
+                                  {/* No penalty badge in payments API; show nothing here */}
                                 </div>
                                 <div className="text-sm text-gray-600 flex items-center gap-2">
                                   <Phone className="w-3 h-3" />
@@ -1080,26 +1099,19 @@ const EventDetail = () => {
                                   <div className="text-xs mt-1 flex items-center gap-1">
                                     <CreditCard className="w-3 h-3" />
                                     {(() => {
-                                      const payment = settlements.payments?.find((payment: any) => payment.playerId === (p.playerId || p.id || p._id));
-                                      if (payment?.status === 'paid') {
+                                      const payment = settlements.payments?.find((payment: PaymentItem) => payment.playerId === (p.playerId || p.id || p._id));
+                                      if (payment?.status === 'COMPLETED') {
                                         return (
                                           <span className="text-green-600 flex items-center gap-1">
                                             <CheckCircle className="w-3 h-3" />
                                             จ่ายแล้ว ฿{payment.amount}
-                                            {payment.hasPenalty && (
-                                              <span className="text-red-600 ml-1">(รวมค่าปรับ ฿{payment.penaltyAmount})</span>
-                                            )}
                                           </span>
                                         );
                                       } else {
-                                        const textColor = payment?.hasPenalty ? "text-red-600" : "text-orange-600";
                                         return (
-                                          <span className={`${textColor} flex items-center gap-1`}>
+                                          <span className={`text-orange-600 flex items-center gap-1`}>
                                             <Clock className="w-3 h-3" />
                                             รอชำระ ฿{payment?.amount || 0}
-                                            {payment?.hasPenalty && (
-                                              <span className="text-red-600 ml-1">(รวมค่าปรับ ฿{payment.penaltyAmount})</span>
-                                            )}
                                           </span>
                                         );
                                       }
@@ -1111,8 +1123,8 @@ const EventDetail = () => {
                             <div className="flex gap-2">
                               {/* AWAITING PAYMENT: Mark as Paid button (Guest players only) */}
                               {event.status === 'awaiting_payment' && settlements && p.userType === 'guest' && (() => {
-                                const payment = settlements.payments?.find((payment: any) => payment.playerId === (p.playerId || p.id || p._id));
-                                return payment?.status !== 'paid' && (
+                                const payment = settlements.payments?.find((payment: PaymentItem) => payment.playerId === (p.playerId || p.id || p._id));
+                                return payment?.status !== 'COMPLETED' && (
                                   <Button
                                     variant="outline"
                                     size="sm"
@@ -1453,6 +1465,29 @@ const EventDetail = () => {
                                 <Timer className="w-3 h-3" />
                                 {p.startTime || '-'} - {p.endTime || '-'}
                               </div>
+                              {/* Payment info (read-only) during awaiting_payment */}
+                              {event.status === 'awaiting_payment' && settlements && (
+                                <div className="text-xs mt-1 flex items-center gap-1">
+                                  <CreditCard className="w-3 h-3" />
+                                  {(() => {
+                                    const payment = settlements.payments?.find((payment: PaymentItem) => payment.playerId === (p.playerId || p.id || p._id));
+                                    if (payment?.status === 'COMPLETED') {
+                                      return (
+                                        <span className="text-green-600 flex items-center gap-1">
+                                          <CheckCircle className="w-3 h-3" />
+                                          จ่ายแล้ว ฿{payment.amount}
+                                        </span>
+                                      );
+                                    }
+                                    return (
+                                      <span className={`text-orange-600 flex items-center gap-1`}>
+                                        <Clock className="w-3 h-3" />
+                                        รอชำระ ฿{payment?.amount || 0}
+                                      </span>
+                                    );
+                                  })()}
+                                </div>
+                              )}
                             </div>
                           </div>
                         </div>

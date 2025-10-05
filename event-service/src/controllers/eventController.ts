@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { Types } from "mongoose";
 import Event from "../models/Event";
 import {
   IEventCreate,
@@ -513,7 +514,7 @@ export const createEvent = async (
  *         name: status
  *         schema:
  *           type: string
- *           enum: [active, canceled, completed]
+ *           enum: [upcoming, in_progress, calculating, awaiting_payment, completed, canceled]
  *         description: Filter events by status
  *       - in: query
  *         name: date
@@ -696,6 +697,15 @@ export const getEvents = async (req: Request, res: Response): Promise<void> => {
 export const getEvent = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
+
+    if (!Types.ObjectId.isValid(id)) {
+      res.status(400).json({
+        code: "INVALID_EVENT_ID",
+        message: `Invalid event ID format: ${id}`,
+        details: { id },
+      });
+      return;
+    }
 
     const event = await Event.findById(id);
 
@@ -1073,6 +1083,12 @@ export const deleteEvent = async (
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/EventStatus'
+ *       400:
+ *         description: Invalid event ID format
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  *       401:
  *         description: Authentication required
  *         content:

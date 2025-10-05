@@ -1,10 +1,11 @@
 // API utility functions for gateway integration (axios version)
 
-import axios, { AxiosError, AxiosInstance } from "axios";
+import axios, { AxiosError, AxiosInstance, AxiosRequestHeaders } from "axios";
 
 // Vite only exposes variables prefixed with VITE_
 const GATEWAY_URL =
   (import.meta.env.VITE_GATEWAY_URL as string) || "http://localhost:3000";
+const MATCHING_SERVICE_URL = process.env.MATCHING_SERVICE_URL || "http://localhost:3008";
 
 export interface ApiResponse<T = unknown> {
   success: boolean;
@@ -66,7 +67,7 @@ export interface PlayerItem {
   startTime?: string;
   endTime?: string;
   status?: string;
-  userType?: 'member' | 'guest';
+  userType?: "member" | "guest";
 }
 
 class ApiClient {
@@ -89,8 +90,10 @@ class ApiClient {
     // Attach token automatically
     this.http.interceptors.request.use((config) => {
       if (this.token) {
-        config.headers = config.headers || {};
-        config.headers["Authorization"] = `Bearer ${this.token}`;
+        if (!config.headers) {
+          config.headers = {} as AxiosRequestHeaders;
+        }
+        (config.headers as AxiosRequestHeaders)["Authorization"] = `Bearer ${this.token}`;
       }
       return config;
     });
@@ -227,6 +230,7 @@ class ApiClient {
     offset?: number;
     status?: string;
     date?: string;
+    eventName?: string;
   }): Promise<ApiResponse<{ events: unknown[] }>> {
     return this.request(`/api/events`, {
       params: {
@@ -234,6 +238,7 @@ class ApiClient {
         offset: params?.offset,
         status: params?.status,
         date: params?.date,
+        eventName: params?.eventName,
       },
     });
   }
@@ -383,6 +388,20 @@ class ApiClient {
     });
   }
 
+  // Payments: fetch payments by event from real payment service
+  async getEventPayments(eventId: string): Promise<ApiResponse<{ payments: { playerId: string; amount: number; status: 'PENDING' | 'COMPLETED' }[] }>> {
+    // Call absolute URL to payment service (port 8080)
+    return this.request<{ payments: { playerId: string; amount: number; status: 'PENDING' | 'COMPLETED' }[] }>(`http://localhost:8080/api/payments/event/${eventId}`);
+  }
+
+  // Payments: fetch payments by player (optionally filter by event)
+  async getPlayerPayments(playerId: string, params?: { eventId?: string; status?: string }): Promise<ApiResponse<{ payments: Array<{ id: string; status: string; amount: number; currency: string; qrCodeUri?: string | null; eventId?: string; createdAt?: string; updatedAt?: string }> }>> {
+    const query: Record<string, any> = {};
+    if (params?.eventId) query.eventId = params.eventId;
+    if (params?.status) query.status = params.status;
+    return this.request(`/api/payments/player/${playerId}`, { params: Object.keys(query).length ? query : undefined });
+  }
+
   // Mark player as paid endpoint (mocked for now)
   async markPlayerAsPaid(eventId: string, playerId: string): Promise<ApiResponse<unknown>> {
     // Mock response for now - replace with real API call later
@@ -414,6 +433,64 @@ class ApiClient {
   async getVenue(venueId: string): Promise<ApiResponse<unknown>> {
     return this.request(`/api/event/venues/${venueId}`);
   }
+
+  // Matching service integration
+  private async matchingRequest<T>(
+    endpoint: string,
+    options: { method?: string; data?: any } = {}
+  ): Promise<ApiResponse<T>> {
+    try {
+      const response = await axios.request({
+        url: `${MATCHING_SERVICE_URL}${endpoint}`,
+        method: (options.method || "GET") as any,
+        data: options.data,
+        headers: {
+          "Content-Type": "application/json",
+          ...(this.token ? { Authorization: `Bearer ${this.token}` } : {})
+        },
+        timeout: 10000
+      });
+
+      return {
+        success: true,
+        data: response.data?.data ?? response.data,
+        message: response.data?.message,
+      };
+    } catch (err) {
+      const axErr = err as AxiosError<any>;
+      const errorMessage = axErr.response?.data?.message || axErr.message || "Matching service error";
+      return { success: false, error: errorMessage };
+    }
+  }
+
+  // Matching endpoints
+  async seedMatching(eventId: string): Promise<ApiResponse<any>> {
+    return this.matchingRequest("/api/matchings/seed", {
+      method: "POST",
+      data: { eventId }
+    });
+  }
+
+  async advanceMatching(eventId: string, data?: {
+    courtId?: string;
+    at?: string;
+  }): Promise<ApiResponse<any>> {
+    return this.matchingRequest("/api/matchings/advance", {
+      method: "POST",
+      data: {
+        eventId,
+        ...data
+      }
+    });
+  }
+
+  async closeMatching(eventId: string): Promise<ApiResponse<any>> {
+    return this.matchingRequest("/api/matchings/close", {
+      method: "POST",
+      data: { eventId }
+    });
+  }
+
 }
 
 // Create and export singleton instance

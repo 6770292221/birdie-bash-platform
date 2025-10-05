@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Receipt, ArrowLeft, CheckCircle, Clock, Info } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -6,16 +6,101 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { mockPaymentHistory, mockNextPayoutNotice } from '@/data/mockPaymentHistory';
+import { mockNextPayoutNotice } from '@/data/mockPaymentHistory';
+import { apiClient, PlayerItem } from '@/utils/api';
 
 const PaymentHistory = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { t } = useLanguage();
 
+  type RawPayment = { id: string; status: string; amount: number; currency: string; qrCodeUri?: string | null; eventId?: string; createdAt?: string; updatedAt?: string };
+  type HistoryItem = { id: string; title: string; datetime: string; amount: string; status: 'ชำระแล้ว' };
+  const [loading, setLoading] = useState(false);
+  const [items, setItems] = useState<HistoryItem[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
     if (!user) navigate('/login');
   }, [user, navigate]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const fetchHistory = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        // 1) Get all registrations for this user to discover playerIds
+        const regsResp = await apiClient.getUserRegistrations({ includeCanceled: true });
+        const regs = (regsResp.success ? (regsResp.data?.registrations || []) : []) as Array<PlayerItem & { eventId?: string }>;
+        const playerIds = Array.from(new Set(regs.map(r => r.playerId).filter(Boolean))) as string[];
+        if (!playerIds.length) {
+          if (!cancelled) setItems([]);
+          return;
+        }
+        // 2) For each playerId, fetch completed payments
+        const paymentResponses = await Promise.all(playerIds.map(pid => apiClient.getPlayerPayments(pid, { status: 'COMPLETED' })));
+        const payments: RawPayment[] = paymentResponses
+          .filter(r => r.success)
+          .flatMap(r => (r.data?.payments || []) as RawPayment[])
+          .filter(p => p.status === 'COMPLETED');
+
+        if (!payments.length) {
+          if (!cancelled) setItems([]);
+          return;
+        }
+
+        // 3) Fetch event names for payments' eventIds
+        const uniqueEventIds = Array.from(new Set(payments.map(p => p.eventId).filter(Boolean))) as string[];
+        const eventMap: Record<string, { eventName?: string } | null> = {};
+        await Promise.all(
+          uniqueEventIds.map(async (eid) => {
+            const er = await apiClient.getEvent(eid);
+            if (er.success) {
+              const isWithEvent = (d: unknown): d is { event?: { eventName?: string } } => !!d && typeof d === 'object' && 'event' in d;
+              const data = er.data as unknown;
+              const eventObj = isWithEvent(data) ? (data.event ?? undefined) : (data as { eventName?: string } | undefined);
+              eventMap[eid] = { eventName: eventObj?.eventName };
+            } else {
+              eventMap[eid] = null;
+            }
+          })
+        );
+
+        // 4) Map to history items and sort desc by time
+        const formatter = new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB' });
+        const toDisplayTime = (iso?: string) => {
+          try {
+            return iso ? new Date(iso).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' }) : '';
+          } catch {
+            return iso || '';
+          }
+        };
+
+        const sorted = [...payments].sort((a, b) => {
+          const tb = new Date(b.updatedAt || b.createdAt || '').getTime();
+          const ta = new Date(a.updatedAt || a.createdAt || '').getTime();
+          return tb - ta; // newest first
+        });
+
+        const mapped: HistoryItem[] = sorted.map((p) => {
+          const title = (p.eventId && eventMap[p.eventId]?.eventName) || 'กิจกรรม';
+          const when = toDisplayTime(p.updatedAt || p.createdAt);
+          const amount = formatter.format(Number(p.amount || 0));
+          return { id: p.id, title, datetime: when, amount, status: 'ชำระแล้ว' as const };
+        });
+
+        if (!cancelled) setItems(mapped);
+      } catch (e) {
+        console.error('Failed to load payment history', e);
+        if (!cancelled) setError('ไม่สามารถโหลดประวัติการจ่ายเงินได้');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    fetchHistory();
+    return () => { cancelled = true; };
+  }, [user]);
 
   if (!user) {
     return null;
@@ -36,7 +121,7 @@ const PaymentHistory = () => {
             </div>
             <div>
               <h1 className="text-2xl font-bold text-gray-900">ประวัติการจ่ายเงิน</h1>
-              <p className="text-sm text-gray-600">ตัวอย่างข้อมูลรอการเชื่อมต่อระบบจริง</p>
+              <p className="text-sm text-gray-600">แสดงเฉพาะรายการที่ชำระเสร็จสิ้น (Completed)</p>
             </div>
           </div>
         </div>
@@ -58,15 +143,27 @@ const PaymentHistory = () => {
           </CardContent>
         </Card>
 
-        {/* Payment History List */}
+        {/* Payment History List (Completed only) */}
         <Card className="bg-white/80 backdrop-blur-sm">
           <CardHeader className="pb-3">
             <CardTitle className="text-lg text-gray-900">
-              รายการล่าสุด ({mockPaymentHistory.length})
+              รายการล่าสุด ({items.length})
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {mockPaymentHistory.map((entry) => (
+            {loading && (
+              <div className="text-sm text-gray-600">กำลังโหลดประวัติการจ่ายเงิน…</div>
+            )}
+
+            {!loading && error && (
+              <div className="text-sm text-red-600">{error}</div>
+            )}
+
+            {!loading && !error && items.length === 0 && (
+              <div className="text-sm text-gray-600">ยังไม่มีประวัติการชำระเงินที่เสร็จสมบูรณ์</div>
+            )}
+
+            {!loading && !error && items.map((entry) => (
               <div
                 key={entry.id}
                 className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 p-4 bg-gray-50 rounded-lg border"
@@ -77,27 +174,15 @@ const PaymentHistory = () => {
                 </div>
                 <div className="flex items-center gap-4">
                   <span className="text-lg font-bold text-gray-900">{entry.amount}</span>
-                  <Badge
-                    className={
-                      entry.status === 'ชำระแล้ว'
-                        ? 'bg-green-100 text-green-700 border-green-200'
-                        : 'bg-amber-100 text-amber-700 border-amber-200'
-                    }
-                  >
-                    {entry.status === 'ชำระแล้ว' ? (
-                      <CheckCircle className="w-3 h-3 mr-1" />
-                    ) : (
-                      <Clock className="w-3 h-3 mr-1" />
-                    )}
+                  <Badge className="bg-green-100 text-green-700 border-green-200">
+                    <CheckCircle className="w-3 h-3 mr-1" />
                     {entry.status}
                   </Badge>
                 </div>
               </div>
             ))}
 
-            <div className="text-center text-sm text-gray-500">
-              ข้อมูลนี้เป็นตัวอย่างเพื่อทดสอบหน้าจอ เมื่อเชื่อมต่อบริการจริง รายการจะแสดงโดยอัตโนมัติ
-            </div>
+            <div className="text-center text-sm text-gray-500">ข้อมูลแสดงจากระบบจริง (เฉพาะสถานะชำระแล้ว)</div>
           </CardContent>
         </Card>
 

@@ -182,10 +182,18 @@ export const getAllUsers = async (req: Request, res: Response, next: NextFunctio
 
 export const getProfile = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const claims = (req as any).user as { userId?: string } | undefined;
-    if (!claims?.userId) { res.status(401).json({ code: 'UNAUTHORIZED', message: 'Access token required' }); return; }
+    const headerUserIdRaw = req.headers['x-user-id'];
+    const userId = Array.isArray(headerUserIdRaw) ? headerUserIdRaw[0] : headerUserIdRaw;
 
-    const user = await User.findById(claims.userId);
+    if (!userId) {
+      res.status(401).json({
+        code: 'AUTHENTICATION_REQUIRED',
+        message: 'Authentication required',
+      });
+      return;
+    }
+
+    const user = await User.findById(userId);
     if (!user) { res.status(404).json({ code: 'USER_NOT_FOUND', message: 'User not found' }); return; }
 
     res.status(200).json({

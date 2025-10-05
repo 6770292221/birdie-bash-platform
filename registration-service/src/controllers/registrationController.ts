@@ -160,6 +160,19 @@ const mapPlayerResponse = (player: IPlayerDocument) => ({
     : null,
 });
 
+function parseTimeToMinutes(time: string): number | null {
+  if (typeof time !== 'string') {
+    return null;
+  }
+
+  const [hours, minutes] = time.split(':').map(Number);
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) {
+    return null;
+  }
+
+  return hours * 60 + minutes;
+}
+
 function extractEventStatus(status: any): {
   state?: EventStatus;
   isAcceptingRegistrations?: boolean;
@@ -337,6 +350,14 @@ export const cancelPlayerRegistration = async (
   try {
     const { id: eventId, pid: playerId } = req.params;
     const userId = req.headers["x-user-id"];
+    if (!userId) {
+      res.status(401).json({
+        code: "AUTHENTICATION_REQUIRED",
+        message: "User ID is required",
+      });
+      return;
+    }
+
     const event = await fetchEventById(eventId);
     if (!event) {
       res.status(404).json({
@@ -366,26 +387,14 @@ export const cancelPlayerRegistration = async (
       return;
     }
 
-    const userRole = req.headers["x-user-role"];
-    const isAdmin = userRole === "admin";
-
-    if (!isAdmin) {
-      if (!player.userId) {
-        res.status(403).json({
-          code: "INSUFFICIENT_PERMISSIONS",
-          message: "Only admin can cancel guest registrations",
-          details: { playerId, playerType: "guest" },
-        });
-        return;
-      }
-      if (userId && player.userId !== userId) {
-        res.status(403).json({
-          code: "INSUFFICIENT_PERMISSIONS",
-          message: "You can only cancel your own registration",
-          details: { playerId, requesterId: userId, ownerId: player.userId },
-        });
-        return;
-      }
+    // Only check ownership for member registrations
+    if (player.userId && userId && player.userId !== userId) {
+      res.status(403).json({
+        code: "INSUFFICIENT_PERMISSIONS",
+        message: "You can only cancel your own registration",
+        details: { playerId, requesterId: userId, ownerId: player.userId },
+      });
+      return;
     }
 
     if (player.status === "canceled") {
@@ -401,20 +410,46 @@ export const cancelPlayerRegistration = async (
 
     // Check if cancellation incurs penalty
     if (PENALTY_CONFIG.PENALTY_ENABLED) {
-      const now = new Date();
-      const eventDateTime = new Date(`${event.eventDate}T00:00:00`);
+      const BANGKOK_OFFSET_MILLIS = 7 * 60 * 60 * 1000; // UTC+7
 
-      // If event has specific start time, use it; otherwise use event date
-      if (player.startTime) {
-        const [hours, minutes] = player.startTime.split(':').map(Number);
-        eventDateTime.setHours(hours, minutes, 0, 0);
-      }
+      const parseValidTime = (time?: unknown): string | undefined => {
+        if (typeof time !== 'string') return undefined;
+        return /^([01]?\d|2[0-3]):[0-5]\d$/.test(time) ? time : undefined;
+      };
 
-      const minutesUntilEvent = (eventDateTime.getTime() - now.getTime()) / (1000 * 60);
+      const courts = Array.isArray((event as any).courts) ? (event as any).courts : [];
+      const validStartMinutes = courts
+        .map((court: any) => parseValidTime(court?.startTime))
+        .filter((time: string | undefined): time is string => Boolean(time))
+        .map((time: string) => parseTimeToMinutes(time))
+        .filter((minutes: number | null): minutes is number => minutes !== null);
 
-      // Apply penalty if canceling within the penalty period
-      if (minutesUntilEvent <= PENALTY_CONFIG.CANCELLATION_PENALTY_MINUTES && minutesUntilEvent > 0) {
-        player.isPenalty = true;
+      const earliestMinutes = validStartMinutes.length > 0 ? Math.min(...validStartMinutes) : null;
+
+      const eventDateParts = typeof event.eventDate === 'string' ? event.eventDate.split('-') : [];
+      const year = Number(eventDateParts[0]);
+      const month = Number(eventDateParts[1]);
+      const day = Number(eventDateParts[2]);
+
+      if (
+        earliestMinutes !== null &&
+        !Number.isNaN(year) &&
+        !Number.isNaN(month) &&
+        !Number.isNaN(day)
+      ) {
+        const startHours = Math.floor(earliestMinutes / 60);
+        const startMinutes = earliestMinutes % 60;
+
+        const eventStartUtcMillis =
+          Date.UTC(year, month - 1, day, startHours, startMinutes) - BANGKOK_OFFSET_MILLIS;
+        const minutesUntilEvent = (eventStartUtcMillis - Date.now()) / (1000 * 60);
+
+        if (
+          minutesUntilEvent <= PENALTY_CONFIG.CANCELLATION_PENALTY_MINUTES &&
+          minutesUntilEvent > 0
+        ) {
+          player.isPenalty = true;
+        }
       }
     }
 
@@ -487,12 +522,10 @@ export const registerMember = async (
     }
 
     const userId = req.headers["x-user-id"];
-
     if (!userId) {
       res.status(401).json({
         code: "AUTHENTICATION_REQUIRED",
-        message: "User authentication required for player registration",
-        details: { endpoint: "/api/events/{id}/players" },
+        message: "User ID is required",
       });
       return;
     }
@@ -515,6 +548,7 @@ export const registerMember = async (
       eventId,
       userId,
       registrationTime: new Date(),
+      createdBy: userId,
       userType: "member",
       isPenalty: false,
       penaltyFee: 0,
@@ -820,7 +854,6 @@ export const promoteWaitlist = async (
  *     tags: [Registration]
  *     parameters:
  *       - $ref: '#/components/parameters/UserIdHeader'
- *       - $ref: '#/components/parameters/UserRoleHeader'
  *       - in: path
  *         name: id
  *         required: true
@@ -873,21 +906,11 @@ export const registerGuest = async (
     const { id: eventId } = req.params;
     const registrationData: RegisterByGuest = req.body;
 
-    const adminUserId = req.headers["x-user-id"];
-    const adminRole = req.headers["x-user-role"];
-    if (!adminUserId) {
+    const userId = req.headers["x-user-id"];
+    if (!userId) {
       res.status(401).json({
         code: "AUTHENTICATION_REQUIRED",
-        message: "Admin authentication required for guest registration",
-        details: { endpoint: "/api/events/{id}/guests" },
-      });
-      return;
-    }
-    if (adminRole !== "admin") {
-      res.status(403).json({
-        code: "INSUFFICIENT_PERMISSIONS",
-        message: "Admin privileges required to register guests",
-        details: { currentRole: adminRole, requiredRole: "admin" },
+        message: "User ID is required",
       });
       return;
     }
@@ -953,7 +976,7 @@ export const registerGuest = async (
       name: registrationData.name,
       phoneNumber: registrationData.phoneNumber,
       registrationTime: new Date(),
-      createdBy: adminUserId,
+      createdBy: userId,
       userType: "guest",
       isPenalty: false,
       penaltyFee: 0,
