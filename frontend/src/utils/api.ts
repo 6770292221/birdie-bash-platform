@@ -5,7 +5,7 @@ import axios, { AxiosError, AxiosInstance, AxiosRequestHeaders } from "axios";
 // Vite only exposes variables prefixed with VITE_
 const GATEWAY_URL =
   (import.meta.env.VITE_GATEWAY_URL as string) || "http://localhost:3000";
-const MATCHING_SERVICE_URL = process.env.MATCHING_SERVICE_URL || "http://localhost:3008";
+const MATCHING_SERVICE_URL = "http://localhost:3008";
 
 export interface ApiResponse<T = unknown> {
   success: boolean;
