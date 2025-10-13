@@ -171,16 +171,16 @@ const CalculatePage = () => {
 
         const totalAmount = (calculateResponse.data as any).totalCollected || 0;
 
-        toast({
-          title: 'บันทึกและคำนวณสำเร็จ! 🎉',
-          description: `บันทึกลูกขนไก่ ${shuttlecockCount} ลูก และคำนวณค่าใช้จ่ายสำหรับ ${transformedData.length} คน ยอดรวม ฿${totalAmount.toFixed(2)}`,
-        });
+        // toast({
+        //   title: 'บันทึกและคำนวณสำเร็จ! 🎉',
+        //   description: `บันทึกลูกขนไก่ ${shuttlecockCount} ลูก และคำนวณค่าใช้จ่ายสำหรับ ${transformedData.length} คน ยอดรวม ฿${totalAmount.toFixed(2)}`,
+        // });
       } else {
         // If calculation fails, still show success for shuttlecock save
-        toast({
-          title: 'บันทึกสำเร็จ! 🎉',
-          description: `บันทึกจำนวนลูกขนไก่ ${shuttlecockCount} ลูก เรียบร้อยแล้ว`,
-        });
+        // toast({
+        //   title: 'บันทึกสำเร็จ! 🎉',
+        //   description: `บันทึกจำนวนลูกขนไก่ ${shuttlecockCount} ลูก เรียบร้อยแล้ว`,
+        // });
       }
 
       // Reload event data to get updated information
@@ -259,7 +259,9 @@ const CalculatePage = () => {
 
       // Step 2: Issue settlement (save to DB and process charges)
       console.log('Step 2: Issuing settlement...');
-      const issueResponse = await apiClient.issueSettlement(selectedEventId);
+      const issueResponse = await apiClient.issueSettlement(selectedEventId, {
+        shuttlecockCount: parseInt(shuttlecockCount) || 0,
+      });
 
       console.log('Settlement issue response:', issueResponse);
 
@@ -292,10 +294,10 @@ const CalculatePage = () => {
         const successfulCharges = (issueResponse.data as any).successfulCharges || 0;
         const failedCharges = (issueResponse.data as any).failedCharges || 0;
 
-        toast({
-          title: 'บันทึกและเก็บเงินสำเร็จ! 🎉',
-          description: `เก็บเงินสำเร็จ ${successfulCharges} คน, ล้มเหลว ${failedCharges} คน, รวมเก็บได้ ฿${totalAmount.toFixed(2)}`,
-        });
+        // toast({
+        //   title: 'บันทึกและเก็บเงินสำเร็จ! 🎉',
+        //   description: `เก็บเงินสำเร็จ ${successfulCharges} คน, ล้มเหลว ${failedCharges} คน, รวมเก็บได้ ฿${totalAmount.toFixed(2)}`,
+        // });
 
         // Redirect to event detail page after successful charge
         console.log('🔄 Redirecting to event detail page...', selectedEventId);
@@ -309,11 +311,11 @@ const CalculatePage = () => {
 
     } catch (error) {
       console.error('Calculation and settlement error:', error);
-      toast({
-        title: 'เกิดข้อผิดพลาดในการคำนวณ',
-        description: error instanceof Error ? error.message : 'ไม่สามารถดำเนินการได้',
-        variant: 'destructive'
-      });
+      // toast({
+      //   title: 'เกิดข้อผิดพลาดในการคำนวณ',
+      //   description: error instanceof Error ? error.message : 'ไม่สามารถดำเนินการได้',
+      //   variant: 'destructive'
+      // });
     } finally {
       setIsSubmitting(false);
     }
