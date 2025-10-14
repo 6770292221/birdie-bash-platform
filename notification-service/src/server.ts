@@ -7,8 +7,7 @@ import { bootQueue } from "./queue";
 import { broadcastByEventId } from "./services/notify";
 import { EventMessage } from "./types";
 import { fetchEventById } from "./remote/eventApi";
-import User from "./models/User";
-
+import { fetchAllUsers } from "./remote/authApi";
 const app = express();
 app.use(express.json());
 
@@ -169,7 +168,7 @@ app.get("/diag/event/:id", async (req, res) => {
 });
 app.get("/diag/people/count", async (_req, res) => {
   try {
-    const count = await User.countDocuments({ role: "user" });
+    const count = (await fetchAllUsers()).filter(u => u.role === "user").length;
     res.json({ ok:true, count });
   } catch (e:any) {
     console.error("diag people error:", errInfo(e));

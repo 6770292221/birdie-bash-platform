@@ -1,17 +1,17 @@
-import User from "../models/User";
+import { fetchAllUsers } from "../remote/authApi";
 
 export type BroadcastPerson = { email?: string; phone?: string };
 
 export async function fetchAllPeopleFromDB(): Promise<BroadcastPerson[]> {
-  const users = await User.find(
-    { role: "user" },
-    { email: 1, phoneNumber: 1 }
-  ).lean();
+  // Now fetch from Auth API instead of MongoDB
+  const users = await fetchAllUsers();
 
   return users
+    .filter(u => u.role === "user")
     .map(u => ({
-      email: (u as any).email as string | undefined,
-      phone: (u as any).phoneNumber as string | undefined,
+      email: u.email,
+      phone: u.phoneNumber,
     }))
     .filter(p => p.email || p.phone);
 }
+
