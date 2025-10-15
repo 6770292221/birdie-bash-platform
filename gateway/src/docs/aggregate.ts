@@ -3,6 +3,7 @@ import https from "https";
 import { URL } from "url";
 import swaggerUi from "swagger-ui-express";
 import type { Express, Request, Response } from "express";
+import { match } from "assert";
 
 function fetchJson(targetUrl: string, timeoutMs = 2500): Promise<any> {
   return new Promise((resolve, reject) => {
@@ -246,7 +247,8 @@ export function registerDocs(
   authServiceUrl: string,
   eventServiceUrl: string,
   registrationServiceUrl?: string,
-  settlementServiceUrl?: string
+  settlementServiceUrl?: string,
+  matchingServiceUrl?: string
 ) {
   app.get("/api-docs.json", async (req: Request, res: Response) => {
     const proto = (req.headers["x-forwarded-proto"] as string) || (req.protocol || "http");
@@ -266,6 +268,7 @@ export function registerDocs(
       appendUpstream('event', eventServiceUrl);
       appendUpstream('registration', registrationServiceUrl);
       appendUpstream('settlement', settlementServiceUrl);
+      appendUpstream('matching', matchingServiceUrl);
 
       const results = await Promise.allSettled(upstreams.map(u => fetchJson(u.url)));
 

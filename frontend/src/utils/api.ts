@@ -5,7 +5,6 @@ import axios, { AxiosError, AxiosInstance, AxiosRequestHeaders } from "axios";
 // Vite only exposes variables prefixed with VITE_
 const GATEWAY_URL =
   (import.meta.env.VITE_GATEWAY_URL as string) || "http://localhost:3000";
-const MATCHING_SERVICE_URL = "http://localhost:3008";
 
 export interface ApiResponse<T = unknown> {
   success: boolean;
@@ -435,32 +434,14 @@ class ApiClient {
   }
 
   // Matching service integration
-  private async matchingRequest<T>(
+   private async matchingRequest<T>(
     endpoint: string,
     options: { method?: string; data?: any } = {}
   ): Promise<ApiResponse<T>> {
-    try {
-      const response = await axios.request({
-        url: `${MATCHING_SERVICE_URL}${endpoint}`,
-        method: (options.method || "GET") as any,
-        data: options.data,
-        headers: {
-          "Content-Type": "application/json",
-          ...(this.token ? { Authorization: `Bearer ${this.token}` } : {})
-        },
-        timeout: 10000
-      });
-
-      return {
-        success: true,
-        data: response.data?.data ?? response.data,
-        message: response.data?.message,
-      };
-    } catch (err) {
-      const axErr = err as AxiosError<any>;
-      const errorMessage = axErr.response?.data?.message || axErr.message || "Matching service error";
-      return { success: false, error: errorMessage };
-    }
+    return this.request<T>(endpoint, {
+      method: options.method || "GET",
+      data: options.data,
+    });
   }
 
   // Matching endpoints

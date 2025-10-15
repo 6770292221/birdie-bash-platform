@@ -33,6 +33,8 @@ const SETTLEMENT_SERVICE_URL =
   process.env.SETTLEMENT_SERVICE_URL || "http://localhost:3006";
 const REGISTRATION_SERVICE_URL =
   process.env.REGISTRATION_SERVICE_URL || "http://localhost:3005";
+const MATCHING_SERVICE_URL =
+  process.env.MATCHING_SERVICE_URL || "http://localhost:3008";
 const PAYMENT_SERVICE_GRPC_URL =
   process.env.PAYMENT_SERVICE_GRPC_URL || "localhost:50051";
 
@@ -46,7 +48,8 @@ registerDocs(
   AUTH_SERVICE_URL,
   EVENT_SERVICE_URL,
   REGISTRATION_SERVICE_URL,
-  SETTLEMENT_SERVICE_URL
+  SETTLEMENT_SERVICE_URL,
+  MATCHING_SERVICE_URL
 );
 
 // Authentication middleware is now in ./middleware/auth
@@ -89,7 +92,8 @@ const routes = getRoutes(
   AUTH_SERVICE_URL,
   EVENT_SERVICE_URL,
   SETTLEMENT_SERVICE_URL,
-  REGISTRATION_SERVICE_URL
+  REGISTRATION_SERVICE_URL,
+  MATCHING_SERVICE_URL
 );
 
 // Setup proxies for each service

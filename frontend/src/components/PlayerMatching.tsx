@@ -46,6 +46,8 @@ const [eventData, setEventData] = useState<any>(null); // เพิ่ม state 
     return new Date().toISOString();
   };
 
+  
+
   // Start initial games - เริ่มเกมแรก
   const handleSeedMatching = async () => {
     setLoading(true);
@@ -165,37 +167,53 @@ const [eventData, setEventData] = useState<any>(null); // เพิ่ม state 
     return currentTime >= startMinutes && currentTime <= endMinutes;
   };
 
-  // Helper function to get court name
-  const getCourtName = (courtId: string): string => {
-    const court = event.courts.find(c => c.id === courtId || c.courtNumber.toString() === courtId);
-    return court?.name || `คอร์ท ${courtId}`;
-  };
+  const normalizeCourtKey = (val: string | number | undefined | null) => {
+  const s = String(val ?? '').toLowerCase();
+  const m = s.match(/(\d+)/);
+  return m ? m[1] : s;
+};
 
-  // Get courts with active games from matching status
-  const getCourtsWithGames = () => {
-    if (!matchingStatus?.courts || !matchingStatus?.games) return [];
-    
-    return matchingStatus.courts
-      .filter((court: any) => court.currentGameId)
-      .map((court: any) => {
-        const activeGame = matchingStatus.games.find((game: any) => 
-          game.id === court.currentGameId && !game.endTime
-        );
-        const originalCourt = event.courts.find((c: Court) => 
-          c.id === court.id || c.courtNumber?.toString() === court.id
-        );
-        
-        return {
-          ...court,
-          name: originalCourt?.name || `คอร์ท ${court.id}`,
-          startTime: originalCourt?.startTime || '20:00',
-          endTime: originalCourt?.endTime || '22:00',
-          activeGame,
-          players: activeGame?.playerIds || [],
-          isAvailable: originalCourt ? isCourtAvailable(originalCourt) : true
-        };
-      });
-  };
+// Helper function to get court name
+const getCourtName = (courtId: string): string => {
+  const key = normalizeCourtKey(courtId);
+  const court = event.courts.find(c =>
+    normalizeCourtKey((c as any).id ?? c.courtNumber) === key
+  );
+  // ชื่อเป็น "คอร์ท c<เลข>" ถ้าไม่มี name
+  return (court as any)?.name || `คอร์ท c${key}`;
+};
+
+// Get courts with active games from matching status
+const getCourtsWithGames = () => {
+  if (!matchingStatus?.courts || !matchingStatus?.games) return [];
+
+  return matchingStatus.courts
+    .filter((court: any) => court.currentGameId)
+    .map((court: any) => {
+      const activeGame = matchingStatus.games.find(
+        (game: any) => game.id === court.currentGameId && !game.endTime
+      );
+
+      // จับคู่ court "c1" กับ courtNumber 1
+      const originalCourt = event.courts.find((c: Court) =>
+        normalizeCourtKey((c as any).id ?? c.courtNumber) === normalizeCourtKey(court.id)
+      );
+
+      // ใช้เวลาใน event.courts ถ้ามี ไม่งั้นไม่กำหนด (เลี่ยง fallback 20:00/22:00)
+      const startTime = (originalCourt as any)?.startTime ?? undefined;
+      const endTime = (originalCourt as any)?.endTime ?? undefined;
+
+      return {
+        ...court,
+        name: getCourtName(court.id),
+        startTime,
+        endTime,
+        activeGame,
+        players: activeGame?.playerIds || [],
+        isAvailable: originalCourt ? isCourtAvailable(originalCourt) : true,
+      };
+    });
+};
 
   // Get players by state from matching status
   const getPlayersByState = (state: string) => {

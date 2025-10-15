@@ -11,7 +11,8 @@ export function getRoutes(
   authUrl: string,
   eventUrl: string,
   settlementUrl: string,
-  registrationUrl?: string
+  registrationUrl?: string,
+  matchingUrl?: string
 ): ProxyRoute[] {
   return [
     // Registration service routes first (more specific)
@@ -79,5 +80,11 @@ export function getRoutes(
       protected: true,
       adminRequired: true,
     },
+    {
+      path: "/api/matchings",
+      target: matchingUrl || "",
+      protected: true,
+      adminRequired: true,
+    }
   ];
 }
