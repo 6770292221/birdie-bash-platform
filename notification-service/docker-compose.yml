@@ -1,54 +1,6 @@
 services:
-  api:
-    build: .
-    image: notification-service:latest
-    container_name: notif-api
-    command: ["node", "dist/server.js"]
-    ports:
-      - "3009:3009"
-    env_file:
-      - .env
-    environment:
-      PORT: "${PORT:-3009}"
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      mongo:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:3009/health"]
-      interval: 10s
-      timeout: 3s
-      retries: 10
-
-  worker:
-    image: notification-service:latest
-    container_name: notif-worker
-    command: ["node", "dist/worker/notificationWorker.js"]
-    env_file:
-      - .env
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      mongo:
-        condition: service_healthy
-
-  mongo:
-    image: mongo:7
-    container_name: mongo
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongo_data:/data/db
-    healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ ping: 1 }).ok"]
-      interval: 10s
-      timeout: 5s
-      retries: 20
-
   rabbitmq:
-    image: rabbitmq:4.1.4-management
-    container_name: rabbitmq
+    image: rabbitmq:3.12-management
     ports:
       - "5672:5672"
       - "15672:15672"
@@ -57,16 +9,40 @@ services:
       RABBITMQ_DEFAULT_PASS: guest
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-      interval: 10s
-      timeout: 5s
+      interval: 5s
+      timeout: 3s
       retries: 20
 
+  mongo:
+    image: mongo:6
+    ports:
+      - "27017:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.runCommand({ ping: 1 })"]
+      interval: 5s
+      timeout: 3s
+      retries: 40
+
   mailhog:
-    image: mailhog/mailhog:v1.0.1
-    container_name: mailhog
+    image: mailhog/mailhog:latest
     ports:
       - "1025:1025"
       - "8025:8025"
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 1025 && wget -q -O- http://localhost:8025/api/v2/status >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 3s
+      retries: 40
 
-volumes:
-  mongo_data:
+  notification-service:
+    build: .
+    env_file: .env
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+      mailhog:
+        condition: service_healthy
+    ports:
+      - "3000:3000"

@@ -74,6 +74,23 @@ services:
     networks:
       - birdie-network
 
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    container_name: birdie-mailhog
+    restart: unless-stopped
+    ports:
+      - "8025:8025"
+      - "1025:1025"
+    volumes:
+      - mailhog_data:/mailhog/data
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8025"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - birdie-network
+
   # Gateway API
   gateway:
     build: ./gateway
@@ -89,6 +106,7 @@ services:
       - EVENT_SERVICE_URL=http://event-service:3003
       - REGISTRATION_SERVICE_URL=http://registration-service:3005
       - SETTLEMENT_SERVICE_URL=http://settlement-service:3006
+      - NOTIFICATION_SERVICE_URL=http://notification-service:3007
       - MATCHING_SERVICE_URL=http://matching-service:3008
       - PAYMENT_SERVICE_GRPC_URL=payment-service:50051
     depends_on:
@@ -96,6 +114,7 @@ services:
       - event-service
       - registration-service
       - settlement-service
+      - notification-service
     networks:
       - birdie-network
 
@@ -203,8 +222,17 @@ services:
     ports:
       - "3002:3002"   # HTTP endpoint
       - "50051:50051" # gRPC endpoint
-    env_file:
-      - ./payment-service/.env.docker
+    environment:
+    - NODE_ENV=development
+    - PORT=3007
+    - MYSQL_HOST=mysql
+    - MYSQL_PORT=3306
+    - MYSQL_DB=payment_db
+    - MYSQL_USER=payment_user
+    - MYSQL_PASSWORD=payment123
+    - RABBIT_URL=amqp://admin:password123@rabbitmq:5672
+    - RABBIT_EXCHANGE=events
+    - DATABASE_URL=mysql://payment_user:payment123@mysql:3306/payment_db
     networks:
       - birdie-network
 
@@ -233,9 +261,56 @@ services:
       - EVENT_BASE_URL=http://event-service:3003
       - REGISTER_BASE_URL=http://registration-service:3005
       - AUTH_BASE_URL=http://auth-service:3001
-
     depends_on:
       - mongodb
+    networks:
+      - birdie-network
+
+  # Notification Service
+  notification-service:
+    build: ./notification-service
+    container_name: birdie-notification-service
+    restart: unless-stopped
+    ports:
+      - "3007:3007"
+    environment:
+      - PORT=3007
+      - NODE_ENV=development
+      - DRY_RUN=false
+      - MONGODB_URI=mongodb+srv://birdie_admin:AppUser%232025%21@birdie-bash-cluster.lwadyko.mongodb.net/notification?retryWrites=true&w=majority&appName=birdie-bash-cluster
+      - RABBIT_URL=amqp://admin:password123@rabbitmq:5672
+      - RABBIT_EXCHANGE=events
+      - RABBIT_QUEUE=events.notification
+      - RABBIT_BIND_KEY="event.#"
+      - DEDUP_TTL_SECONDS=604800
+      - CONSUME_MIN_INTERVAL_MS=60000
+      - THROTTLE_TTL_SECONDS=2592000
+      - SMTP_HOST=mailhog
+      - SMTP_PORT=1025
+      - SMTP_USER=
+      - SMTP_PASS=
+      - EMAIL_FROM="BBP Notify <no-reply@bbp.local>"
+      - SMSOK_BASE=https://api.smsok.co
+      - SMSOK_AUTH=Basic TFFkN2I5amtRSFh1ZFNGWVRKaEtWZ2hFVm9KbHUxOlpDQnpEUEc4Z0thbWVsX1p5b2FZWUkxRnVrbmp0Zw==
+      - SMS_SENDER=BBP_SA_PROJ
+      - SMS_CALLBACK_URL=https://your-callback-url.com/sms/callback
+      - FORCE_NO_SENDER=false
+      - SMS_WHITELIST=66961655474
+      - BROADCAST_CHANNELS=email,sms
+      - EVENTS_API_BASE=http://event-service:3003
+      - EVENTS_API_PATH=/api/events/:id
+      - REG_API_BASE=http://registration-service:3005
+      - REG_API_PLAYERS_PATH=/api/registration/events/:id/players?limit=1000&offset=0
+      - AUTH_API_BASE=http://auth-service:3001
+      - AUTH_API_USER_PATH=/api/auth/user/{id}
+      - AUTH_API_LIST_PATH=/api/auth/users?role=user&limit=10000&offset=0
+    depends_on:
+      mongodb:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+      mailhog:
+        condition: service_healthy
     networks:
       - birdie-network
 
@@ -245,6 +320,8 @@ volumes:
   rabbitmq_data:
     driver: local
   mysql_data:
+    driver: local
+  mailhog_data:
     driver: local
 
 networks:
