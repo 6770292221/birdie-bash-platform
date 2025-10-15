@@ -222,17 +222,8 @@ services:
     ports:
       - "3002:3002"   # HTTP endpoint
       - "50051:50051" # gRPC endpoint
-    environment:
-    - NODE_ENV=development
-    - PORT=3007
-    - MYSQL_HOST=mysql
-    - MYSQL_PORT=3306
-    - MYSQL_DB=payment_db
-    - MYSQL_USER=payment_user
-    - MYSQL_PASSWORD=payment123
-    - RABBIT_URL=amqp://admin:password123@rabbitmq:5672
-    - RABBIT_EXCHANGE=events
-    - DATABASE_URL=mysql://payment_user:payment123@mysql:3306/payment_db
+    env_file:
+      - ./payment-service/.env.docker
     networks:
       - birdie-network
 
