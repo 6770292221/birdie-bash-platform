@@ -3,7 +3,6 @@ import https from "https";
 import { URL } from "url";
 import swaggerUi from "swagger-ui-express";
 import type { Express, Request, Response } from "express";
-import { match } from "assert";
 
 function fetchJson(targetUrl: string, timeoutMs = 2500): Promise<any> {
   return new Promise((resolve, reject) => {
