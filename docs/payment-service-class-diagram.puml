@@ -1,0 +1,269 @@
+@startuml PaymentService Domain Model
+
+!define LIGHTORANGE #FFE5CC
+!define LIGHTBLUE #CCE5FF
+!define LIGHTGREEN #E5FFCC
+!define LIGHTPURPLE #E5CCFF
+!define LIGHTYELLOW #FFFFCC
+!define LIGHTPINK #FFE5F0
+
+skinparam backgroundColor #FAFAFA
+skinparam roundCorner 15
+skinparam shadowing true
+skinparam linetype ortho
+
+skinparam class {
+    BackgroundColor LIGHTBLUE
+    BorderColor #2C3E50
+    BorderThickness 2
+    ArrowColor #34495E
+    ArrowThickness 2
+    FontSize 12
+    FontName Arial
+    AttributeFontSize 11
+    StereotypeFontSize 10
+}
+
+skinparam package {
+    BackgroundColor #FFFFFF
+    BorderColor #95A5A6
+    BorderThickness 2
+    FontSize 14
+    FontStyle bold
+}
+
+skinparam note {
+    BackgroundColor LIGHTYELLOW
+    BorderColor #F39C12
+    BorderThickness 1
+}
+
+' Core Domain Entities
+package "Core Domain" <<Folder>> {
+
+    class Event <<Entity>> LIGHTORANGE {
+        +id: string
+        +eventName: string
+        +eventDate: string
+        +location: string
+        +status: EventStatus
+        +shuttlecockPrice: number
+        +courtHourlyRate: number
+        +penaltyFee: number
+        +shuttlecockCount: number
+        +createdBy: string
+        +updatedBy: string
+        +createdAt: Date
+        +updatedAt: Date
+        --
+        +addPlayer(player: Player): void
+        +removePlayer(playerId: string): void
+        +hasAvailableSlots(): boolean
+        +updateCapacity(): void
+        +calculateTotalCost(playerId: string): number
+        +allocateCourt(courtNumber, startTime, endTime): void
+        +startEvent(): void
+        +completeEvent(): void
+        +cancelEvent(): void
+        +isAllPaymentsCompleted(): boolean
+    }
+
+    class Player <<Entity>> LIGHTGREEN {
+        +id: string
+        +eventId: ObjectId
+        +userId: string
+        +name: string
+        +email: string
+        +phoneNumber: string
+        +startTime: string
+        +endTime: string
+        +registrationTime: Date
+        +status: PlayerStatus
+        +userType: UserType
+        +isPenalty: boolean
+        +createdBy: string
+        +createdAt: Date
+        +updatedAt: Date
+        --
+        +register(event: Event): void
+        +cancelRegistration(): void
+        +moveToWaitlist(): void
+        +applyPenalty(): void
+        +calculatePaymentAmount(event: Event): number
+        +isGuest(): boolean
+        +isMember(): boolean
+    }
+
+    class Payment <<Entity>> LIGHTPURPLE {
+        +id: string
+        +eventId: string
+        +playerId: string
+        +amount: number
+        +currency: string
+        +description: string
+        +paymentMethod: string
+        +qrCodeUri: string
+        +omiseChargeId: string
+        +omiseSourceId: string
+        +status: PaymentStatus
+        +createdAt: Date
+        +updatedAt: Date
+        --
+        +issueCharge(): void
+        +markAsPending(): void
+        +markAsCompleted(): void
+        +markAsFailed(): void
+        +cancel(): void
+        +generateQRCode(): string
+        +addTransaction(transaction): void
+        +isPending(): boolean
+        +isCompleted(): boolean
+        +isFailed(): boolean
+    }
+
+    class PaymentTransaction <<Entity>> LIGHTPURPLE {
+        +id: string
+        +paymentId: string
+        +type: TransactionType
+        +amount: number
+        +status: PaymentStatus
+        +transactionId: string
+        +timestamp: Date
+        --
+        +record(): void
+        +updateStatus(status: PaymentStatus): void
+        +isSuccessful(): boolean
+    }
+}
+
+' Value Objects
+package "Value Objects" <<Folder>> {
+
+    class Capacity <<Value Object>> LIGHTYELLOW {
+        +maxParticipants: number
+        +currentParticipants: number
+        +availableSlots: number
+        +waitlistEnabled: boolean
+    }
+
+    class CourtTime <<Value Object>> LIGHTYELLOW {
+        +courtNumber: number
+        +startTime: string
+        +endTime: string
+    }
+}
+
+' External Entities
+package "External - Omise Payment Gateway" <<Folder>> {
+
+    class Charge <<External>> LIGHTPINK {
+        +id: string
+        +amount: number
+        +currency: string
+        +status: string
+        +sourceId: string
+        +created_at: string
+        --
+        +create(amount, currency, sourceId): Charge
+        +retrieve(chargeId: string): Charge
+        +getStatus(): string
+        +updateStatus(newStatus: string): void
+    }
+
+    class Source <<External>> LIGHTPINK {
+        +id: string
+        +type: string
+        +flow: string
+        +amount: number
+        +currency: string
+        --
+        +create(amount, currency, type): Source
+        +getQRCode(): string
+    }
+
+    class ScannableCode <<Value Object>> LIGHTPINK {
+        +type: string
+    }
+
+    class Image <<Value Object>> LIGHTPINK {
+        +download_uri: string
+    }
+}
+
+' Enumerations
+package "Enumerations" <<Folder>> {
+
+    enum PlayerStatus {
+        REGISTERED
+        WAITLIST
+        CANCELED
+    }
+
+    enum UserType {
+        MEMBER
+        GUEST
+    }
+
+    enum EventStatus {
+        UPCOMING
+        IN_PROGRESS
+        COMPLETED
+        CANCELLED
+    }
+
+    enum PaymentStatus {
+        PENDING
+        PROCESSING
+        COMPLETED
+        FAILED
+        CANCELLED
+    }
+
+    enum TransactionType {
+        CHARGE
+    }
+}
+
+' Relationships - Core Domain
+Event "1" o-down- "0..*" Player : registers >
+Event "1" o-down- "0..*" Payment : requires >
+Player "1" o-right- "0..*" Payment : makes >
+Payment "1" *-down- "1..*" PaymentTransaction : tracks >
+
+' Relationships - Value Objects
+Event "1" *-left- "1" Capacity : has
+Event "1" *-left- "0..*" CourtTime : allocates
+
+' Relationships - External Gateway
+Payment "1" -right-- "1" Charge : processed via >
+Charge "1" -down-- "1" Source : uses >
+Source "1" *-down- "1" ScannableCode : contains
+ScannableCode "1" *-down- "1" Image : has
+
+' Relationships - Enumerations
+Player .up. PlayerStatus : <<uses>>
+Player .up. UserType : <<uses>>
+Event .up. EventStatus : <<uses>>
+Payment .up. PaymentStatus : <<uses>>
+PaymentTransaction .up. PaymentStatus : <<uses>>
+PaymentTransaction .up. TransactionType : <<uses>>
+
+' Notes
+note right of Event
+  Represents a badminton event
+  with court allocations and
+  participant management
+end note
+
+note bottom of Payment
+  Handles payment lifecycle
+  through Omise gateway
+  with PromptPay QR codes
+end note
+
+note left of Charge
+  External Omise API
+  Payment processing
+end note
+
+@enduml
