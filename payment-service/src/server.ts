@@ -13,7 +13,24 @@ dotenv.config();
 const app = express();
 const BASE_PORT = Number(process.env.PORT) || 3003;
 
-app.use(cors());
+// Configure CORS explicitly to support frontend running on host
+// Accept comma-separated list in CORS_ORIGINS; default to localhost ports used in dev
+const rawOrigins = (process.env.CORS_ORIGINS || "http://localhost:9001,http://127.0.0.1:9001,http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000").split(",").map(o => o.trim()).filter(Boolean);
+const corsOptions: cors.CorsOptions = {
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true); // non-browser or same-origin
+    if (rawOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error(`CORS: Origin not allowed: ${origin}`));
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+  maxAge: 86400,
+};
+
+app.use(cors(corsOptions));
+// Ensure preflight requests are handled globally
+app.options("*", cors(corsOptions));
 app.use(express.json());
 
 // Health check endpoint - the only REST endpoint we keep

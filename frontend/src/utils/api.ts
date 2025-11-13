@@ -389,8 +389,8 @@ class ApiClient {
 
   // Payments: fetch payments by event from real payment service
   async getEventPayments(eventId: string): Promise<ApiResponse<{ payments: { playerId: string; amount: number; status: 'PENDING' | 'COMPLETED' }[] }>> {
-    // Call absolute URL to payment service (port 8080)
-    return this.request<{ payments: { playerId: string; amount: number; status: 'PENDING' | 'COMPLETED' }[] }>(`http://localhost:8080/api/payments/event/${eventId}`);
+    // Route via API Gateway to avoid hardcoded host/ports and enable Docker networking
+    return this.request<{ payments: { playerId: string; amount: number; status: 'PENDING' | 'COMPLETED' }[] }>(`/api/payments/event/${eventId}`);
   }
 
   // Payments: fetch payments by player (optionally filter by event)
