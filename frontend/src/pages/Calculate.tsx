@@ -95,18 +95,18 @@ const CalculatePage = () => {
   };
 
   const loadEventData = async (eventId: string) => {
-    const [detail, reg, wait] = await Promise.all([
+    const [detail, reg] = await Promise.all([
       apiClient.getEvent(eventId),
       apiClient.getPlayers(eventId, { status: 'registered', limit: 100, offset: 0 }),
-      apiClient.getPlayers(eventId, { status: 'waitlist', limit: 100, offset: 0 }),
+      // apiClient.getPlayers(eventId, { status: 'waitlist', limit: 100, offset: 0 }),
     ]);
     if (detail.success) {
       const eventData = (detail.data as any).event || detail.data;
       setEventDetail(eventData);
     }
     const regList = reg.success ? ((reg.data as any).players || (reg.data as any) || []) : [];
-    const waitList = wait.success ? ((wait.data as any).players || (wait.data as any) || []) : [];
-    setPlayers([...regList, ...waitList]);
+    // const waitList = wait.success ? ((wait.data as any).players || (wait.data as any) || []) : [];
+    setPlayers([...regList,]);
   };
 
 
