@@ -286,7 +286,7 @@ services:
       - SMS_SENDER=BBP_SA_PROJ
       - SMS_CALLBACK_URL=https://your-callback-url.com/sms/callback
       - FORCE_NO_SENDER=false
-      - SMS_WHITELIST=66961655474
+      - SMS_WHITELIST="66961655474, 66845545432"
       - BROADCAST_CHANNELS=email,sms
       - EVENTS_API_BASE=http://event-service:3003
       - EVENTS_API_PATH=/api/events/:id
