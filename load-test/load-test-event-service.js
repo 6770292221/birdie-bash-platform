@@ -16,9 +16,9 @@ export const options = {
       maxVUs: 3000,           // เพดาน VU สูงพอ (latency สูงต้องใช้ VU เยอะ)
       stages: [
         { target: 200, duration: '30s' },
-        { target: 500, duration: '30s' },
-        { target: 800, duration: '30s' },
-        { target: 0, duration: '10s' },
+        { target: 500, duration: '1m' },
+        { target: 800, duration: '3m' },
+        { target: 0, duration: '30s' },
       ],
     },
   },
